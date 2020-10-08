@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <string.h> // note(josh): for memset
 
 #ifndef DEFAULT_ALIGNMENT

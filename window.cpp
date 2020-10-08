@@ -30,36 +30,6 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM w, LPARAM l) {
     return DefWindowProc(hwnd, uMsg, w, l);
 }
 
-bool setup_pixel_format() {
-    assert(window.windows_device_context != nullptr);
-
-    PIXELFORMATDESCRIPTOR pfd = {};
-    pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-    pfd.nVersion = 1;
-    pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_DOUBLEBUFFER;
-    pfd.dwLayerMask = PFD_MAIN_PLANE;
-    pfd.iPixelType = PFD_TYPE_RGBA;
-    pfd.cColorBits = 32;
-    pfd.cAlphaBits = 8;
-    pfd.cDepthBits = 24;
-    pfd.cAccumBits = 0;
-    pfd.cStencilBits = 8;
-
-    int pixelformat = ChoosePixelFormat(window.windows_device_context, &pfd);
-
-    if (pixelformat == 0) {
-        assert(false && "ChoosePixelFormat failed");
-        return false;
-    }
-
-    if (SetPixelFormat(window.windows_device_context, pixelformat, &pfd) == false) {
-        assert(false && "SetPixelFormat failed");
-        return false;
-    }
-
-    return true;
-}
-
 void create_window(int width, int height) {
     const char *CLASS_NAME = "my window class";
     WNDCLASSEXA wc = {};
@@ -89,10 +59,6 @@ void create_window(int width, int height) {
 
     window.width = width;
     window.height = height;
-
-    if (!setup_pixel_format()) {
-        PostQuitMessage(0);
-    }
 }
 
 void update_window() {

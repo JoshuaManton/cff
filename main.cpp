@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "basic.cpp"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #include "math.cpp"
 #include "types.cpp"
 #include "allocators.cpp"
@@ -56,18 +59,20 @@ void main() {
     Vertex_Shader vertex_shader = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader pixel_shader = compile_pixel_shader_from_file(L"pixel.hlsl");
 
-    byte color_data[16] = {
-        255, 0, 0, 255,
-        0, 255, 0, 255,
-        0, 0, 255, 255,
-        255, 255, 255, 255,
-    };
+    int filedata_len;
+    char *filedata = read_entire_file("my_texture.png", &filedata_len);
+    // stbi_set_flip_vertically_on_load(1);
+    int x,y,n;
+    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, &x, &y, &n, 4);
+    assert(color_data);
 
     Texture_Description texture_description = {};
-    texture_description.width = 2;
-    texture_description.height = 2;
+    texture_description.width = x;
+    texture_description.height = y;
     texture_description.color_data = color_data;
     Texture texture = create_texture(texture_description);
+    stbi_image_free(color_data);
+    free(filedata);
 
     while (true) {
         update_window();

@@ -20,4 +20,19 @@ static_assert(sizeof(float) == 4, "float size was not 4");
 
 static_assert(sizeof(void *) == 8, "void * size was not 8");
 
-#define assert(cond) assert(cond, "#cond")
+// #define assert(cond) assert(cond, "#cond")
+
+// todo(josh): custom allocator
+char *read_entire_file(char *filename, int *len) {
+    auto file = fopen(filename, "rb");
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    char *str = (char *)malloc(length + 1);
+    fread(str, 1, length, file);
+    fclose(file);
+
+    str[length] = 0;
+    *len = length+1;
+    return str;
+}

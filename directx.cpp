@@ -444,7 +444,7 @@ void prerender() {
     viewport.Height = window.height;
     directx.device_context->RSSetViewports(1, &viewport);
 
-    directx.device_context->PSSetSamplers(0, 1, &directx.point_clamp_sampler);
+    directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
 }
 
 void postrender() {
