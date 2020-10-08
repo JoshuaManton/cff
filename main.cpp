@@ -12,16 +12,19 @@
 #include "directx.cpp"
 
 struct Fixed_Function {
-    Vertex vertices[64];
+    Vertex *vertices;
+    int max_vertices;
     int num_vertices;
 };
 
-void ff_begin(Fixed_Function *ff) {
+void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {
     ff->num_vertices = 0;
+    ff->vertices = buffer;
+    ff->max_vertices = max_vertices;
 }
 
 void ff_end(Fixed_Function *ff) {
-    assert(ff->num_vertices < ARRAYSIZE(ff->vertices));
+    assert(ff->num_vertices < ff->max_vertices);
     Vertex_Buffer vertex_buffer = create_vertex_buffer(ff->vertices, ff->num_vertices);
     bind_vertex_buffers(&vertex_buffer, 1);
     draw(ff->num_vertices, 0);
@@ -29,17 +32,17 @@ void ff_end(Fixed_Function *ff) {
 }
 
 void ff_vertex(Fixed_Function *ff, Vector3 position) {
-    assert(ff->num_vertices < ARRAYSIZE(ff->vertices));
+    assert(ff->num_vertices < ff->max_vertices);
     ff->vertices[ff->num_vertices].position = v3(position.x, position.y, position.z);
 }
 
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord) {
-    assert(ff->num_vertices < ARRAYSIZE(ff->vertices));
+    assert(ff->num_vertices < ff->max_vertices);
     ff->vertices[ff->num_vertices].tex_coord = tex_coord;
 }
 
 void ff_color(Fixed_Function *ff, Vector4 color) {
-    assert(ff->num_vertices < ARRAYSIZE(ff->vertices));
+    assert(ff->num_vertices < ff->max_vertices);
     ff->vertices[ff->num_vertices].color = color;
 }
 
@@ -82,8 +85,9 @@ void main() {
 
         bind_textures(&texture, 0, 1);
 
+        Vertex vertices[1024] = {};
         Fixed_Function ff = {};
-        ff_begin(&ff);
+        ff_begin(&ff, vertices, ARRAYSIZE(vertices));
         ff_vertex(&ff, v3(-0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(0, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
