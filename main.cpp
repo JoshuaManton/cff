@@ -2,14 +2,12 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "basic.cpp"
+#include "basic.h"
 #define STB_IMAGE_IMPLEMENTATION
+#include "window.h"
 #include "stb_image.h"
-#include "math.cpp"
-#include "types.cpp"
-#include "allocators.cpp"
-#include "window.cpp"
-#include "directx.cpp"
+#include "math.h"
+#include "renderer.h"
 
 struct Fixed_Function {
     Vertex *vertices;
@@ -25,7 +23,7 @@ void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {
 
 void ff_end(Fixed_Function *ff) {
     assert(ff->num_vertices < ff->max_vertices);
-    Vertex_Buffer vertex_buffer = create_vertex_buffer(ff->vertices, ff->num_vertices);
+    Buffer vertex_buffer = create_vertex_buffer(ff->vertices, ff->num_vertices);
     bind_vertex_buffers(&vertex_buffer, 1);
     draw(ff->num_vertices, 0);
     destroy_vertex_buffer(vertex_buffer);
@@ -50,14 +48,17 @@ void ff_next(Fixed_Function *ff) {
     ff->num_vertices += 1;
 }
 
+static Window main_window;
+static float time_at_startup;
+
 void main() {
     time_at_startup = time_now();
 
     Allocator global_allocator = default_allocator();
 
-    create_window(1920, 1080);
+    main_window = create_window(1920, 1080);
 
-    init_directx();
+    init_render_backend(&main_window);
 
     Vertex_Shader vertex_shader = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader pixel_shader = compile_pixel_shader_from_file(L"pixel.hlsl");
@@ -79,7 +80,7 @@ void main() {
 
     while (true) {
         update_window();
-        prerender();
+        prerender(main_window.width, main_window.height);
 
         bind_shaders(vertex_shader, pixel_shader);
 
@@ -96,7 +97,7 @@ void main() {
         ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         ff_end(&ff);
 
-        postrender();
+        present(true);
     }
 
     Fixed_Function ff = {};

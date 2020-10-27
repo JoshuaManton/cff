@@ -1,26 +1,128 @@
-typedef unsigned char      byte; static_assert(sizeof(byte) == 1, "byte size was not 1");
-typedef unsigned char      u8;   static_assert(sizeof(u8)   == 1, "u8 size was not 1");
-typedef unsigned short     u16;  static_assert(sizeof(u16)  == 2, "u16 size was not 2");
-typedef unsigned int       u32;  static_assert(sizeof(u32)  == 4, "u32 size was not 4");
-typedef unsigned long long u64;  static_assert(sizeof(u64)  == 8, "u64 size was not 8");
+#include "basic.h"
 
-typedef u32 uint; static_assert(sizeof(uint)  == 4, "uint size was not 4");
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-typedef char      i8;   static_assert(sizeof(i8)   == 1, "i8 size was not 1");
-typedef short     i16;  static_assert(sizeof(i16)  == 2, "i16 size was not 2");
-typedef int       i32;  static_assert(sizeof(i32)  == 4, "i32 size was not 4");
-typedef long long i64;  static_assert(sizeof(i64)  == 8, "i64 size was not 8");
 
-static_assert(sizeof(int)  == 4, "int size was not 4");
 
-typedef float  f32; static_assert(sizeof(f32) == 4, "f32 size was not 4");
-typedef double f64; static_assert(sizeof(f64) == 8, "f64 size was not 8");
+bool is_power_of_two(uintptr_t n) {
+    return n > 0 && (n & (n-1)) == 0;
+}
 
-static_assert(sizeof(float) == 4, "float size was not 4");
+uintptr_t align_forward(uintptr_t p, uintptr_t align) {
+    assert(is_power_of_two(align));
+    p = (p + (align - 1)) & (~(align - 1));
+    return p;
+}
 
-static_assert(sizeof(void *) == 8, "void * size was not 8");
+uintptr_t align_backward(uintptr_t p, uintptr_t align) {
+    return align_forward(p - align + 1, align);
+}
 
-// #define assert(cond) assert(cond, "#cond")
+void zero_memory(void *memory_void, int length) {
+    char *memory = (char *)memory_void;
+    uintptr_t start = (uintptr_t)memory;
+    uintptr_t start_aligned = align_forward(start, alignof(uintptr_t));
+    uintptr_t end = start + (uintptr_t)length;
+    uintptr_t end_aligned = align_backward(end, alignof(uintptr_t));
+
+    for (uintptr_t i = start; i < start_aligned; i++) {
+        memory[i-start] = 0;
+    }
+
+    for (uintptr_t i = start_aligned; i < end_aligned; i += sizeof(uintptr_t)) {
+        *((uintptr_t *)&memory[i-start]) = 0;
+    }
+
+    for (uintptr_t i = end_aligned; i < end; i++) {
+        memory[i-start] = 0;
+    }
+}
+
+
+
+void *alloc(Allocator allocator, int size, int alignment) {
+    assert(allocator.alloc_proc != nullptr && "Alloc proc was nullptr for allocator");
+    void *ptr = allocator.alloc_proc(allocator.data, size, alignment);
+    return memset(ptr, 0, size);
+}
+
+void free(Allocator allocator, void *ptr) {
+    assert(allocator.free_proc != nullptr && "Free proc was nullptr for allocator");
+    allocator.free_proc(allocator.data, ptr);
+}
+
+
+
+void *default_allocator_alloc(void *allocator, int size, int alignment) {
+    return malloc(size);
+}
+
+void default_allocator_free(void *allocator, void *ptr) {
+    free(ptr);
+}
+
+Allocator default_allocator() {
+    Allocator a = {};
+    a.alloc_proc = default_allocator_alloc;
+    a.free_proc = default_allocator_free;
+    return a;
+}
+
+
+
+char *buffer_allocate(char *buffer, int buffer_len, int *offset, int size, int alignment, bool panic_on_oom) {
+    // Don't allow allocations of zero size. This would likely return a
+    // pointer to a different allocation, causing many problems.
+    if (size == 0) {
+        return nullptr;
+    }
+
+    // todo(josh): The `align_forward()` call and the `start + size` below
+    // that could overflow if the `size` or `align` parameters are super huge
+
+    int start = align_forward(*offset, alignment);
+
+    // Don't allow allocations that would extend past the end of the buffer.
+    if ((start + size) > buffer_len) {
+        if (panic_on_oom) {
+            assert(0 && "buffer_allocate ran out of memory");
+        }
+        return nullptr;
+    }
+
+    *offset = start + size;
+    char *ptr = &buffer[start];
+    zero_memory(ptr, size);
+    return ptr;
+}
+
+
+
+void init_arena(Arena *arena, char *backing, int backing_size) {
+    arena->memory = backing;
+    arena->memory_size = backing_size;
+    arena->cur_offset = 0;
+}
+
+void *arena_alloc(void *allocator, int size, int align) {
+    Arena *arena = (Arena *)allocator;
+    return buffer_allocate(arena->memory, arena->memory_size, &arena->cur_offset, size, align);
+}
+
+void arena_free(void *allocator, void *ptr) {
+    // note(josh): freeing from arenas does nothing.
+}
+
+Allocator arena_allocator() {
+    Allocator a = {};
+    a.alloc_proc = arena_alloc;
+    a.free_proc = arena_free;
+    return a;
+}
+
+
 
 // todo(josh): custom allocator
 char *read_entire_file(char *filename, int *len) {

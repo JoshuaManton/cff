@@ -1,9 +1,4 @@
-#include <math.h>
-
-struct Vector2 {
-    float x;
-    float y;
-};
+#include "math.h"
 
 Vector2 v2(float x, float y) {
     Vector2 v;
@@ -27,12 +22,6 @@ Vector2 operator *(Vector2 a, float v) {
 Vector2 operator /(Vector2 a, float v) {
     return v2(a.x/v, a.y/v);
 }
-
-struct Vector3 {
-    float x;
-    float y;
-    float z;
-};
 
 Vector3 v3(float x, float y, float z) {
     Vector3 v;
@@ -60,13 +49,6 @@ Vector3 operator /(Vector3 a, float v) {
 
 
 
-struct Vector4 {
-    float x;
-    float y;
-    float z;
-    float w;
-};
-
 Vector4 v4(float x, float y, float z, float w) {
     Vector4 v;
     v.x = x;
@@ -90,8 +72,4 @@ Vector4 operator *(Vector4 a, float v) {
 
 Vector4 operator /(Vector4 a, float v) {
     return v4(a.x/v, a.y/v, a.z/v, a.w/v);
-}
-
-float sin(float t) {
-    return (float)sin((double)t);
 }

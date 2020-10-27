@@ -1,22 +1,10 @@
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-struct Window {
-    HWND handle;
-    HDC windows_device_context;
-
-    int width;
-    int height;
-};
-
-Window window;
-float time_at_startup;
+#include "window.h"
 
 float time_now() {
     FILETIME ft = {};
     GetSystemTimeAsFileTime(&ft);
     double t = (f64)(((u64)ft.dwLowDateTime) | (((u64)ft.dwHighDateTime) << 32));
-    return (t / 10.0 / 1000.0 / 1000.0) - time_at_startup;
+    return (t / 10.0 / 1000.0 / 1000.0);
 }
 
 LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM w, LPARAM l) {
@@ -30,7 +18,7 @@ LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM w, LPARAM l) {
     return DefWindowProc(hwnd, uMsg, w, l);
 }
 
-void create_window(int width, int height) {
+Window create_window(int width, int height) {
     const char *CLASS_NAME = "my window class";
     WNDCLASSEXA wc = {};
     wc.cbSize = sizeof(WNDCLASSEXA);
@@ -42,6 +30,7 @@ void create_window(int width, int height) {
     auto c = RegisterClassExA(&wc);
     assert(c != 0);
 
+    Window window = {};
     window.handle = CreateWindowEx(
         0,
         CLASS_NAME,
@@ -59,6 +48,7 @@ void create_window(int width, int height) {
 
     window.width = width;
     window.height = height;
+    return window;
 }
 
 void update_window() {

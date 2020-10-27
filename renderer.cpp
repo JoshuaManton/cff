@@ -1,46 +1,23 @@
-#include <d3d11.h>
-#include <d3dcompiler.h>
+#include "renderer.h"
 
-#define MAX_BOUND_TEXTURES 12
-
-typedef ID3D11Buffer *Vertex_Buffer;
-typedef ID3D11Buffer *Index_Buffer;
-typedef ID3D11Buffer *Constant_Buffer;
-
-typedef ID3D11VertexShader *Vertex_Shader;
-typedef ID3D11PixelShader *Pixel_Shader;
-
-typedef ID3D11Texture2D *Texture_Handle;
-
-struct Texture {
-    Texture_Handle handle;
-    Texture_Description description;
-    ID3D11ShaderResourceView *shader_resource_view;
-};
-
-struct DirectX {
-    IDXGISwapChain *swap_chain_handle;
-    ID3D11RenderTargetView *swap_chain_render_target_view;
-    ID3D11Device *device;
-    ID3D11DeviceContext *device_context;
-    ID3D11RasterizerState *rasterizer;
-    ID3D11DepthStencilState *no_depth_test_state;
-    ID3D11SamplerState *linear_wrap_sampler;
-    ID3D11SamplerState *linear_clamp_sampler;
-    ID3D11SamplerState *point_wrap_sampler;
-    ID3D11SamplerState *point_clamp_sampler;
-    ID3D11BlendState *alpha_blend_state;
-    ID3D11BlendState *no_alpha_blend_state;
-
-    ID3D11InputLayout *vertex_format;
-    ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
-};
+#ifdef RENDER_BACKEND_DX11
 
 DirectX directx;
 
-ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture) {
+DXGI_FORMAT dx_texture_format(Texture_Format tf) {
+    switch (tf) {
+        case TF_R8G8B8A8_UINT:      return DXGI_FORMAT_R8G8B8A8_UNORM;
+        case TF_R8G8B8A8_UINT_SRGB: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        default: {
+            assert(false && "unknown format");
+            return (DXGI_FORMAT)0;
+        }
+    }
+}
+
+ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, DXGI_FORMAT format) {
     D3D11_RENDER_TARGET_VIEW_DESC render_target_view_desc = {};
-    render_target_view_desc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; // todo(josh): parameterize formats
+    render_target_view_desc.Format        = format;
     render_target_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
     ID3D11RenderTargetView *render_target_view = {};
     auto result = directx.device->CreateRenderTargetView(backing_texture, &render_target_view_desc, &render_target_view);
@@ -48,7 +25,7 @@ ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_te
     return render_target_view;
 }
 
-ID3D11Buffer *create_vertex_buffer(Vertex *vertices, int num_vertices) {
+Buffer create_vertex_buffer(Vertex *vertices, int num_vertices) {
     D3D11_BUFFER_DESC vertex_buffer_desc = {};
     vertex_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
     vertex_buffer_desc.ByteWidth = sizeof(Vertex) * num_vertices;
@@ -62,22 +39,22 @@ ID3D11Buffer *create_vertex_buffer(Vertex *vertices, int num_vertices) {
     return vertex_buffer;
 }
 
-void destroy_vertex_buffer(ID3D11Buffer *buffer) {
+void destroy_vertex_buffer(Buffer buffer) {
     buffer->Release();
 }
 
-void init_directx() {
+void init_render_backend(Window *window) {
     // Create swap chain
     DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
     swap_chain_desc.BufferCount                        = 2;
     swap_chain_desc.SwapEffect                         = DXGI_SWAP_EFFECT_FLIP_DISCARD; // todo(josh): use DXGI_SWAP_EFFECT_DISCARD (or something else) on non-Windows 10
-    swap_chain_desc.BufferDesc.Width                   = (u32)window.width;
-    swap_chain_desc.BufferDesc.Height                  = (u32)window.height;
+    swap_chain_desc.BufferDesc.Width                   = (u32)window->width;
+    swap_chain_desc.BufferDesc.Height                  = (u32)window->height;
     swap_chain_desc.BufferDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swap_chain_desc.BufferDesc.RefreshRate.Numerator   = 60; // todo(josh): query monitor refresh rate. Zak: NOT the same as vsync
+    swap_chain_desc.BufferDesc.RefreshRate.Numerator   = 60; // todo(josh): query monitor refresh rate.
     swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swap_chain_desc.BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swap_chain_desc.OutputWindow                       = window.handle;
+    swap_chain_desc.OutputWindow                       = window->handle;
     swap_chain_desc.SampleDesc.Count                   = 1;
     swap_chain_desc.SampleDesc.Quality                 = 0;
     swap_chain_desc.Windowed                           = true;
@@ -110,7 +87,7 @@ void init_directx() {
     ID3D11Texture2D *back_buffer_texture = {};
     result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
     assert(result == S_OK);
-    directx.swap_chain_render_target_view = dx_create_render_target_view(back_buffer_texture);
+    directx.swap_chain_render_target_view = dx_create_render_target_view(back_buffer_texture, swap_chain_desc.BufferDesc.Format); // todo(josh): srgb backbuffer
     back_buffer_texture->Release();
 
     // Make 2D rasterizer
@@ -284,7 +261,7 @@ void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
     directx.device_context->PSSetShader(pixel, 0, 0);
 }
 
-void bind_vertex_buffers(Vertex_Buffer *buffers, int num_buffers) {
+void bind_vertex_buffers(Buffer *buffers, int num_buffers) {
     u32 stride = sizeof(Vertex);
     u32 offset = 0;
     directx.device_context->IASetVertexBuffers(0, num_buffers, buffers, &stride, &offset);
@@ -297,12 +274,14 @@ void draw(int vertex_count, int start_vertex) {
 Texture create_texture(Texture_Description desc) {
     // todo(josh): check for max texture size?
 
+    DXGI_FORMAT texture_format = dx_texture_format(desc.format);
+
     // Create texture
     D3D11_TEXTURE2D_DESC texture_desc = {};
     texture_desc.Width            = (u32)desc.width;
     texture_desc.Height           = (u32)desc.height;
     texture_desc.MipLevels        = 1;
-    texture_desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texture_desc.Format           = texture_format;
     texture_desc.SampleDesc.Count = 1;
     texture_desc.Usage = D3D11_USAGE_DEFAULT;
 
@@ -359,7 +338,7 @@ Texture create_texture(Texture_Description desc) {
 
     // Create shader resource view
     D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
-    texture_shader_resource_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texture_shader_resource_desc.Format = texture_format;
     texture_shader_resource_desc.Texture2D.MipLevels = 1;
     texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     /*
@@ -411,7 +390,7 @@ void unbind_all_textures() {
     directx.device_context->PSSetShaderResources(0, ARRAYSIZE(directx.cur_srvs), &directx.cur_srvs[0]);
 }
 
-void prerender() {
+void prerender(int viewport_width, int viewport_height) {
     // if depth_buffer == nullptr {
     //     depth_texture_desc: Texture_Description;
     //     depth_texture_desc.type = .Texture2D;
@@ -440,13 +419,15 @@ void prerender() {
     D3D11_VIEWPORT viewport = {};
     viewport.TopLeftX = 0;
     viewport.TopLeftY = 0;
-    viewport.Width = window.width;
-    viewport.Height = window.height;
+    viewport.Width = viewport_width;
+    viewport.Height = viewport_height;
     directx.device_context->RSSetViewports(1, &viewport);
 
     directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
 }
 
-void postrender() {
-    directx.swap_chain_handle->Present(1, 0);
+void present(bool vsync) {
+    directx.swap_chain_handle->Present(vsync, 0);
 }
+
+#endif
