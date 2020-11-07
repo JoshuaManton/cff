@@ -44,12 +44,19 @@ struct Arena {
 
 void *alloc(Allocator allocator, int size, int alignment = DEFAULT_ALIGNMENT);
 void free(Allocator allocator, void *ptr);
+#define NEW(allocator, type) ((type *)alloc(allocator, sizeof(type), alignof(type)))
+#define MAKE(allocator, type, count) ((type *)alloc(allocator, sizeof(type) * count, alignof(type)))
+
 void *default_allocator_alloc(void *allocator, int size, int alignment);
 void default_allocator_free(void *allocator, void *ptr);
 Allocator default_allocator();
+
 char *buffer_allocate(char *buffer, int buffer_len, int *offset, int size, int alignment, bool panic_on_oom = true);
+
 void init_arena(Arena *arena, char *backing, int backing_size);
 void *arena_alloc(void *allocator, int size, int align = DEFAULT_ALIGNMENT);
 void arena_free(void *allocator, void *ptr);
 Allocator arena_allocator();
+
+// todo(josh): read_entire_file should be in a different file I think
 char *read_entire_file(char *filename, int *len);
