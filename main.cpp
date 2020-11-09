@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "basic.h"
 #include "window.h"
+#include "basic.h"
 #include "math.h"
 #include "renderer.h"
 
@@ -19,8 +19,7 @@ struct Pass_CBuffer {
 };
 
 struct Model_CBuffer {
-    Vector3 position;
-    float pad0;
+    Matrix4 model_matrix;
 };
 
 struct Vertex {
@@ -30,6 +29,8 @@ struct Vertex {
 };
 
 void main() {
+    init_platform();
+
     g_time_at_startup = time_now();
 
     Allocator global_allocator = default_allocator();
@@ -114,25 +115,38 @@ void main() {
     Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices));
     Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices));
 
+    Vector3 camera_position = {};
+    Quaternion camera_rotation = quaternion_identity();
+
     while (true) {
-        update_window();
+        update_window(&g_main_window);
+
+        if (get_input(&g_main_window, INPUT_E)) camera_position.y += 0.1f;
+        if (get_input(&g_main_window, INPUT_Q)) camera_position.y -= 0.1f;
+
+        Vector2 delta = g_main_window.mouse_position_pixel_delta * 0.25f;
+
+        // rotate quat by degrees
+        Quaternion yaw   = quaternion_identity() * axis_angle(v3(0, 1, 0), to_radians(delta.x));
+        Quaternion pitch = quaternion_identity() * axis_angle(v3(1, 0, 0), to_radians(delta.y));
+        camera_rotation = pitch * camera_rotation * yaw;
+
         prerender(g_main_window.width, g_main_window.height);
 
         bind_vertex_format(default_vertex_format);
         bind_shaders(vertex_shader, pixel_shader);
         bind_textures(&texture, 0, 1);
 
-        Vector3 camera_position = v3(0, sin(time_now())*4, -5);
-        Vector3 cube_position = v3(sin(time_now() * 2) * 5, 0, 10);
+        Vector3 cube_position = v3(5, 5, 10);
 
         Pass_CBuffer pass_cbuffer = {};
-        pass_cbuffer.view_matrix = view_matrix(camera_position, quaternion_look_at(camera_position, cube_position, v3(0, 1, 0)));
+        pass_cbuffer.view_matrix = view_matrix(camera_position, camera_rotation);
         pass_cbuffer.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
         update_buffer(pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
         bind_constant_buffers(&pass_cbuffer_handle, 1, 0);
 
         Model_CBuffer model_cbuffer = {};
-        model_cbuffer.position = cube_position;
+        model_cbuffer.model_matrix = model_matrix(cube_position, v3(1, 1, 1), quaternion_identity());
         update_buffer(model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
         bind_constant_buffers(&model_cbuffer_handle, 1, 1);
 

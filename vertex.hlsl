@@ -16,16 +16,13 @@ cbuffer CBUFFER_PASS : register(b0) {
 }
 
 cbuffer CBUFFER_SPECIFIC : register(b1) {
-    float3 position;
-    float pad0;
+    row_major matrix model_matrix;
 };
 
 PS_INPUT main(VS_INPUT input) {
-    // matrix mvp = mul(model, mul(view, proj));
-    matrix mvp = mul(view_matrix, projection_matrix);
+    matrix mvp = mul(model_matrix, mul(view_matrix, projection_matrix));
     PS_INPUT v;
-    v.position = mul(float4(input.position + position, 1.0), mvp);
-    // v.position = float4(input.position + position, 1.0);
+    v.position = mul(float4(input.position, 1.0), mvp);
     v.texcoord = input.texcoord;
     v.color = input.color;
     return v;

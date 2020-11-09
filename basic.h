@@ -26,6 +26,21 @@ static_assert(sizeof(float) == 4, "float size was not 4");
 
 static_assert(sizeof(void *) == 8, "void * size was not 8");
 
+#ifndef ARRAYSIZE
+#define ARRAYSIZE(a) \
+    ((sizeof(a) / sizeof(*(a))) / \
+    static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
+#endif
+
+static void bounds__check(int index, int min, int max_plus_one, char *file, int line) {
+    if ((index < min) || (index >= max_plus_one)) {
+        printf("<%s:%d> Index %d is out of range %d..<%d\n", file, line, index, min, max_plus_one);
+        assert(false);
+    }
+}
+
+#define BOUNDS_CHECK(index, min, max_plus_one) bounds__check(index, min, max_plus_one, __FILE__, __LINE__)
+
 #ifndef DEFAULT_ALIGNMENT
 #define DEFAULT_ALIGNMENT sizeof(void *) * 2
 #endif

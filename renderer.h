@@ -1,8 +1,24 @@
 #pragma once
 
+#ifdef RENDER_BACKEND_DX11
+#include <d3d11.h>
+#include <d3dcompiler.h>
+
+typedef ID3D11Buffer *Buffer;
+
+typedef ID3D11VertexShader *Vertex_Shader;
+typedef ID3D11PixelShader *Pixel_Shader;
+
+typedef ID3D11Texture2D *Texture_Handle;
+
+typedef ID3D11InputLayout *Vertex_Format;
+#endif
+
 #include "math.h"
-#include "basic.h"
 #include "window.h"
+#include "basic.h"
+
+
 
 void init_renderer(Window *window);
 
@@ -35,24 +51,6 @@ struct Texture_Description {
     // is_cpu_read_target
     byte *color_data;
 };
-
-
-
-#ifdef RENDER_BACKEND_DX11
-#include <d3d11.h>
-#include <d3dcompiler.h>
-
-typedef ID3D11Buffer *Buffer;
-
-typedef ID3D11VertexShader *Vertex_Shader;
-typedef ID3D11PixelShader *Pixel_Shader;
-
-typedef ID3D11Texture2D *Texture_Handle;
-
-typedef ID3D11InputLayout *Vertex_Format;
-#endif
-
-
 
 struct Texture {
     Texture_Handle handle;

@@ -54,11 +54,25 @@ Vector2 operator *=(Vector2 &a, float f) {
     return (a = a * f);
 }
 
+Vector2 operator *(Vector2 a, Vector2 b) {
+    return v2(a.x*b.x, a.y*b.y);
+}
+Vector2 operator *=(Vector2 &a, Vector2 b) {
+    return (a = a * b);
+}
+
 Vector2 operator /(Vector2 a, float f) {
     return v2(a.x/f, a.y/f);
 }
 Vector2 operator /=(Vector2 &a, float f) {
     return (a = a / f);
+}
+
+Vector2 operator /(Vector2 a, Vector2 b) {
+    return v2(a.x/b.x, a.y/b.y);
+}
+Vector2 operator /=(Vector2 &a, Vector2 b) {
+    return (a = a / b);
 }
 
 
@@ -115,11 +129,25 @@ Vector3 operator *=(Vector3 &a, float f) {
     return (a = a * f);
 }
 
+Vector3 operator *(Vector3 a, Vector3 b) {
+    return v3(a.x*b.x, a.y*b.y, a.z*b.z);
+}
+Vector3 operator *=(Vector3 &a, Vector3 b) {
+    return (a = a * b);
+}
+
 Vector3 operator /(Vector3 a, float f) {
     return v3(a.x/f, a.y/f, a.z/f);
 }
 Vector3 operator /=(Vector3 &a, float f) {
     return (a = a / f);
+}
+
+Vector3 operator /(Vector3 a, Vector3 b) {
+    return v3(a.x/b.x, a.y/b.y, a.z/b.z);
+}
+Vector3 operator /=(Vector3 &a, Vector3 b) {
+    return (a = a / b);
 }
 
 
@@ -170,11 +198,25 @@ Vector4 operator *=(Vector4 &a, float f) {
     return (a = a * f);
 }
 
+Vector4 operator *(Vector4 a, Vector4 b) {
+    return v4(a.x*b.x, a.y*b.y, a.z*b.z, a.w*b.w);
+}
+Vector4 operator *=(Vector4 &a, Vector4 b) {
+    return (a = a * b);
+}
+
 Vector4 operator /(Vector4 a, float f) {
     return v4(a.x/f, a.y/f, a.z/f, a.w/f);
 }
 Vector4 operator /=(Vector4 &a, float f) {
     return (a = a / f);
+}
+
+Vector4 operator /(Vector4 a, Vector4 b) {
+    return v4(a.x/b.x, a.y/b.y, a.z/b.z, a.w/b.w);
+}
+Vector4 operator /=(Vector4 &a, Vector4 b) {
+    return (a = a / b);
 }
 
 
@@ -231,6 +273,12 @@ Quaternion operator *(Quaternion a, Quaternion b) {
 }
 Quaternion operator *=(Quaternion &a, Quaternion b) {
     return (a = a * b);
+}
+
+Vector3 operator *(Quaternion q, Vector3 v) {
+    Vector3 qxyz = v3(q.x, q.y, q.z);
+    Vector3 t = cross(qxyz * 2.0f, v);
+    return v + t*q.w + cross(qxyz, t);
 }
 
 Quaternion operator *(Quaternion a, float f) {
@@ -300,6 +348,13 @@ Quaternion axis_angle(Vector3 axis, float angle_radians) {
     return result;
 }
 
+Vector3 quaternion_right  (Quaternion q) { return q * v3(1, 0, 0); }
+Vector3 quaternion_up     (Quaternion q) { return q * v3(0, 1, 0); }
+Vector3 quaternion_forward(Quaternion q) { return q * v3(0, 0, 1); }
+Vector3 quaternion_left   (Quaternion q) { return -quaternion_right(q);   }
+Vector3 quaternion_down   (Quaternion q) { return -quaternion_up(q);      }
+Vector3 quaternion_back   (Quaternion q) { return -quaternion_forward(q); }
+
 
 
 Matrix4 m4_identity() {
@@ -318,6 +373,86 @@ Matrix4 m4(Vector4 columns[4]) {
     m[2] = columns[2];
     m[3] = columns[3];
     return m;
+}
+
+Matrix4 operator *(Matrix4 a, Matrix4 b) {
+    Matrix4 result;
+    for(int column = 0; column < 4; column++) {
+        for(int row = 0; row < 4; row++) {
+            float sum = 0;
+            for(int vector = 0; vector < 4; vector++) {
+                sum += a[vector][row] * b[column][vector];
+            }
+            result[column][row] = sum;
+        }
+    }
+    return result;
+}
+
+Vector4 operator *(Matrix4 a, Vector4 v) {
+    Vector4 result;
+    for(int row = 0; row < 4; row++) {
+        float sum = 0;
+        for(int column = 0; column < 4; column++) {
+            sum += a[column][row] * v[column];
+        }
+        result[row] = sum;
+    }
+    return result;
+}
+
+Matrix4 operator *(Matrix4 a, float f) {
+    Matrix4 result;
+    for(int column = 0; column < 4; column++) {
+        for(int row = 0; row < 4; row++) {
+            result[column][row] = a[column][row] * f;
+        }
+    }
+    return result;
+}
+
+Matrix4 translate(Vector3 v) {
+    Matrix4 result = m4_identity();
+    result[3][0] = v[0];
+    result[3][1] = v[1];
+    result[3][2] = v[2];
+    return result;
+}
+
+Matrix4 rotate(float angle_radians, Vector3 v) {
+    float c = cos(angle_radians);
+    float s = sin(angle_radians);
+
+    Vector3 a = normalize(v);
+    Vector3 t = a * (1.0f-c);
+
+    Matrix4 result = m4_identity();
+
+    result[0][0] = c + t[0]*a[0];
+    result[0][1] = 0 + t[0]*a[1] + s*a[2];
+    result[0][2] = 0 + t[0]*a[2] - s*a[1];
+    result[0][3] = 0;
+
+    result[1][0] = 0 + t[1]*a[0] - s*a[2];
+    result[1][1] = c + t[1]*a[1];
+    result[1][2] = 0 + t[1]*a[2] + s*a[0];
+    result[1][3] = 0;
+
+    result[2][0] = 0 + t[2]*a[0] + s*a[1];
+    result[2][1] = 0 + t[2]*a[1] - s*a[0];
+    result[2][2] = c + t[2]*a[2];
+    result[2][3] = 0;
+
+    return result;
+}
+
+Matrix4 mat4_scale(Vector3 v) {
+    Matrix4 result = {};
+    result[0][0] = v[0];
+    result[1][1] = v[1];
+    result[2][2] = v[2];
+    result[3][3] = 1;
+    return result;
 }
 
 Matrix4 transpose(Matrix4 a) {
@@ -363,13 +498,6 @@ Matrix4 orthographic(float left, float right, float bottom, float top, float nea
     //     m[2] = -m[2];
     // }
 
-    return result;;
-}
-
-Matrix4 view_matrix(Vector3 position, Quaternion orientation) {
-    Matrix4 t = translate(-position);
-    Matrix4 r = quaternion_to_matrix4(inverse(orientation));
-    Matrix4 result = r * t;
     return result;
 }
 
@@ -393,86 +521,6 @@ Matrix4 look_at(Vector3 eye, Vector3 center, Vector3 up) {
     // }
 
     Matrix4 result = m4(columns);
-    return result;
-}
-
-Matrix4 translate(Vector3 v) {
-    Matrix4 result = m4_identity();
-    result[3][0] = v[0];
-    result[3][1] = v[1];
-    result[3][2] = v[2];
-    return result;
-}
-
-Matrix4 rotate(float angle_radians, Vector3 v) {
-    float c = cos(angle_radians);
-    float s = sin(angle_radians);
-
-    Vector3 a = normalize(v);
-    Vector3 t = a * (1.0f-c);
-
-    Matrix4 result = m4_identity();
-
-    result[0][0] = c + t[0]*a[0];
-    result[0][1] = 0 + t[0]*a[1] + s*a[2];
-    result[0][2] = 0 + t[0]*a[2] - s*a[1];
-    result[0][3] = 0;
-
-    result[1][0] = 0 + t[1]*a[0] - s*a[2];
-    result[1][1] = c + t[1]*a[1];
-    result[1][2] = 0 + t[1]*a[2] + s*a[0];
-    result[1][3] = 0;
-
-    result[2][0] = 0 + t[2]*a[0] + s*a[1];
-    result[2][1] = 0 + t[2]*a[1] - s*a[0];
-    result[2][2] = c + t[2]*a[2];
-    result[2][3] = 0;
-
-    return result;
-}
-
-Matrix4 scale(Vector3 v) {
-    Matrix4 result = {};
-    result[0][0] = v[0];
-    result[1][1] = v[1];
-    result[2][2] = v[2];
-    result[3][3] = 1;
-    return result;
-}
-
-Matrix4 operator *(Matrix4 a, Matrix4 b) {
-    Matrix4 result;
-    for(int column = 0; column < 4; column++) {
-        for(int row = 0; row < 4; row++) {
-            float sum = 0;
-            for(int vector = 0; vector < 4; vector++) {
-                sum += a[vector][row] * b[column][vector];
-            }
-            result[column][row] = sum;
-        }
-    }
-    return result;
-}
-
-Vector4 operator *(Matrix4 a, Vector4 v) {
-    Vector4 result;
-    for(int row = 0; row < 4; row++) {
-        float sum = 0;
-        for(int column = 0; column < 4; column++) {
-            sum += a[column][row] * v[column];
-        }
-        result[row] = sum;
-    }
-    return result;
-}
-
-Matrix4 operator *(Matrix4 a, float f) {
-    Matrix4 result;
-    for(int column = 0; column < 4; column++) {
-        for(int row = 0; row < 4; row++) {
-            result[column][row] = a[column][row] * f;
-        }
-    }
     return result;
 }
 
@@ -567,4 +615,19 @@ Quaternion quaternion_look_at(Vector3 eye, Vector3 center, Vector3 up) {
     // todo(josh): figure out why we have to swap center & eye, and why we need the inverse()
     Matrix4 m = look_at(center, eye, up);
     return inverse(matrix4_to_quaternion(m));
+}
+
+Matrix4 view_matrix(Vector3 position, Quaternion orientation) {
+    Matrix4 t = translate(-position);
+    Matrix4 r = quaternion_to_matrix4(inverse(orientation));
+    Matrix4 result = r * t;
+    return result;
+}
+
+Matrix4 model_matrix(Vector3 position, Vector3 scale, Quaternion orientation) {
+    Matrix4 t = translate(position);
+    Matrix4 s = mat4_scale(scale);
+    Matrix4 r = quaternion_to_matrix4(orientation);
+    Matrix4 model_matrix = (t * r) * s;
+    return model_matrix;
 }
