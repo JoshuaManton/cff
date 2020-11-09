@@ -1,3 +1,19 @@
+struct DirectX {
+    IDXGISwapChain *swap_chain_handle;
+    ID3D11RenderTargetView *swap_chain_render_target_view;
+    ID3D11Device *device;
+    ID3D11DeviceContext *device_context;
+    ID3D11RasterizerState *rasterizer;
+    ID3D11DepthStencilState *no_depth_test_state;
+    ID3D11SamplerState *linear_wrap_sampler;
+    ID3D11SamplerState *linear_clamp_sampler;
+    ID3D11SamplerState *point_wrap_sampler;
+    ID3D11SamplerState *point_clamp_sampler;
+    ID3D11BlendState *alpha_blend_state;
+    ID3D11BlendState *no_alpha_blend_state;
+    ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
+};
+
 static DirectX directx;
 
 ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, DXGI_FORMAT format) {
@@ -247,21 +263,46 @@ void bind_vertex_format(Vertex_Format format) {
     directx.device_context->IASetInputLayout(format);
 }
 
-Buffer create_vertex_buffer(void *data, int data_len) {
-    D3D11_BUFFER_DESC vertex_buffer_desc = {};
-    vertex_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
-    vertex_buffer_desc.ByteWidth = data_len;
-    vertex_buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+Buffer create_buffer(Buffer_Type type, void *data, int len) {
+    D3D11_BUFFER_DESC buffer_desc = {};
+    buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    buffer_desc.ByteWidth = len;
+    switch (type) {
+        case BT_VERTEX:   { buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;   break; }
+        case BT_INDEX:    { buffer_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;    break; }
+        case BT_CONSTANT: { buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER; break; }
+        default: {
+            assert(false && "unknown buffer type");
+        }
+    }
 
-    D3D11_SUBRESOURCE_DATA vertex_buffer_data = {};
-    vertex_buffer_data.pSysMem = data;
-    ID3D11Buffer *vertex_buffer = {};
-    auto result = directx.device->CreateBuffer(&vertex_buffer_desc, &vertex_buffer_data, &vertex_buffer);
+    D3D11_SUBRESOURCE_DATA buffer_data = {};
+    buffer_data.pSysMem = data;
+    Buffer buffer = {};
+    auto result = directx.device->CreateBuffer(&buffer_desc, data == nullptr ? nullptr : &buffer_data, &buffer);
     assert(result == S_OK);
-    return vertex_buffer;
+    return buffer;
 }
 
-void destroy_vertex_buffer(Buffer buffer) {
+void update_buffer(Buffer buffer, void *data, int len) {
+    directx.device_context->UpdateSubresource((ID3D11Resource *)buffer, 0, nullptr, data, (u32)len, 0);
+}
+
+void bind_vertex_buffers(Buffer *buffers, int num_buffers, u32 start_slot, u32 *strides, u32 *offsets) {
+    directx.device_context->IASetVertexBuffers(start_slot, num_buffers, buffers, strides, offsets);
+}
+
+void bind_index_buffer(Buffer buffer, u32 slot) {
+    // todo(josh): parameterize index type
+    directx.device_context->IASetIndexBuffer(buffer, DXGI_FORMAT_R32_UINT, slot);
+}
+
+void bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot) {
+    directx.device_context->VSSetConstantBuffers(start_slot, num_buffers, buffers);
+    directx.device_context->PSSetConstantBuffers(start_slot, num_buffers, buffers);
+}
+
+void destroy_buffer(Buffer buffer) {
     buffer->Release();
 }
 
@@ -304,13 +345,6 @@ Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): 
 void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
     directx.device_context->VSSetShader(vertex, 0, 0);
     directx.device_context->PSSetShader(pixel, 0, 0);
-}
-
-void bind_vertex_buffers(Buffer *buffers, int num_buffers, int stride) {
-    assert(num_buffers == 1 && "only one buffer supported at the moment");
-    u32 offset = 0;
-    u32 ustride = (u32)stride;
-    directx.device_context->IASetVertexBuffers(0, num_buffers, buffers, &ustride, &offset);
 }
 
 void draw(int vertex_count, int start_vertex) {

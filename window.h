@@ -13,6 +13,6 @@ struct Window {
     int height;
 };
 
-float time_now();
+double time_now();
 Window create_window(int width, int height);
 void update_window();

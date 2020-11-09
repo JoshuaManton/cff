@@ -50,22 +50,6 @@ typedef ID3D11PixelShader *Pixel_Shader;
 typedef ID3D11Texture2D *Texture_Handle;
 
 typedef ID3D11InputLayout *Vertex_Format;
-
-struct DirectX {
-    IDXGISwapChain *swap_chain_handle;
-    ID3D11RenderTargetView *swap_chain_render_target_view;
-    ID3D11Device *device;
-    ID3D11DeviceContext *device_context;
-    ID3D11RasterizerState *rasterizer;
-    ID3D11DepthStencilState *no_depth_test_state;
-    ID3D11SamplerState *linear_wrap_sampler;
-    ID3D11SamplerState *linear_clamp_sampler;
-    ID3D11SamplerState *point_wrap_sampler;
-    ID3D11SamplerState *point_clamp_sampler;
-    ID3D11BlendState *alpha_blend_state;
-    ID3D11BlendState *no_alpha_blend_state;
-    ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
-};
 #endif
 
 
@@ -114,6 +98,15 @@ struct Vertex_Field {
     Vertex_Field_Step_Type step_type;
 };
 
+enum Buffer_Type {
+    BT_INVALID,
+    BT_VERTEX,
+    BT_INDEX,
+    BT_CONSTANT,
+    BT_INSTANCE,
+    BT_COUNT,
+};
+
 
 
 void          init_render_backend(Window *window);
@@ -122,9 +115,12 @@ Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields);
 void          destroy_vertex_format(Vertex_Format format);
 void          bind_vertex_format(Vertex_Format format);
 
-Buffer        create_vertex_buffer(void *data, int data_len);
-void          destroy_vertex_buffer(ID3D11Buffer *buffer);
-void          bind_vertex_buffers(Buffer *buffers, int num_buffers, int stride);
+Buffer create_buffer(Buffer_Type type, void *data, int len);
+void   update_buffer(Buffer buffer, void *data, int len);
+void   destroy_buffer(Buffer buffer);
+void   bind_vertex_buffers(Buffer *buffers, int num_buffers, u32 start_slot, u32 *strides, u32 *offsets);
+void   bind_index_buffer(Buffer buffer, u32 slot);
+void   bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot);
 
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename);
 Pixel_Shader  compile_pixel_shader_from_file(wchar_t *filename);

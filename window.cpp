@@ -1,10 +1,10 @@
 #include "window.h"
 
-float time_now() {
-    FILETIME ft = {};
-    GetSystemTimeAsFileTime(&ft);
-    double t = (f64)(((u64)ft.dwLowDateTime) | (((u64)ft.dwHighDateTime) << 32));
-    return (t / 10.0 / 1000.0 / 1000.0);
+double time_now() {
+    FILETIME file_time = {};
+    GetSystemTimeAsFileTime(&file_time);
+    i64 t = (i64)(((u64)file_time.dwLowDateTime) | ((u64)file_time.dwHighDateTime) << 32);
+    return (double)(t - 0x019db1ded53e8000) / 10000000.0;
 }
 
 LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM w, LPARAM l) {

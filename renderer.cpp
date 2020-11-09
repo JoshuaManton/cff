@@ -29,10 +29,14 @@ void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices) {
 void ff_end(Fixed_Function *ff) {
     assert(ff->num_vertices < ff->max_vertices);
     bind_vertex_format(renderer_state.ff_vertex_format);
-    Buffer vertex_buffer = create_vertex_buffer(ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
-    bind_vertex_buffers(&vertex_buffer, 1, sizeof(FFVertex));
+
+    // todo(josh): should this create() go int ff_begin?
+    Buffer vertex_buffer = create_buffer(BT_VERTEX, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
+    u32 strides[] = { sizeof(ff->vertices[0]) };
+    u32 offsets[] = { 0 };
+    bind_vertex_buffers(&vertex_buffer, 1, 0, strides, offsets);
     draw(ff->num_vertices, 0);
-    destroy_vertex_buffer(vertex_buffer);
+    destroy_buffer(vertex_buffer);
 }
 
 void ff_vertex(Fixed_Function *ff, Vector3 position) {

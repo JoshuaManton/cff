@@ -13,6 +13,11 @@
 static Window g_main_window;
 static float g_time_at_startup;
 
+struct Model_CBuffer {
+    Vector3 position;
+    float pad0;
+};
+
 void main() {
     g_time_at_startup = time_now();
 
@@ -43,6 +48,8 @@ void main() {
     stbi_image_free(color_data);
     free(filedata);
 
+    Buffer model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
+
     while (true) {
         update_window();
         prerender(g_main_window.width, g_main_window.height);
@@ -60,6 +67,11 @@ void main() {
         ff_vertex(&ff, v3( 0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(1, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+
+        Model_CBuffer model_cbuffer = {};
+        model_cbuffer.position = v3(sin(time_now()), 0, 0);
+        update_buffer(model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
+        bind_constant_buffers(&model_cbuffer_handle, 1, 0);
         ff_end(&ff);
 
         present(true);
