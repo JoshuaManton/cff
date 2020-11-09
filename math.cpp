@@ -2,6 +2,11 @@
 
 #include <math.h>
 
+f32 to_radians    (f32 degrees) { return degrees * RAD_PER_DEG; }
+f64 to_radians_f64(f64 degrees) { return degrees * RAD_PER_DEG; }
+f32 to_degrees    (f32 radians) { return radians * DEG_PER_RAD; }
+f64 to_degrees_f64(f64 radians) { return radians * DEG_PER_RAD; }
+
 Vector2 v2(float x, float y) {
     Vector2 v;
     v.x = x;
@@ -34,6 +39,9 @@ Vector2 operator +=(Vector2 &a, Vector2 b) {
 
 Vector2 operator -(Vector2 a, Vector2 b) {
     return v2(a.x-b.x, a.y-b.y);
+}
+Vector2 operator -(Vector2 a) {
+    return v2(-a.x, -a.y);
 }
 Vector2 operator -=(Vector2 &a, Vector2 b) {
     return (a = a - b);
@@ -93,6 +101,9 @@ Vector3 operator +=(Vector3 &a, Vector3 b) {
 Vector3 operator -(Vector3 a, Vector3 b) {
     return v3(a.x-b.x, a.y-b.y, a.z-b.z);
 }
+Vector3 operator -(Vector3 a) {
+    return v3(-a.x, -a.y, -a.z);
+}
 Vector3 operator -=(Vector3 &a, Vector3 b) {
     return (a = a - b);
 }
@@ -145,6 +156,9 @@ Vector4 operator +=(Vector4 &a, Vector4 b) {
 Vector4 operator -(Vector4 a, Vector4 b) {
     return v4(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w);
 }
+Vector4 operator -(Vector4 a) {
+    return v4(-a.x, -a.y, -a.z, -a.w);
+}
 Vector4 operator -=(Vector4 &a, Vector4 b) {
     return (a = a - b);
 }
@@ -161,6 +175,129 @@ Vector4 operator /(Vector4 a, float f) {
 }
 Vector4 operator /=(Vector4 &a, float f) {
     return (a = a / f);
+}
+
+
+
+Quaternion quaternion_identity() {
+    Quaternion result;
+    result.x = 0.0f;
+    result.y = 0.0f;
+    result.z = 0.0f;
+    result.w = 1.0f;
+    return result;
+}
+
+Quaternion quaternion(float x, float y, float z, float w) {
+    Quaternion result;
+    result.x = x;
+    result.y = y;
+    result.z = z;
+    result.w = w;
+    return result;
+}
+
+Quaternion operator +(Quaternion a, Quaternion b) {
+    Quaternion result;
+    result.x = a.x+b.x;
+    result.y = a.y+b.y;
+    result.z = a.z+b.z;
+    result.w = a.w+b.w;
+    return result;
+}
+Quaternion operator +=(Quaternion &a, Quaternion b) {
+    return (a = a + b);
+}
+
+Quaternion operator -(Quaternion a, Quaternion b) {
+    Quaternion result;
+    result.x = a.x-b.x;
+    result.y = a.y-b.y;
+    result.z = a.z-b.z;
+    result.w = a.w-b.w;
+    return result;
+}
+Quaternion operator -=(Quaternion &a, Quaternion b) {
+    return (a = a - b);
+}
+
+Quaternion operator *(Quaternion a, Quaternion b) {
+    Quaternion result;
+    result.x = ( a.x*b.w) + (a.y*b.z) - (a.z*b.y) + (a.w*b.x);
+    result.y = (-a.x*b.z) + (a.y*b.w) + (a.z*b.x) + (a.w*b.y);
+    result.z = ( a.x*b.y) - (a.y*b.x) + (a.z*b.w) + (a.w*b.z);
+    result.w = (-a.x*b.x) - (a.y*b.y) - (a.z*b.z) + (a.w*b.w);
+    return result;
+}
+Quaternion operator *=(Quaternion &a, Quaternion b) {
+    return (a = a * b);
+}
+
+Quaternion operator *(Quaternion a, float f) {
+    Quaternion result;
+    result.x = a.x*f;
+    result.y = a.y*f;
+    result.z = a.z*f;
+    result.w = a.w*f;
+    return result;
+}
+Quaternion operator *=(Quaternion &a, float f) {
+    return (a = a * f);
+}
+
+Quaternion operator /(Quaternion a, float f) {
+    Quaternion result;
+    result.x = a.x/f;
+    result.y = a.y/f;
+    result.z = a.z/f;
+    result.w = a.w/f;
+    return result;
+}
+Quaternion operator /=(Quaternion &a, float f) {
+    return (a = a / f);
+}
+
+float dot(Quaternion a, Quaternion b) {
+    return (a.x*b.x) + (a.y*b.y) + (a.z*b.z) + (a.w*b.w);
+}
+
+float length(Quaternion q) {
+    return sqrt(dot(q, q));
+}
+
+float sqr_length(Quaternion q) {
+    return dot(q, q);
+}
+
+Quaternion normalize(Quaternion q) {
+    return q / length(q);
+}
+
+Quaternion inverse(Quaternion q) {
+    Quaternion conjugate;
+    conjugate.x = -q.x;
+    conjugate.y = -q.y;
+    conjugate.z = -q.z;
+    conjugate.w = q.w;
+
+    float len_sqr = dot(q, q);
+    Quaternion result;
+    result = conjugate / len_sqr;
+    return result;
+}
+
+Quaternion axis_angle(Vector3 axis, float angle_radians) {
+    Vector3 norm = normalize(axis);
+    float s = sin(angle_radians / 2.0f);
+
+    Vector3 vec = norm * s;
+
+    Quaternion result;
+    result.x = vec.x;
+    result.y = vec.y;
+    result.z = vec.z;
+    result.w = cos(angle_radians / 2.0f);
+    return result;
 }
 
 
@@ -229,8 +366,15 @@ Matrix4 orthographic(float left, float right, float bottom, float top, float nea
     return result;;
 }
 
-Matrix4 look_at(Vector3 eye, Vector3 centre, Vector3 up) {
-    Vector3 f = normalize(centre - eye);
+Matrix4 view_matrix(Vector3 position, Quaternion orientation) {
+    Matrix4 t = translate(-position);
+    Matrix4 r = quaternion_to_matrix4(inverse(orientation));
+    Matrix4 result = r * t;
+    return result;
+}
+
+Matrix4 look_at(Vector3 eye, Vector3 center, Vector3 up) {
+    Vector3 f = normalize(center - eye);
     Vector3 s = normalize(cross(f, up));
     Vector3 u = cross(s, f);
 
@@ -330,4 +474,97 @@ Matrix4 operator *(Matrix4 a, float f) {
         }
     }
     return result;
+}
+
+
+
+Matrix4 quaternion_to_matrix4(Quaternion q) {
+    Quaternion norm = normalize(q);
+
+    float xx = norm.x * norm.x;
+    float yy = norm.y * norm.y;
+    float zz = norm.z * norm.z;
+    float xy = norm.x * norm.y;
+    float xz = norm.x * norm.z;
+    float yz = norm.y * norm.z;
+    float wx = norm.w * norm.x;
+    float wy = norm.w * norm.y;
+    float wz = norm.w * norm.z;
+
+    Matrix4 result;
+
+    result[0][0] = 1.0f - 2.0f * (yy + zz);
+    result[0][1] = 2.0f * (xy + wz);
+    result[0][2] = 2.0f * (xz - wy);
+    result[0][3] = 0.0f;
+
+    result[1][0] = 2.0f * (xy - wz);
+    result[1][1] = 1.0f - 2.0f * (xx + zz);
+    result[1][2] = 2.0f * (yz + wx);
+    result[1][3] = 0.0f;
+
+    result[2][0] = 2.0f * (xz + wy);
+    result[2][1] = 2.0f * (yz - wx);
+    result[2][2] = 1.0f - 2.0f * (xx + yy);
+    result[2][3] = 0.0f;
+
+    result[3][0] = 0.0f;
+    result[3][1] = 0.0f;
+    result[3][2] = 0.0f;
+    result[3][3] = 1.0f;
+
+    return result;
+}
+
+Quaternion matrix4_to_quaternion(Matrix4 m) {
+    float t;
+    Quaternion result;
+    if (m[2][2] < 0.0f) {
+        if (m[0][0] > m[1][1]) {
+            t = 1 + m[0][0] - m[1][1] - m[2][2];
+            result = quaternion(
+                t,
+                m[0][1] + m[1][0],
+                m[2][0] + m[0][2],
+                m[1][2] - m[2][1]
+            );
+        }
+        else {
+            t = 1 - m[0][0] + m[1][1] - m[2][2];
+            result = quaternion(
+                m[0][1] + m[1][0],
+                t,
+                m[1][2] + m[2][1],
+                m[2][0] - m[0][2]
+            );
+        }
+    }
+    else {
+        if (m[0][0] < -m[1][1]) {
+            t = 1 - m[0][0] - m[1][1] + m[2][2];
+            result = quaternion(
+                m[2][0] + m[0][2],
+                m[1][2] + m[2][1],
+                t,
+                m[0][1] - m[1][0]
+            );
+        }
+        else {
+            t = 1 + m[0][0] + m[1][1] + m[2][2];
+            result = quaternion(
+                m[1][2] - m[2][1],
+                m[2][0] - m[0][2],
+                m[0][1] - m[1][0],
+                t
+            );
+        }
+    }
+    result *= 0.5f / sqrt(t);
+    return result;
+}
+
+Quaternion quaternion_look_at(Vector3 eye, Vector3 center, Vector3 up) {
+    // todo(josh): figure out why we have to swap center & eye, and why we need the inverse()
+    Matrix4 m = look_at(center, eye, up);
+    return inverse(matrix4_to_quaternion(m));
 }

@@ -10,14 +10,22 @@ struct PS_INPUT {
     float4 color    : COLOR;
 };
 
-cbuffer CBUFFER_SPECIFIC : register(b0) {
+cbuffer CBUFFER_PASS : register(b0) {
+    row_major matrix view_matrix;
+    row_major matrix projection_matrix;
+}
+
+cbuffer CBUFFER_SPECIFIC : register(b1) {
     float3 position;
     float pad0;
 };
 
 PS_INPUT main(VS_INPUT input) {
+    // matrix mvp = mul(model, mul(view, proj));
+    matrix mvp = mul(view_matrix, projection_matrix);
     PS_INPUT v;
-    v.position = float4(input.position + position, 1.0);
+    v.position = mul(float4(input.position + position, 1.0), mvp);
+    // v.position = float4(input.position + position, 1.0);
     v.texcoord = input.texcoord;
     v.color = input.color;
     return v;

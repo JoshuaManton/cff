@@ -109,7 +109,7 @@ enum Buffer_Type {
 
 
 
-void          init_render_backend(Window *window);
+void init_render_backend(Window *window);
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields);
 void          destroy_vertex_format(Vertex_Format format);
@@ -126,13 +126,13 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename);
 Pixel_Shader  compile_pixel_shader_from_file(wchar_t *filename);
 void          bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
 
-Texture       create_texture(Texture_Description desc);
-void          bind_textures(Texture *textures, int slot, int num_textures);
-void          unbind_all_textures();
+Texture create_texture(Texture_Description desc);
+void    bind_textures(Texture *textures, int slot, int num_textures);
+void    unbind_all_textures();
 
-void          prerender(int viewport_width, int viewport_height);
-void          draw(int vertex_count, int start_vertex);
-void          present(bool vsync);
+void prerender(int viewport_width, int viewport_height);
+void issue_draw_call(int vertex_count, int index_count, int instance_count = 0);
+void present(bool vsync);
 
 
 

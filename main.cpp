@@ -13,9 +13,20 @@
 static Window g_main_window;
 static float g_time_at_startup;
 
+struct Pass_CBuffer {
+    Matrix4 view_matrix;
+    Matrix4 projection_matrix;
+};
+
 struct Model_CBuffer {
     Vector3 position;
     float pad0;
+};
+
+struct Vertex {
+    Vector3 position;
+    Vector3 tex_coord;
+    Vector4 color;
 };
 
 void main() {
@@ -48,31 +59,99 @@ void main() {
     stbi_image_free(color_data);
     free(filedata);
 
+    // Make vertex format
+    Vertex_Field vertex_fields[] = {
+        {"POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
+        {"TEXCOORD", "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
+        {"COLOR",    "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
+    };
+    Vertex_Format default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields));
+
+    Buffer pass_cbuffer_handle  = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
     Buffer model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
+
+    u32 cube_indices[] = {
+         0,  2,  1,  0,  3,  2,
+         4,  5,  6,  4,  6,  7,
+         8, 10,  9,  8, 11, 10,
+        12, 13, 14, 12, 14, 15,
+        16, 17, 18, 16, 18, 19,
+        20, 22, 21, 20, 23, 22,
+    };
+
+    FFVertex cube_vertices[] = {
+        {{-0.5f, -0.5f, -0.5f}, {}, {}},
+        {{ 0.5f, -0.5f, -0.5f}, {}, {}},
+        {{ 0.5f,  0.5f, -0.5f}, {}, {}},
+        {{-0.5f,  0.5f, -0.5f}, {}, {}},
+
+        {{-0.5f, -0.5f,  0.5f}, {}, {}},
+        {{ 0.5f, -0.5f,  0.5f}, {}, {}},
+        {{ 0.5f,  0.5f,  0.5f}, {}, {}},
+        {{-0.5f,  0.5f,  0.5f}, {}, {}},
+
+        {{-0.5f, -0.5f, -0.5f}, {}, {}},
+        {{-0.5f,  0.5f, -0.5f}, {}, {}},
+        {{-0.5f,  0.5f,  0.5f}, {}, {}},
+        {{-0.5f, -0.5f,  0.5f}, {}, {}},
+
+        {{ 0.5f, -0.5f, -0.5f}, {}, {}},
+        {{ 0.5f,  0.5f, -0.5f}, {}, {}},
+        {{ 0.5f,  0.5f,  0.5f}, {}, {}},
+        {{ 0.5f, -0.5f,  0.5f}, {}, {}},
+
+        {{-0.5f, -0.5f, -0.5f}, {}, {}},
+        {{ 0.5f, -0.5f, -0.5f}, {}, {}},
+        {{ 0.5f, -0.5f,  0.5f}, {}, {}},
+        {{-0.5f, -0.5f,  0.5f}, {}, {}},
+
+        {{-0.5f,  0.5f, -0.5f}, {}, {}},
+        {{ 0.5f,  0.5f, -0.5f}, {}, {}},
+        {{ 0.5f,  0.5f,  0.5f}, {}, {}},
+        {{-0.5f,  0.5f,  0.5f}, {}, {}},
+    };
+
+    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices));
+    Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices));
 
     while (true) {
         update_window();
         prerender(g_main_window.width, g_main_window.height);
 
+        bind_vertex_format(default_vertex_format);
         bind_shaders(vertex_shader, pixel_shader);
-
         bind_textures(&texture, 0, 1);
 
-        FFVertex vertices[1024] = {};
-        Fixed_Function ff = {};
-        ff_begin(&ff, vertices, ARRAYSIZE(vertices));
-        ff_vertex(&ff, v3(-0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(0, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        ff_vertex(&ff, v3( 0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(1, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        Vector3 camera_position = v3(0, sin(time_now())*4, -5);
+        Vector3 cube_position = v3(sin(time_now() * 2) * 5, 0, 10);
+
+        Pass_CBuffer pass_cbuffer = {};
+        pass_cbuffer.view_matrix = view_matrix(camera_position, quaternion_look_at(camera_position, cube_position, v3(0, 1, 0)));
+        pass_cbuffer.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
+        update_buffer(pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
+        bind_constant_buffers(&pass_cbuffer_handle, 1, 0);
 
         Model_CBuffer model_cbuffer = {};
-        model_cbuffer.position = v3(sin(time_now()), 0, 0);
+        model_cbuffer.position = cube_position;
         update_buffer(model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
-        bind_constant_buffers(&model_cbuffer_handle, 1, 0);
-        ff_end(&ff);
+        bind_constant_buffers(&model_cbuffer_handle, 1, 1);
+
+        // FFVertex vertices[1024] = {};
+        // Fixed_Function ff = {};
+        // ff_begin(&ff, vertices, ARRAYSIZE(vertices));
+        // ff_vertex(&ff, v3(-0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(0, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        // ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        // ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        // ff_vertex(&ff, v3( 0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(1, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        // ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        // ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
+        // ff_end(&ff);
+
+        u32 strides[1] = {sizeof(FFVertex)};
+        u32 offsets[1] = {0};
+        bind_vertex_buffers(&cube_vertex_buffer, 1, 0, strides, offsets);
+        bind_index_buffer(cube_index_buffer, 0);
+        issue_draw_call(ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices));
 
         present(true);
     }

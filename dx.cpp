@@ -347,8 +347,24 @@ void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
     directx.device_context->PSSetShader(pixel, 0, 0);
 }
 
-void draw(int vertex_count, int start_vertex) {
-    directx.device_context->Draw(vertex_count, start_vertex);
+void issue_draw_call(int vertex_count, int index_count, int instance_count) {
+    if (instance_count == 0) {
+        if (index_count > 0) {
+            directx.device_context->DrawIndexed((u32)index_count, 0, 0);
+        }
+        else {
+            directx.device_context->Draw((u32)vertex_count, 0);
+        }
+    }
+    else {
+        if (index_count > 0) {
+            directx.device_context->DrawIndexedInstanced((u32)index_count, (u32)instance_count, 0, 0, 0);
+        }
+        else {
+            directx.device_context->DrawInstanced((u32)vertex_count, (u32)instance_count, 0, 0);
+        }
+    }
+
 }
 
 Texture create_texture(Texture_Description desc) {
@@ -504,6 +520,8 @@ void prerender(int viewport_width, int viewport_height) {
     directx.device_context->RSSetViewports(1, &viewport);
 
     directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
+    directx.device_context->RSSetState(directx.rasterizer);
+
 }
 
 void present(bool vsync) {

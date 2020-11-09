@@ -13,7 +13,7 @@ static Renderer_State renderer_state;
 void init_renderer(Window *window) {
     // Make vertex format
     Vertex_Field fields[] = {
-        {"POSITION", "position",  offsetof(FFVertex, position),  VFT_FLOAT4, VFST_PER_VERTEX},
+        {"POSITION", "position",  offsetof(FFVertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
         {"TEXCOORD", "tex_coord", offsetof(FFVertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
         {"COLOR",    "color",     offsetof(FFVertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
@@ -30,12 +30,12 @@ void ff_end(Fixed_Function *ff) {
     assert(ff->num_vertices < ff->max_vertices);
     bind_vertex_format(renderer_state.ff_vertex_format);
 
-    // todo(josh): should this create() go int ff_begin?
+    // todo(josh): should this create() go in ff_begin?
     Buffer vertex_buffer = create_buffer(BT_VERTEX, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
-    u32 strides[] = { sizeof(ff->vertices[0]) };
-    u32 offsets[] = { 0 };
+    u32 strides[1] = { sizeof(ff->vertices[0]) };
+    u32 offsets[1] = { 0 };
     bind_vertex_buffers(&vertex_buffer, 1, 0, strides, offsets);
-    draw(ff->num_vertices, 0);
+    issue_draw_call(ff->num_vertices, 0);
     destroy_buffer(vertex_buffer);
 }
 
