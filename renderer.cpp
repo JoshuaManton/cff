@@ -58,6 +58,10 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
         Model_CBuffer model_cbuffer = {};
         model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
         if (mesh->has_material) {
+            model_cbuffer.ambient   = mesh->material.ambient;
+            model_cbuffer.metallic  = mesh->material.metallic;
+            model_cbuffer.roughness = mesh->material.roughness;
+
             if (mesh->material.albedo_map.handle && options.do_albedo) {
                 bind_textures(&mesh->material.albedo_map, 1, TS_ALBEDO);
                 model_cbuffer.has_albedo_map = 1;

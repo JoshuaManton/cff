@@ -1,7 +1,11 @@
 SamplerState main_sampler;
 
-Texture2D albedo_map : register(t0);
-Texture2D normal_map : register(t1);
+Texture2D albedo_map    : register(t0);
+Texture2D normal_map    : register(t1);
+Texture2D metallic_map  : register(t2);
+Texture2D roughness_map : register(t3);
+Texture2D emission_map  : register(t4);
+Texture2D ao_map        : register(t5);
 
 struct PS_INPUT {
     float4 position         : SV_POSITION;
@@ -130,10 +134,12 @@ float4 main(PS_INPUT input) : SV_Target {
     }
 
     if (has_ao_map) {
-        output_color *= albedo_map.Sample(main_sampler, input.texcoord.xy).r;
+        output_color *= ao_map.Sample(main_sampler, input.texcoord.xy).r;
     }
 
     float3 albedo = output_color.rgb;
+
+    output_color *= ambient;
 
     for (int point_light_index = 0; point_light_index < num_point_lights; point_light_index++) {
         float3 light_position = point_light_positions[point_light_index].xyz;
