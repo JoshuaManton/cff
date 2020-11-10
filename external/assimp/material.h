@@ -198,8 +198,8 @@ enum aiTextureType
      */
     aiTextureType_NONE = 0,
 
-    /** LEGACY API MATERIALS 
-     * Legacy refers to materials which 
+    /** LEGACY API MATERIALS
+     * Legacy refers to materials which
      * Were originally implemented in the specifications around 2000.
      * These must never be removed, as most engines support them.
      */

@@ -12,21 +12,33 @@ struct PS_INPUT {
 };
 
 cbuffer CBUFFER_PASS : register(b0) {
-    row_major matrix view_matrix;
-    row_major matrix projection_matrix;
+    matrix view_matrix;
+    matrix projection_matrix;
     float3 camera_position;
 }
 
 cbuffer CBUFFER_SPECIFIC : register(b1) {
-    row_major matrix model_matrix;
+    matrix model_matrix;
+    int has_albedo_map;
+    int has_normal_map;
+    int has_metallic_map;
+    int has_roughness_map;
+    int has_emission_map;
+    int has_ao_map;
+    float ambient;
+    float metallic;
+    float roughness;
+    float pad0;
+    float pad1;
+    float pad2;
 };
 
 PS_INPUT main(VS_INPUT input) {
-    matrix mvp = mul(model_matrix, mul(view_matrix, projection_matrix));
+    matrix mvp = mul(projection_matrix, mul(view_matrix, model_matrix));
     PS_INPUT v;
-    v.position = mul(float4(input.position, 1.0), mvp);
+    v.position = mul(mvp, float4(input.position, 1.0));
     v.texcoord = input.texcoord;
     v.color = input.color;
-    v.world_position = mul(float4(input.position, 1.0), model_matrix).xyz;
+    v.world_position = mul(model_matrix, float4(input.position, 1.0)).xyz;
     return v;
 }

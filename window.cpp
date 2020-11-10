@@ -353,6 +353,10 @@ void update_window(Window *window) {
     assert(currently_processing_window == nullptr);
     currently_processing_window = window;
     currently_processing_window->mouse_position_pixel_delta = {};
+    currently_processing_window->mouse_scroll = {};
+    memset(&currently_processing_window->inputs_down[0], 0, ARRAYSIZE(currently_processing_window->inputs_down));
+    memset(&currently_processing_window->inputs_up[0],   0, ARRAYSIZE(currently_processing_window->inputs_up));
+
     MSG msg = {};
     while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
@@ -366,4 +370,12 @@ void update_window(Window *window) {
 
 bool get_input(Window *window, Input input) {
     return window->inputs_held[input];
+}
+
+bool get_input_down(Window *window, Input input) {
+    return window->inputs_down[input];
+}
+
+bool get_input_up(Window *window, Input input) {
+    return window->inputs_up[input];
 }

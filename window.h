@@ -157,3 +157,5 @@ Window create_window(int width, int height);
 void update_window(Window *window);
 
 bool get_input(Window *window, Input input);
+bool get_input_down(Window *window, Input input);
+bool get_input_up(Window *window, Input input);

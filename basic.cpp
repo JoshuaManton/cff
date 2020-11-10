@@ -127,7 +127,10 @@ Allocator arena_allocator() {
 // todo(josh): custom allocator
 char *read_entire_file(char *filename, int *len) {
     auto file = fopen(filename, "rb");
-    assert(file != nullptr && "couldn't find file");
+    if (file == nullptr) {
+        printf("read_entire_file couldn't find file: %s\n", filename);
+        assert(false);
+    }
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
     fseek(file, 0, SEEK_SET);
@@ -142,17 +145,6 @@ char *read_entire_file(char *filename, int *len) {
 
 
 
-void String_Builder::print(char *str) {
-    for (char *s = str; *s != '\0'; s++) {
-        buf.append(*s);
-    }
-    buf.data[buf.count] = 0;
-}
-
-char *String_Builder::string() {
-    return buf.data;
-}
-
 String_Builder make_string_builder(Allocator allocator) {
     String_Builder sb = {};
     sb.buf.allocator = allocator;
@@ -161,4 +153,22 @@ String_Builder make_string_builder(Allocator allocator) {
 
 void destroy_string_builder(String_Builder sb) {
     sb.buf.destroy();
+}
+
+void String_Builder::print(char *str) {
+    for (char *s = str; *s != '\0'; s++) {
+        buf.append(*s);
+    }
+    BOUNDS_CHECK(buf.count, 0, buf.capacity);
+    buf.data[buf.count] = 0;
+}
+
+void String_Builder::clear() {
+    buf.clear();
+    BOUNDS_CHECK(buf.count, 0, buf.capacity);
+    buf.data[buf.count] = 0;
+}
+
+char *String_Builder::string() {
+    return buf.data;
 }

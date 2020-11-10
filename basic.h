@@ -119,6 +119,7 @@ struct Array {
     T pop();
     T ordered_remove(int index);
     T unordered_remove(int index);
+    void clear();
     void destroy();
 
     inline T &operator[](int index) {
@@ -175,6 +176,11 @@ void Array<T>::destroy() {
     if (data) {
         free(allocator, data);
     }
+}
+
+template<typename T>
+void Array<T>:: clear() {
+    count = 0;
 }
 
 template<typename T>
@@ -266,6 +272,7 @@ struct String_Builder {
     Array<char> buf;
 
     void print(char *str);
+    void clear();
     char *string();
 };
 

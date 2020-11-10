@@ -47,44 +47,57 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
             for (int prop_index = 0; prop_index < assimp_material->mNumProperties; prop_index++) {
                 aiMaterialProperty *property = assimp_material->mProperties[prop_index];
                 if (strcmp(property->mKey.data, "$tex.file") == 0) {
-                    switch (property->mType) {
-                        case aiPTI_Float:   break;
-                        case aiPTI_Double:  break;
-                        case aiPTI_Integer: break;
-                        case aiPTI_Buffer:  break;
-                        case aiPTI_String: {
-                            char *cstr = ((aiString *)property->mData)->data;
-                            switch (property->mSemantic) {
-                                case aiTextureType_NONE:                                                              break;
-                                case aiTextureType_DIFFUSE: {
-                                    String_Builder sb = make_string_builder(default_allocator());
-                                    defer(destroy_string_builder(sb));
-                                    sb.print("sponza/");
-                                    sb.print(cstr);
-                                    material.albedo = load_texture_from_file(sb.string());
-                                    break;
-                                }
-                                case aiTextureType_SPECULAR:                                                          break;
-                                case aiTextureType_AMBIENT:                                                           break;
-                                case aiTextureType_EMISSIVE:                                                          break;
-                                case aiTextureType_HEIGHT:                                                            break;
-                                case aiTextureType_NORMALS:                                                           break;
-                                case aiTextureType_SHININESS:                                                         break;
-                                case aiTextureType_OPACITY:                                                           break;
-                                case aiTextureType_DISPLACEMENT:                                                      break;
-                                case aiTextureType_LIGHTMAP:                                                          break;
-                                case aiTextureType_REFLECTION:                                                        break;
-                                case aiTextureType_BASE_COLOR:                                                        break;
-                                case aiTextureType_NORMAL_CAMERA:                                                     break;
-                                case aiTextureType_EMISSION_COLOR:                                                    break;
-                                case aiTextureType_METALNESS:                                                         break;
-                                case aiTextureType_DIFFUSE_ROUGHNESS:                                                 break;
-                                case aiTextureType_AMBIENT_OCCLUSION:                                                 break;
-                                case aiTextureType_UNKNOWN:                                                           break;
-                            }
+                    assert(property->mType == aiPTI_String);
+                    char *cstr = ((aiString *)property->mData)->data;
+                    String_Builder path_sb = make_string_builder(default_allocator());
+                    defer(destroy_string_builder(path_sb));
+                    path_sb.print("sponza/");
+                    path_sb.print(cstr);
+                    switch (property->mSemantic) {
+                        case aiTextureType_DIFFUSE:           { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT_SRGB); } break; }
+                        case aiTextureType_NORMALS:           { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_BASE_COLOR:        { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_NORMAL_CAMERA:     { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_EMISSION_COLOR:    { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_METALNESS:         { if (material.metallic_map.handle  == nullptr) {  material.metallic_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_DIFFUSE_ROUGHNESS: { if (material.roughness_map.handle == nullptr) {  material.roughness_map = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_AMBIENT_OCCLUSION: { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_LIGHTMAP:          { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_EMISSIVE:          { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        case aiTextureType_SPECULAR:          { printf("Unhandled: aiTextureType_SPECULAR: %s\n", path_sb.string());     break; }
+                        case aiTextureType_AMBIENT:           { printf("Unhandled: aiTextureType_AMBIENT: %s\n", path_sb.string());      break; }
+                        case aiTextureType_HEIGHT:            { printf("Unhandled: aiTextureType_HEIGHT: %s\n", path_sb.string());       break; }
+                        case aiTextureType_SHININESS:         { printf("Unhandled: aiTextureType_SHININESS: %s\n", path_sb.string());    break; }
+                        case aiTextureType_OPACITY:           { printf("Unhandled: aiTextureType_OPACITY: %s\n", path_sb.string());      break; }
+                        case aiTextureType_DISPLACEMENT:      { printf("Unhandled: aiTextureType_DISPLACEMENT: %s\n", path_sb.string()); break; }
+                        case aiTextureType_REFLECTION:        { printf("Unhandled: aiTextureType_REFLECTION: %s\n", path_sb.string());   break; }
+                        case aiTextureType_NONE:              { assert(false); }
+                        case aiTextureType_UNKNOWN: {
+                            printf("Unknown texture type: %s\n", path_sb.string());
                             break;
                         }
                     }
+                }
+                else if (strcmp(property->mKey.data, "$mat.gltf.pbrMetallicRoughness.baseColorFactor") == 0) {
+                    assert(property->mType == aiPTI_Float);
+                    material.ambient = *(float *)property->mData;
+                }
+                else if (strcmp(property->mKey.data, "$mat.gltf.pbrMetallicRoughness.metallicFactor") == 0) {
+                    assert(property->mType == aiPTI_Float);
+                    material.metallic = *(float *)property->mData;
+                }
+                else if (strcmp(property->mKey.data, "$mat.gltf.pbrMetallicRoughness.roughnessFactor") == 0) {
+                    assert(property->mType == aiPTI_Float);
+                    material.roughness = *(float *)property->mData;
+                }
+                else {
+                    // switch (property->mType) {
+                    //     case aiPTI_Float:   printf("%s -> %f\n", property->mKey.data, *(float *)property->mData);           break;
+                    //     case aiPTI_Double:  printf("%s -> %f\n", property->mKey.data, *(double *)property->mData);          break;
+                    //     case aiPTI_Integer: printf("%s -> %d\n", property->mKey.data, *(int *)property->mData);             break;
+                    //     case aiPTI_Buffer:  printf("%s -> %p\n", property->mKey.data, property->mData);                     break;
+                    //     case aiPTI_String:  printf("%s -> %s\n", property->mKey.data, ((aiString *)property->mData)->data); break;
+                    // }
                 }
             }
         }
@@ -107,22 +120,19 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
     }
 }
 
-void load_mesh(void *data, int len, Array<Loaded_Mesh> *out_array) {
+void load_mesh_from_file(char *filename, Array<Loaded_Mesh> *out_array) {
     Assimp::Importer importer;
 
-    const aiScene *scene = importer.ReadFileFromMemory(data, len,
+    const aiScene *scene = importer.ReadFile(filename,
         aiProcess_PreTransformVertices |
         aiProcess_Triangulate |
         aiProcess_GenSmoothNormals |
-        aiProcess_FlipUVs,
-        "glb");
+        aiProcess_FlipUVs);
 
-    assert(scene != nullptr);
+    if (scene == nullptr) {
+        printf("Error loading mesh: %s\n", importer.GetErrorString());
+        assert(false);
+    }
+
     process_node(scene, scene->mRootNode, out_array);
-}
-
-void load_mesh_from_file(char *filename, Array<Loaded_Mesh> *out_array) {
-    int len;
-    char *data = read_entire_file(filename, &len);
-    load_mesh(data, len, out_array);
 }

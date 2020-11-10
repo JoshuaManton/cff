@@ -33,8 +33,6 @@ void main() {
     Vertex_Shader vertex_shader = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader pixel_shader = compile_pixel_shader_from_file(L"pixel.hlsl");
 
-    Texture texture = load_texture_from_file("my_texture.png");
-
     // Make vertex format
     Vertex_Field vertex_fields[] = {
         {"SV_POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
@@ -42,9 +40,6 @@ void main() {
         {"COLOR",       "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
     Vertex_Format default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields));
-
-    Buffer pass_cbuffer_handle  = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
-    Buffer model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
 
     u32 cube_indices[] = {
          0,  2,  1,  0,  3,  2,
@@ -91,11 +86,23 @@ void main() {
     Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices));
 
     Vector3 camera_position = {};
-    Quaternion camera_rotation = quaternion_identity();
+    Quaternion camera_orientation = quaternion_identity();
+
+    Array<Loaded_Mesh> helmet_meshes = {};
+    helmet_meshes.allocator = default_allocator();
+    load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
 
     Array<Loaded_Mesh> sponza_meshes = {};
     sponza_meshes.allocator = default_allocator();
     load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
+
+    Render_Options render_options = {};
+    render_options.do_albedo    = true;
+    render_options.do_normal    = true;
+    render_options.do_metallic  = true;
+    render_options.do_roughness = true;
+    render_options.do_emission  = true;
+    render_options.do_ao        = true;
 
     while (true) {
         update_window(&g_main_window);
@@ -107,14 +114,21 @@ void main() {
             break;
         }
 
+        if (get_input_down(&g_main_window, INPUT_1)) { render_options.do_albedo    = !render_options.do_albedo;    printf("do_albedo: %d\n",    render_options.do_albedo);    }
+        if (get_input_down(&g_main_window, INPUT_2)) { render_options.do_normal    = !render_options.do_normal;    printf("do_normal: %d\n",    render_options.do_normal);    }
+        if (get_input_down(&g_main_window, INPUT_3)) { render_options.do_metallic  = !render_options.do_metallic;  printf("do_metallic: %d\n",  render_options.do_metallic);  }
+        if (get_input_down(&g_main_window, INPUT_4)) { render_options.do_roughness = !render_options.do_roughness; printf("do_roughness: %d\n", render_options.do_roughness); }
+        if (get_input_down(&g_main_window, INPUT_5)) { render_options.do_emission  = !render_options.do_emission;  printf("do_emission: %d\n",  render_options.do_emission);  }
+        if (get_input_down(&g_main_window, INPUT_6)) { render_options.do_ao        = !render_options.do_ao;        printf("do_ao: %d\n",        render_options.do_ao);        }
+
         const float CAMERA_SPEED = 0.025f;
 
-        if (get_input(&g_main_window, INPUT_E)) camera_position += quaternion_up(camera_rotation)      * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_Q)) camera_position -= quaternion_up(camera_rotation)      * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_W)) camera_position += quaternion_forward(camera_rotation) * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_S)) camera_position -= quaternion_forward(camera_rotation) * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_D)) camera_position += quaternion_right(camera_rotation)   * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_A)) camera_position -= quaternion_right(camera_rotation)   * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * CAMERA_SPEED;
 
         if (get_input(&g_main_window, INPUT_MOUSE_RIGHT)) {
             Vector2 delta = g_main_window.mouse_position_pixel_delta * 0.25f;
@@ -123,32 +137,28 @@ void main() {
             Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
             Quaternion y = axis_angle(v3(0, 1, 0), to_radians(rotate_vector.y));
             Quaternion z = axis_angle(v3(0, 0, 1), to_radians(rotate_vector.z));
-            Quaternion result = y * camera_rotation;
+            Quaternion result = y * camera_orientation;
             result = result * x;
             result = result * z;
             result = normalize(result);
-            camera_rotation = result;
+            camera_orientation = result;
         }
 
         prerender(g_main_window.width, g_main_window.height);
 
+        set_render_targets(nullptr, nullptr);
+        clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
+
         bind_vertex_format(default_vertex_format);
         bind_shaders(vertex_shader, pixel_shader);
-        bind_textures(&texture, 0, 1);
 
         Vector3 cube_position = v3(5, 5, 10);
 
-        Pass_CBuffer pass_cbuffer = {};
-        pass_cbuffer.view_matrix = view_matrix(camera_position, camera_rotation);
-        pass_cbuffer.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
-        pass_cbuffer.camera_position = camera_position;
-        update_buffer(pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
-        bind_constant_buffers(&pass_cbuffer_handle, 1, 0);
-
-        Model_CBuffer model_cbuffer = {};
-        model_cbuffer.model_matrix = model_matrix(cube_position, v3(1, 1, 1), quaternion_identity());
-        update_buffer(model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
-        bind_constant_buffers(&model_cbuffer_handle, 1, 1);
+        Render_Pass_Desc pass = {};
+        pass.camera_position = camera_position;
+        pass.camera_orientation = camera_orientation;
+        pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
+        begin_render_pass(&pass);
 
         // FFVertex vertices[1024] = {};
         // Fixed_Function ff = {};
@@ -161,24 +171,8 @@ void main() {
         // ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         // ff_end(&ff);
 
-        Foreach(mesh, sponza_meshes) {
-            u32 strides[1] = {sizeof(Vertex)};
-            u32 offsets[1] = {0};
-            bind_vertex_buffers(&mesh->vertex_buffer, 1, 0, strides, offsets);
-            bind_index_buffer(mesh->index_buffer, 0);
-
-            if (mesh->has_material) {
-                if (mesh->material.albedo.handle) bind_textures(&mesh->material.albedo, 0, 1);
-            }
-
-            issue_draw_call(mesh->num_vertices, mesh->num_indices);
-        }
-
-        // u32 strides[1] = {sizeof(FFVertex)};
-        // u32 offsets[1] = {0};
-        // bind_vertex_buffers(&cube_vertex_buffer, 1, 0, strides, offsets);
-        // bind_index_buffer(cube_index_buffer, 0);
-        // issue_draw_call(ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices));
+        draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
+        draw_meshes(helmet_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
 
         present(true);
     }

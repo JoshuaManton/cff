@@ -13,10 +13,30 @@ struct Pass_CBuffer {
 
 struct Model_CBuffer {
     Matrix4 model_matrix;
+    int has_albedo_map;
+    int has_normal_map;
+    int has_metallic_map;
+    int has_roughness_map;
+    int has_emission_map;
+    int has_ao_map;
+    float ambient;
+    float metallic;
+    float roughness;
+    float pad0;
+    float pad1;
+    float pad2;
 };
 
 struct Material {
-    Texture albedo;
+    Texture albedo_map;
+    Texture normal_map;
+    Texture metallic_map;
+    Texture roughness_map;
+    Texture emission_map;
+    Texture ao_map;
+    float ambient;
+    float metallic;
+    float roughness;
 };
 
 struct Loaded_Mesh {
@@ -28,8 +48,20 @@ struct Loaded_Mesh {
     bool has_material;
 };
 
+enum CBuffer_Slot {
+    CBS_PASS,
+    CBS_MODEL,
+    CBS_LIGHTING,
+};
+
 enum Texture_Slot {
     TS_ALBEDO,
+    TS_NORMAL,
+    TS_METALLIC,
+    TS_ROUGHNESS,
+    TS_EMISSION,
+    TS_AO,
+    TS_COUNT,
 };
 
 struct Vertex {
@@ -50,7 +82,25 @@ struct Fixed_Function {
     int num_vertices;
 };
 
-Texture load_texture_from_file(char *filename);
+Texture load_texture_from_file(char *filename, Texture_Format format = TF_R8G8B8A8_UINT);
+
+struct Render_Options {
+    bool do_albedo;
+    bool do_normal;
+    bool do_metallic;
+    bool do_roughness;
+    bool do_emission;
+    bool do_ao;
+};
+
+struct Render_Pass_Desc {
+    Vector3 camera_position;
+    Quaternion camera_orientation;
+    Matrix4 projection_matrix;
+};
+
+void begin_render_pass(Render_Pass_Desc *pass);
+void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options);
 
 void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices);
 void ff_end(Fixed_Function *ff);

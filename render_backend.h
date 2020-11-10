@@ -18,17 +18,15 @@ typedef ID3D11InputLayout *Vertex_Format;
 #include "window.h"
 #include "basic.h"
 
-
+#define MAX_BOUND_TEXTURES 12
+#define MAX_COLOR_BUFFERS   8
 
 void init_renderer(Window *window);
-
-#define MAX_BOUND_TEXTURES 12
 
 enum Texture_Format {
     TF_INVALID,
     TF_R8G8B8A8_UINT,
     TF_R8G8B8A8_UINT_SRGB,
-
     TF_DEPTH_STENCIL,
 
     TF_COUNT,
@@ -108,7 +106,6 @@ enum Buffer_Type {
     BT_VERTEX,
     BT_INDEX,
     BT_CONSTANT,
-    BT_INSTANCE,
     BT_COUNT,
 };
 
@@ -132,8 +129,12 @@ Pixel_Shader  compile_pixel_shader_from_file(wchar_t *filename);
 void          bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
 
 Texture create_texture(Texture_Description desc);
-void    bind_textures(Texture *textures, int slot, int num_textures);
+void    bind_textures(Texture *textures, int num_textures, int slot);
 void    unbind_all_textures();
+
+void set_render_targets(Texture *color_buffers[MAX_COLOR_BUFFERS], Texture *depth_buffer);
+void unset_render_targets();
+void clear_bound_render_targets(Vector4 color);
 
 void prerender(int viewport_width, int viewport_height);
 void issue_draw_call(int vertex_count, int index_count, int instance_count = 0);

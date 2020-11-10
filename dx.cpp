@@ -3,8 +3,7 @@ struct DirectX {
     ID3D11DeviceContext *device_context;
 
     IDXGISwapChain *swap_chain_handle;
-    ID3D11RenderTargetView *swap_chain_render_target_view;
-    ID3D11DepthStencilView *swap_chain_depth_stencil_view;
+
     Texture swap_chain_depth_buffer;
 
     ID3D11RasterizerState *no_cull_rasterizer;
@@ -17,12 +16,15 @@ struct DirectX {
     ID3D11SamplerState *point_clamp_sampler;
     ID3D11BlendState *alpha_blend_state;
     ID3D11BlendState *no_alpha_blend_state;
+
+    ID3D11RenderTargetView   *cur_rtvs[MAX_COLOR_BUFFERS];
+    ID3D11DepthStencilView   *cur_dsv;
     ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
 };
 
 static DirectX directx;
 
-DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
+static DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
 
 ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
     D3D11_RENDER_TARGET_VIEW_DESC render_target_view_desc = {};
@@ -49,14 +51,23 @@ void init_graphics_driver(Window *window) {
     dx_texture_format_mapping[TF_R8G8B8A8_UINT_SRGB] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     dx_texture_format_mapping[TF_DEPTH_STENCIL]      = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
+    // make sure all texture formats have a mapping
+    for (int i = 0; i < ARRAYSIZE(dx_texture_format_mapping); i++) {
+        if (dx_texture_format_mapping[i] == 0) {
+            if ((Texture_Format)i != TF_INVALID && (Texture_Format)i != TF_COUNT) {
+                printf("Missing dx texture format mapping for %d\n", i);
+                assert(false);
+            }
+        }
+    }
+
     // Create swap chain
-    const Texture_Format SWAP_CHAIN_FORMAT = TF_R8G8B8A8_UINT;
     DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
     swap_chain_desc.BufferCount                        = 2;
     swap_chain_desc.SwapEffect                         = DXGI_SWAP_EFFECT_FLIP_DISCARD; // todo(josh): use DXGI_SWAP_EFFECT_DISCARD (or something else) on non-Windows 10
     swap_chain_desc.BufferDesc.Width                   = (u32)window->width;
     swap_chain_desc.BufferDesc.Height                  = (u32)window->height;
-    swap_chain_desc.BufferDesc.Format                  = dx_texture_format_mapping[TF_R8G8B8A8_UINT];
+    swap_chain_desc.BufferDesc.Format                  = dx_texture_format_mapping[SWAP_CHAIN_FORMAT];
     swap_chain_desc.BufferDesc.RefreshRate.Numerator   = 60; // todo(josh): query monitor refresh rate.
     swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swap_chain_desc.BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -64,12 +75,6 @@ void init_graphics_driver(Window *window) {
     swap_chain_desc.SampleDesc.Count                   = 1;
     swap_chain_desc.SampleDesc.Quality                 = 0;
     swap_chain_desc.Windowed                           = true;
-
-    /*
-    directx.swap_chain.width  = (int)swap_chain_desc.BufferDesc.Width;
-    directx.swap_chain.height = (int)swap_chain_desc.BufferDesc.Height;
-    directx.swap_chain.format = SWAP_CHAIN_FORMAT;
-    */
 
     D3D_FEATURE_LEVEL requested_feature_level = D3D_FEATURE_LEVEL_11_0;
     D3D_FEATURE_LEVEL actual_feature_level = {};
@@ -90,19 +95,12 @@ void init_graphics_driver(Window *window) {
     // todo(josh): if the hardware device fails, try making a WARP device
     assert(result == S_OK);
 
-    ID3D11Texture2D *back_buffer_texture = {};
-    result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
-    assert(result == S_OK);
-    directx.swap_chain_render_target_view = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT); // todo(josh): srgb backbuffer
-    back_buffer_texture->Release();
-
     Texture_Description depth_texture_desc = {};
     depth_texture_desc.type = TT_2D;
     depth_texture_desc.format = TF_DEPTH_STENCIL;
     depth_texture_desc.width = window->width;
     depth_texture_desc.height = window->height;
     directx.swap_chain_depth_buffer = create_texture(depth_texture_desc);
-    directx.swap_chain_depth_stencil_view = dx_create_depth_stencil_view(directx.swap_chain_depth_buffer.handle, TF_DEPTH_STENCIL);
 
     // Make no cull rasterizer
     D3D11_RASTERIZER_DESC no_cull_rasterizer_desc = {};
@@ -510,20 +508,21 @@ Texture create_texture(Texture_Description desc) {
     return texture;
 }
 
-void bind_textures(Texture *textures, int slot, int num_textures) {
-    assert((slot + num_textures) < ARRAYSIZE(directx.cur_srvs));
-    for (int i = slot; i < (slot + num_textures); i++) {
-        if (directx.cur_srvs[i]) {
-            directx.cur_srvs[i] = {};
+void bind_textures(Texture *textures, int num_textures, int start_slot) {
+    assert((start_slot + num_textures) < MAX_BOUND_TEXTURES);
+    for (int i = 0; i < num_textures; i++) {
+        int slot = start_slot + i;
+        if (directx.cur_srvs[slot]) {
+            directx.cur_srvs[slot] = {};
         }
 
         Texture *texture = textures + i;
         if (texture) {
             assert(texture->shader_resource_view);
-            directx.cur_srvs[i] = texture->shader_resource_view;
+            directx.cur_srvs[slot] = texture->shader_resource_view;
         }
     }
-    directx.device_context->PSSetShaderResources((u32)slot, num_textures, &directx.cur_srvs[slot]);
+    directx.device_context->PSSetShaderResources((u32)start_slot, num_textures, &directx.cur_srvs[start_slot]);
 }
 
 void unbind_all_textures() {
@@ -533,31 +532,66 @@ void unbind_all_textures() {
     directx.device_context->PSSetShaderResources(0, ARRAYSIZE(directx.cur_srvs), &directx.cur_srvs[0]);
 }
 
+void set_render_targets(Texture *color_buffers[MAX_COLOR_BUFFERS], Texture *depth_buffer) {
+    unset_render_targets();
+
+    if (color_buffers != nullptr) {
+        for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
+            Texture *color_buffer = color_buffers[i];
+            assert(directx.cur_rtvs[i] == nullptr);
+            if (color_buffer != nullptr) {
+                assert(color_buffer->description.render_target);
+                directx.cur_rtvs[i] = dx_create_render_target_view(color_buffer->handle, color_buffer->description.format);
+            }
+        }
+    }
+    else {
+        ID3D11Texture2D *back_buffer_texture = {};
+        auto result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
+        assert(result == S_OK);
+        assert(directx.cur_rtvs[0] == nullptr);
+        directx.cur_rtvs[0] = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT); // todo(josh): srgb backbuffer
+        back_buffer_texture->Release();
+    }
+
+    Texture *depth_buffer_to_use = depth_buffer;
+    if (depth_buffer_to_use == nullptr) {
+        depth_buffer_to_use = &directx.swap_chain_depth_buffer;
+    }
+    assert(directx.cur_dsv == nullptr);
+    directx.cur_dsv = dx_create_depth_stencil_view(depth_buffer_to_use->handle, depth_buffer_to_use->description.format);
+
+    directx.device_context->OMSetRenderTargets(MAX_COLOR_BUFFERS, &directx.cur_rtvs[0], directx.cur_dsv);
+}
+
+void unset_render_targets() {
+    for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
+        ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
+        if (directx.cur_rtvs[i] != nullptr) {
+            directx.cur_rtvs[i]->Release();
+            directx.cur_rtvs[i] = nullptr;
+        }
+    }
+    if (directx.cur_dsv != nullptr) {
+        directx.cur_dsv->Release();
+        directx.cur_dsv = nullptr;
+    }
+}
+
+void clear_bound_render_targets(Vector4 color) {
+    for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
+        ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
+        if (rtv != nullptr) {
+            float color_elements[4] = { color.x, color.y, color.z, color.w };
+            directx.device_context->ClearRenderTargetView(rtv, color_elements);
+        }
+    }
+    if (directx.cur_dsv != nullptr) {
+        directx.device_context->ClearDepthStencilView(directx.cur_dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+    }
+}
+
 void prerender(int viewport_width, int viewport_height) {
-    // if depth_buffer == nullptr {
-    //     depth_texture_desc: Texture_Description;
-    //     depth_texture_desc.type = .Texture2D;
-    //     depth_texture_desc.format = .DEPTH_STENCIL;
-    //     depth_texture_desc.width = main_window.width_int;
-    //     depth_texture_desc.height = main_window.height_int;
-    //     depth_texture := create_texture(depth_texture_desc); // todo(josh): this is probably leaking. need to store the depth texture in DirectX struct and release it when needed
-    //     defer destroy_texture(depth_texture);
-    //     directx.current_depth_stencil_view = _dx_create_depth_stencil_view(depth_texture.handle.texture_handle.(^ID3D11Texture2D), depth_texture_desc.format);
-    // }
-    // else {
-    //     directx.current_depth_stencil_view = _dx_create_depth_stencil_view(depth_buffer.handle.texture_handle.(^ID3D11Texture2D), depth_buffer.format);
-    // }
-
-
-
-    directx.device_context->OMSetRenderTargets(1, &directx.swap_chain_render_target_view, directx.swap_chain_depth_stencil_view);
-    float r = 0.3 + ((float)sin(time_now()*1.0f) * (float)sin(time_now()*1.0f)) * 0.7;
-    float g = 0.3 + ((float)sin(time_now()*0.7f) * (float)sin(time_now()*0.7f)) * 0.7;
-    float b = 0.3 + ((float)sin(time_now()*0.6f) * (float)sin(time_now()*0.6f)) * 0.7;
-    float color[4] = {r, g, b, 1.0f};
-    directx.device_context->ClearRenderTargetView(directx.swap_chain_render_target_view, color);
-    directx.device_context->ClearDepthStencilView(directx.swap_chain_depth_stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-
     directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     D3D11_VIEWPORT viewport = {};
