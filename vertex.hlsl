@@ -1,14 +1,21 @@
 struct VS_INPUT {
-    float3 position : SV_POSITION;
-    float3 texcoord : TEXCOORD;
-    float4 color    : COLOR;
+    float3 position  : SV_POSITION;
+    float3 texcoord  : TEXCOORD;
+    float4 color     : COLOR;
+    float3 normal    : NORMAL;
+    float3 tangent   : TANGENT;
+    float3 bitangent : BITANGENT;
 };
 
 struct PS_INPUT {
-    float4 position       : SV_POSITION;
-    float3 texcoord       : TEXCOORD;
-    float4 color          : COLOR;
-    float3 world_position : WORLDPOS;
+    float4 position         : SV_POSITION;
+    float3 texcoord         : TEXCOORD;
+    float4 color            : COLOR;
+    float3 normal           : NORMAL;
+    float3 tangent          : TANGENT;
+    float3 bitangent        : BITANGENT;
+    matrix<float, 3, 3> tbn : TBN;
+    float3 world_position   : WORLDPOS;
 };
 
 cbuffer CBUFFER_PASS : register(b0) {
@@ -40,5 +47,18 @@ PS_INPUT main(VS_INPUT input) {
     v.texcoord = input.texcoord;
     v.color = input.color;
     v.world_position = mul(model_matrix, float4(input.position, 1.0)).xyz;
+
+    // todo(josh): fix normals for non-uniformly scaled objects
+    float3 T = normalize(mul(model_matrix, float4(input.tangent,   0)).xyz);
+    float3 B = normalize(mul(model_matrix, float4(input.bitangent, 0)).xyz);
+    float3 N = normalize(mul(model_matrix, float4(input.normal,    0)).xyz);
+
+    // this transpose is pretty lame
+    v.tbn = transpose(matrix<float, 3, 3>(T, B, N));
+
+    v.normal    = N;
+    v.tangent   = T;
+    v.bitangent = B;
+
     return v;
 }

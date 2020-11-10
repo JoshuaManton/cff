@@ -223,39 +223,8 @@ DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
     }
 }
 
-Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields) {
-    char *dummy_vertex_shader =
-    "struct VS_INPUT {\n"
-    "  float3 position : SV_POSITION;\n"
-    "  float3 texcoord : TEXCOORD;\n"
-    "  float4 color    : COLOR;\n"
-    "};"
-    "struct PS_INPUT {\n"
-    "  float4 position : SV_POSITION;\n"
-    "  float3 texcoord : TEXCOORD;\n"
-    "  float4 color    : COLOR;\n"
-    "};"
-    "PS_INPUT main(VS_INPUT input) {\n"
-    "  PS_INPUT v;\n"
-    "  v.position = float4(input.position, 1.0);\n"
-    "  v.texcoord = input.texcoord;\n"
-    "  v.color = input.color;\n"
-    "  return v;\n"
-    "};\n";
-    ID3D10Blob *errors = {};
-    ID3D10Blob *vertex_shader_blob = {};
-    auto result = D3DCompile(dummy_vertex_shader, strlen(dummy_vertex_shader), nullptr, nullptr, nullptr, "main", "vs_4_0", 0, 0, &vertex_shader_blob, &errors);
-    if (errors != nullptr) {
-        auto str = (char *)errors->GetBufferPointer();
-        printf(str);
-        assert(false);
-    }
-    assert(result == S_OK);
-
-    ID3D11VertexShader *vertex_shader = {};
-    result = directx.device->CreateVertexShader(vertex_shader_blob->GetBufferPointer(), vertex_shader_blob->GetBufferSize(), nullptr, &vertex_shader);
-    assert(result == S_OK);
-
+Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader) {
+    // todo(josh): this doesn't have to be an allocation. we could just have a MAX_VERTEX_FIELDS?
     D3D11_INPUT_ELEMENT_DESC *input_elements = MAKE(default_allocator(), D3D11_INPUT_ELEMENT_DESC, num_fields);
     for (int idx = 0; idx < num_fields; idx++) {
         D3D11_INPUT_ELEMENT_DESC *desc = &input_elements[idx];
@@ -284,11 +253,9 @@ Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields) {
     }
 
     Vertex_Format vertex_format = {};
-    result = directx.device->CreateInputLayout(input_elements, num_fields, vertex_shader_blob->GetBufferPointer(), vertex_shader_blob->GetBufferSize(), &vertex_format);
+    auto result = directx.device->CreateInputLayout(input_elements, num_fields, shader.blob->GetBufferPointer(), shader.blob->GetBufferSize(), &vertex_format);
     assert(result == S_OK);
     free(default_allocator(), input_elements);
-    vertex_shader->Release();
-    vertex_shader_blob->Release();
     return vertex_format;
 }
 
@@ -349,11 +316,13 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh)
         assert(false);
     }
     assert(result == S_OK);
-    ID3D11VertexShader *vertex_shader = {};
-    result = directx.device->CreateVertexShader(vertex_shader_blob->GetBufferPointer(), vertex_shader_blob->GetBufferSize(), nullptr, &vertex_shader);
+    ID3D11VertexShader *vertex_shader_handle = {};
+    result = directx.device->CreateVertexShader(vertex_shader_blob->GetBufferPointer(), vertex_shader_blob->GetBufferSize(), nullptr, &vertex_shader_handle);
     assert(result == S_OK);
     if (errors) errors->Release();
-    vertex_shader_blob->Release();
+    Vertex_Shader vertex_shader = {};
+    vertex_shader.handle = vertex_shader_handle;
+    vertex_shader.blob = vertex_shader_blob;
     return vertex_shader;
 }
 
@@ -376,7 +345,7 @@ Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): 
 }
 
 void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
-    directx.device_context->VSSetShader(vertex, 0, 0);
+    directx.device_context->VSSetShader(vertex.handle, 0, 0);
     directx.device_context->PSSetShader(pixel, 0, 0);
 }
 

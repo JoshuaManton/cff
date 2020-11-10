@@ -23,9 +23,29 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
             vertex.position.y = mesh->mVertices[i].y;
             vertex.position.z = mesh->mVertices[i].z;
 
+            // todo(josh): vertex colors
+
             if (mesh->mTextureCoords[0]) {
                 vertex.tex_coord.x = (float)mesh->mTextureCoords[0][i].x;
                 vertex.tex_coord.y = (float)mesh->mTextureCoords[0][i].y;
+            }
+
+            if (mesh->mNormals) {
+                vertex.normal.x = (float)mesh->mNormals[i].x;
+                vertex.normal.y = (float)mesh->mNormals[i].y;
+                vertex.normal.z = (float)mesh->mNormals[i].z;
+            }
+
+            if (mesh->mTangents) {
+                vertex.tangent.x = (float)mesh->mTangents[i].x;
+                vertex.tangent.y = (float)mesh->mTangents[i].y;
+                vertex.tangent.z = (float)mesh->mTangents[i].z;
+            }
+
+            if (mesh->mBitangents) {
+                vertex.bitangent.x = (float)mesh->mBitangents[i].x;
+                vertex.bitangent.y = (float)mesh->mBitangents[i].y;
+                vertex.bitangent.z = (float)mesh->mBitangents[i].z;
             }
 
             vertices.append(vertex);

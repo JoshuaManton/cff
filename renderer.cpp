@@ -4,7 +4,6 @@
 #include "stb_image.h"
 
 struct Renderer_State {
-    Vertex_Format ff_vertex_format;
     Buffer pass_cbuffer_handle;
     Buffer model_cbuffer_handle;
 
@@ -16,11 +15,10 @@ Renderer_State renderer_state;
 void init_renderer(Window *window) {
     // Make vertex format
     Vertex_Field fields[] = {
-        {"SV_POSITION", "position",  offsetof(FFVertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
-        {"TEXCOORD",    "tex_coord", offsetof(FFVertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
-        {"COLOR",       "color",     offsetof(FFVertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
+        {"SV_POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
+        {"TEXCOORD",    "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
+        {"COLOR",       "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
-    renderer_state.ff_vertex_format = create_vertex_format(fields, ARRAYSIZE(fields));
     renderer_state.pass_cbuffer_handle  = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
     renderer_state.model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
 }
@@ -98,7 +96,7 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
     }
 }
 
-void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices) {
+void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {
     ff->num_vertices = 0;
     ff->vertices = buffer;
     ff->max_vertices = max_vertices;
@@ -106,8 +104,6 @@ void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices) {
 
 void ff_end(Fixed_Function *ff) {
     assert(ff->num_vertices < ff->max_vertices);
-    bind_vertex_format(renderer_state.ff_vertex_format);
-
     // todo(josh): should this create() go in ff_begin?
     Buffer vertex_buffer = create_buffer(BT_VERTEX, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
     u32 strides[1] = { sizeof(ff->vertices[0]) };

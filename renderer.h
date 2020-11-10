@@ -4,6 +4,15 @@
 #include "math.h"
 #include "render_backend.h"
 
+struct Vertex {
+    Vector3 position;
+    Vector3 tex_coord;
+    Vector4 color;
+    Vector3 normal;
+    Vector3 tangent;
+    Vector3 bitangent;
+};
+
 struct Pass_CBuffer {
     Matrix4 view_matrix;
     Matrix4 projection_matrix;
@@ -64,20 +73,16 @@ enum Texture_Slot {
     TS_COUNT,
 };
 
-struct Vertex {
-    Vector3 position;
-    Vector3 tex_coord;
-    Vector4 color;
-};
-
-struct FFVertex {
-    Vector3 position;
-    Vector3 tex_coord;
-    Vector4 color;
+#define MAX_POINT_LIGHTS 16 // :MaxPointLights
+struct Lighting_CBuffer {
+    Vector4 point_light_positions[MAX_POINT_LIGHTS];
+    Vector4 point_light_colors[MAX_POINT_LIGHTS];
+    int num_point_lights;
+    float pad[3];
 };
 
 struct Fixed_Function {
-    FFVertex *vertices;
+    Vertex *vertices;
     int max_vertices;
     int num_vertices;
 };
@@ -102,7 +107,7 @@ struct Render_Pass_Desc {
 void begin_render_pass(Render_Pass_Desc *pass);
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options);
 
-void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices);
+void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices);
 void ff_end(Fixed_Function *ff);
 void ff_vertex(Fixed_Function *ff, Vector3 position);
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord);

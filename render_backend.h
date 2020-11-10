@@ -6,7 +6,11 @@
 
 typedef ID3D11Buffer *Buffer;
 
-typedef ID3D11VertexShader *Vertex_Shader;
+typedef struct {
+    ID3D11VertexShader *handle;
+    ID3D10Blob *blob;
+} Vertex_Shader;
+
 typedef ID3D11PixelShader *Pixel_Shader;
 
 typedef ID3D11Texture2D *Texture_Handle;
@@ -113,7 +117,7 @@ enum Buffer_Type {
 
 void init_render_backend(Window *window);
 
-Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields);
+Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader);
 void          destroy_vertex_format(Vertex_Format format);
 void          bind_vertex_format(Vertex_Format format);
 

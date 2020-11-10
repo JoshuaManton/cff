@@ -38,8 +38,11 @@ void main() {
         {"SV_POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
         {"TEXCOORD",    "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
         {"COLOR",       "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
+        {"NORMAL",      "normal",    offsetof(Vertex, normal),    VFT_FLOAT3, VFST_PER_VERTEX},
+        {"TANGENT",     "tangent",   offsetof(Vertex, tangent),   VFT_FLOAT3, VFST_PER_VERTEX},
+        {"BITANGENT",   "bitangent", offsetof(Vertex, bitangent), VFT_FLOAT3, VFST_PER_VERTEX},
     };
-    Vertex_Format default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields));
+    Vertex_Format default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields), vertex_shader);
 
     u32 cube_indices[] = {
          0,  2,  1,  0,  3,  2,
@@ -104,6 +107,8 @@ void main() {
     render_options.do_emission  = true;
     render_options.do_ao        = true;
 
+    Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
+
     while (true) {
         update_window(&g_main_window);
         if (g_main_window.should_close) {
@@ -152,24 +157,21 @@ void main() {
         bind_vertex_format(default_vertex_format);
         bind_shaders(vertex_shader, pixel_shader);
 
-        Vector3 cube_position = v3(5, 5, 10);
+        Lighting_CBuffer lighting = {};
+        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_now()) * 3, 6, 0, 1);
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 20;
+        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_now() * 0.6) * 3, 6, 0, 1);
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 20;
+        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_now() * 0.7) * 3, 6, 0, 1);
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 20;
+        update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
+        bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
         Render_Pass_Desc pass = {};
         pass.camera_position = camera_position;
         pass.camera_orientation = camera_orientation;
         pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
         begin_render_pass(&pass);
-
-        // FFVertex vertices[1024] = {};
-        // Fixed_Function ff = {};
-        // ff_begin(&ff, vertices, ARRAYSIZE(vertices));
-        // ff_vertex(&ff, v3(-0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(0, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        // ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        // ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        // ff_vertex(&ff, v3( 0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(1, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        // ff_vertex(&ff, v3( 0.5f, -0.5f, 0)); ff_tex_coord(&ff, v3(1, 1, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        // ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
-        // ff_end(&ff);
 
         draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
         draw_meshes(helmet_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
