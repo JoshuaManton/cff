@@ -5,14 +5,16 @@ struct VS_INPUT {
 };
 
 struct PS_INPUT {
-    float4 position : SV_POSITION;
-    float3 texcoord : TEXCOORD;
-    float4 color    : COLOR;
+    float4 position       : SV_POSITION;
+    float3 texcoord       : TEXCOORD;
+    float4 color          : COLOR;
+    float3 world_position : WORLDPOS;
 };
 
 cbuffer CBUFFER_PASS : register(b0) {
     row_major matrix view_matrix;
     row_major matrix projection_matrix;
+    float3 camera_position;
 }
 
 cbuffer CBUFFER_SPECIFIC : register(b1) {
@@ -25,5 +27,6 @@ PS_INPUT main(VS_INPUT input) {
     v.position = mul(float4(input.position, 1.0), mvp);
     v.texcoord = input.texcoord;
     v.color = input.color;
+    v.world_position = mul(float4(input.position, 1.0), model_matrix).xyz;
     return v;
 }

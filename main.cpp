@@ -2,31 +2,24 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#define DEVELOPER
+
 #include "window.h"
 #include "basic.h"
 #include "math.h"
+#include "render_backend.h"
 #include "renderer.h"
+#include "array.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#ifdef DEVELOPER
+#include "assimp_loader.cpp"
+#endif
+
 static Window g_main_window;
 static float g_time_at_startup;
-
-struct Pass_CBuffer {
-    Matrix4 view_matrix;
-    Matrix4 projection_matrix;
-};
-
-struct Model_CBuffer {
-    Matrix4 model_matrix;
-};
-
-struct Vertex {
-    Vector3 position;
-    Vector3 tex_coord;
-    Vector4 color;
-};
 
 void main() {
     init_platform();
@@ -62,9 +55,9 @@ void main() {
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
-        {"POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
-        {"TEXCOORD", "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
-        {"COLOR",    "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
+        {"SV_POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
+        {"TEXCOORD",    "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
+        {"COLOR",       "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
     Vertex_Format default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields));
 
@@ -80,36 +73,36 @@ void main() {
         20, 22, 21, 20, 23, 22,
     };
 
-    FFVertex cube_vertices[] = {
-        {{-0.5f, -0.5f, -0.5f}, {}, {}},
-        {{ 0.5f, -0.5f, -0.5f}, {}, {}},
-        {{ 0.5f,  0.5f, -0.5f}, {}, {}},
-        {{-0.5f,  0.5f, -0.5f}, {}, {}},
+    Vertex cube_vertices[] = {
+        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
+        {{-(0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
 
-        {{-0.5f, -0.5f,  0.5f}, {}, {}},
-        {{ 0.5f, -0.5f,  0.5f}, {}, {}},
-        {{ 0.5f,  0.5f,  0.5f}, {}, {}},
-        {{-0.5f,  0.5f,  0.5f}, {}, {}},
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
+        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
 
-        {{-0.5f, -0.5f, -0.5f}, {}, {}},
-        {{-0.5f,  0.5f, -0.5f}, {}, {}},
-        {{-0.5f,  0.5f,  0.5f}, {}, {}},
-        {{-0.5f, -0.5f,  0.5f}, {}, {}},
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
+        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
+        {{-(0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
 
-        {{ 0.5f, -0.5f, -0.5f}, {}, {}},
-        {{ 0.5f,  0.5f, -0.5f}, {}, {}},
-        {{ 0.5f,  0.5f,  0.5f}, {}, {}},
-        {{ 0.5f, -0.5f,  0.5f}, {}, {}},
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
+        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
+        {{ (0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
 
-        {{-0.5f, -0.5f, -0.5f}, {}, {}},
-        {{ 0.5f, -0.5f, -0.5f}, {}, {}},
-        {{ 0.5f, -0.5f,  0.5f}, {}, {}},
-        {{-0.5f, -0.5f,  0.5f}, {}, {}},
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
 
-        {{-0.5f,  0.5f, -0.5f}, {}, {}},
-        {{ 0.5f,  0.5f, -0.5f}, {}, {}},
-        {{ 0.5f,  0.5f,  0.5f}, {}, {}},
-        {{-0.5f,  0.5f,  0.5f}, {}, {}},
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
+        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
+        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
     };
 
     Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices));
@@ -118,18 +111,43 @@ void main() {
     Vector3 camera_position = {};
     Quaternion camera_rotation = quaternion_identity();
 
+    Array<Loaded_Mesh> sponza_meshes = {};
+    sponza_meshes.allocator = default_allocator();
+    load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
+    printf("%d\n", sponza_meshes.count);
+
     while (true) {
         update_window(&g_main_window);
+        if (g_main_window.should_close) {
+            break;
+        }
 
-        if (get_input(&g_main_window, INPUT_E)) camera_position.y += 0.1f;
-        if (get_input(&g_main_window, INPUT_Q)) camera_position.y -= 0.1f;
+        if (get_input(&g_main_window, INPUT_ESCAPE)) {
+            break;
+        }
 
-        Vector2 delta = g_main_window.mouse_position_pixel_delta * 0.25f;
+        const float CAMERA_SPEED = 0.025f;
 
-        // rotate quat by degrees
-        Quaternion yaw   = quaternion_identity() * axis_angle(v3(0, 1, 0), to_radians(delta.x));
-        Quaternion pitch = quaternion_identity() * axis_angle(v3(1, 0, 0), to_radians(delta.y));
-        camera_rotation = pitch * camera_rotation * yaw;
+        if (get_input(&g_main_window, INPUT_E)) camera_position += quaternion_up(camera_rotation)      * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_Q)) camera_position -= quaternion_up(camera_rotation)      * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_W)) camera_position += quaternion_forward(camera_rotation) * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_S)) camera_position -= quaternion_forward(camera_rotation) * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_D)) camera_position += quaternion_right(camera_rotation)   * CAMERA_SPEED;
+        if (get_input(&g_main_window, INPUT_A)) camera_position -= quaternion_right(camera_rotation)   * CAMERA_SPEED;
+
+        if (get_input(&g_main_window, INPUT_MOUSE_RIGHT)) {
+            Vector2 delta = g_main_window.mouse_position_pixel_delta * 0.25f;
+            Vector3 rotate_vector = v3(-delta.y, delta.x, 0);
+
+            Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
+            Quaternion y = axis_angle(v3(0, 1, 0), to_radians(rotate_vector.y));
+            Quaternion z = axis_angle(v3(0, 0, 1), to_radians(rotate_vector.z));
+            Quaternion result = y * camera_rotation;
+            result = result * x;
+            result = result * z;
+            result = normalize(result);
+            camera_rotation = result;
+        }
 
         prerender(g_main_window.width, g_main_window.height);
 
@@ -142,6 +160,7 @@ void main() {
         Pass_CBuffer pass_cbuffer = {};
         pass_cbuffer.view_matrix = view_matrix(camera_position, camera_rotation);
         pass_cbuffer.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
+        pass_cbuffer.camera_position = camera_position;
         update_buffer(pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
         bind_constant_buffers(&pass_cbuffer_handle, 1, 0);
 
@@ -161,15 +180,20 @@ void main() {
         // ff_vertex(&ff, v3(-0.5f,  0.5f, 0)); ff_tex_coord(&ff, v3(0, 0, 0)); ff_color(&ff, v4(1, 1, 1, 1)); ff_next(&ff);
         // ff_end(&ff);
 
-        u32 strides[1] = {sizeof(FFVertex)};
-        u32 offsets[1] = {0};
-        bind_vertex_buffers(&cube_vertex_buffer, 1, 0, strides, offsets);
-        bind_index_buffer(cube_index_buffer, 0);
-        issue_draw_call(ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices));
+        Foreach(mesh, sponza_meshes) {
+            u32 strides[1] = {sizeof(Vertex)};
+            u32 offsets[1] = {0};
+            bind_vertex_buffers(&mesh->vertex_buffer, 1, 0, strides, offsets);
+            bind_index_buffer(mesh->index_buffer, 0);
+            issue_draw_call(mesh->num_vertices, mesh->num_indices);
+        }
+
+        // u32 strides[1] = {sizeof(FFVertex)};
+        // u32 offsets[1] = {0};
+        // bind_vertex_buffers(&cube_vertex_buffer, 1, 0, strides, offsets);
+        // bind_index_buffer(cube_index_buffer, 0);
+        // issue_draw_call(ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices));
 
         present(true);
     }
-
-    Fixed_Function ff = {};
-
 }

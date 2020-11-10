@@ -131,6 +131,7 @@ struct Window {
     HWND handle;
     HDC windows_device_context;
     bool should_close;
+    bool is_focused;
 
     int width;
     int height;
@@ -141,10 +142,14 @@ struct Window {
     Vector2 mouse_position_unit;
     Vector2 mouse_position_pixel_delta;
 
+    float mouse_scroll;
+
     int mouse_capture_sum;
     bool updated_at_least_once;
 
     bool inputs_held[INPUT_COUNT];
+    bool inputs_down[INPUT_COUNT];
+    bool inputs_up  [INPUT_COUNT];
 };
 
 double time_now();

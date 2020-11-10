@@ -1,9 +1,15 @@
 struct DirectX {
-    IDXGISwapChain *swap_chain_handle;
-    ID3D11RenderTargetView *swap_chain_render_target_view;
     ID3D11Device *device;
     ID3D11DeviceContext *device_context;
-    ID3D11RasterizerState *rasterizer;
+
+    IDXGISwapChain *swap_chain_handle;
+    ID3D11RenderTargetView *swap_chain_render_target_view;
+    ID3D11DepthStencilView *swap_chain_depth_stencil_view;
+    Texture swap_chain_depth_buffer;
+
+    ID3D11RasterizerState *no_cull_rasterizer;
+    ID3D11RasterizerState *backface_cull_rasterizer;
+    ID3D11DepthStencilState *depth_test_state;
     ID3D11DepthStencilState *no_depth_test_state;
     ID3D11SamplerState *linear_wrap_sampler;
     ID3D11SamplerState *linear_clamp_sampler;
@@ -16,9 +22,11 @@ struct DirectX {
 
 static DirectX directx;
 
-ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, DXGI_FORMAT format) {
+DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
+
+ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
     D3D11_RENDER_TARGET_VIEW_DESC render_target_view_desc = {};
-    render_target_view_desc.Format        = format;
+    render_target_view_desc.Format        = dx_texture_format_mapping[format];
     render_target_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
     ID3D11RenderTargetView *render_target_view = {};
     auto result = directx.device->CreateRenderTargetView(backing_texture, &render_target_view_desc, &render_target_view);
@@ -26,14 +34,29 @@ ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_te
     return render_target_view;
 }
 
-void init_render_backend(Window *window) {
+ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
+    assert(texture_format_infos[format].is_depth_format);
+    D3D11_DEPTH_STENCIL_VIEW_DESC depth_stencil_view_desc = {};
+    depth_stencil_view_desc.Format = dx_texture_format_mapping[format];
+    ID3D11DepthStencilView *depth_stencil_view = {};
+    auto result = directx.device->CreateDepthStencilView((ID3D11Resource *)backing_texture, nullptr, &depth_stencil_view);
+    assert(result == S_OK);
+    return depth_stencil_view;
+}
+
+void init_graphics_driver(Window *window) {
+    dx_texture_format_mapping[TF_R8G8B8A8_UINT]      = DXGI_FORMAT_R8G8B8A8_UNORM;
+    dx_texture_format_mapping[TF_R8G8B8A8_UINT_SRGB] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    dx_texture_format_mapping[TF_DEPTH_STENCIL]      = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
     // Create swap chain
+    const Texture_Format SWAP_CHAIN_FORMAT = TF_R8G8B8A8_UINT;
     DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
     swap_chain_desc.BufferCount                        = 2;
     swap_chain_desc.SwapEffect                         = DXGI_SWAP_EFFECT_FLIP_DISCARD; // todo(josh): use DXGI_SWAP_EFFECT_DISCARD (or something else) on non-Windows 10
     swap_chain_desc.BufferDesc.Width                   = (u32)window->width;
     swap_chain_desc.BufferDesc.Height                  = (u32)window->height;
-    swap_chain_desc.BufferDesc.Format                  = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swap_chain_desc.BufferDesc.Format                  = dx_texture_format_mapping[TF_R8G8B8A8_UINT];
     swap_chain_desc.BufferDesc.RefreshRate.Numerator   = 60; // todo(josh): query monitor refresh rate.
     swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swap_chain_desc.BufferUsage                        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -70,34 +93,57 @@ void init_render_backend(Window *window) {
     ID3D11Texture2D *back_buffer_texture = {};
     result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
     assert(result == S_OK);
-    directx.swap_chain_render_target_view = dx_create_render_target_view(back_buffer_texture, swap_chain_desc.BufferDesc.Format); // todo(josh): srgb backbuffer
+    directx.swap_chain_render_target_view = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT); // todo(josh): srgb backbuffer
     back_buffer_texture->Release();
 
-    // Make 2D rasterizer
-    D3D11_RASTERIZER_DESC rasterizer_desc = {};
-    rasterizer_desc.FillMode = D3D11_FILL_SOLID;
-    rasterizer_desc.CullMode = D3D11_CULL_NONE;
-    rasterizer_desc.DepthClipEnable = false;
-    result = directx.device->CreateRasterizerState(&rasterizer_desc, &directx.rasterizer);
+    Texture_Description depth_texture_desc = {};
+    depth_texture_desc.type = TT_2D;
+    depth_texture_desc.format = TF_DEPTH_STENCIL;
+    depth_texture_desc.width = window->width;
+    depth_texture_desc.height = window->height;
+    directx.swap_chain_depth_buffer = create_texture(depth_texture_desc);
+    directx.swap_chain_depth_stencil_view = dx_create_depth_stencil_view(directx.swap_chain_depth_buffer.handle, TF_DEPTH_STENCIL);
+
+    // Make no cull rasterizer
+    D3D11_RASTERIZER_DESC no_cull_rasterizer_desc = {};
+    no_cull_rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+    no_cull_rasterizer_desc.CullMode = D3D11_CULL_NONE;
+    no_cull_rasterizer_desc.DepthClipEnable = false;
+    result = directx.device->CreateRasterizerState(&no_cull_rasterizer_desc, &directx.no_cull_rasterizer);
     assert(result == S_OK);
 
-    // Make 2D depth stencil state
-    D3D11_DEPTH_STENCIL_DESC depth_stencil_desc = {};
-    depth_stencil_desc.DepthEnable                  = false;
-    depth_stencil_desc.DepthWriteMask               = D3D11_DEPTH_WRITE_MASK_ALL;
-    depth_stencil_desc.DepthFunc                    = D3D11_COMPARISON_ALWAYS;
-    depth_stencil_desc.StencilEnable                = true;
-    depth_stencil_desc.StencilReadMask              = 0xff;
-    depth_stencil_desc.StencilWriteMask             = 0xff;
-    depth_stencil_desc.FrontFace.StencilFunc        = D3D11_COMPARISON_ALWAYS;
-    depth_stencil_desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
-    depth_stencil_desc.FrontFace.StencilPassOp      = D3D11_STENCIL_OP_KEEP;
-    depth_stencil_desc.FrontFace.StencilFailOp      = D3D11_STENCIL_OP_KEEP;
-    depth_stencil_desc.BackFace.StencilFunc         = D3D11_COMPARISON_ALWAYS;
-    depth_stencil_desc.BackFace.StencilDepthFailOp  = D3D11_STENCIL_OP_KEEP;
-    depth_stencil_desc.BackFace.StencilPassOp       = D3D11_STENCIL_OP_KEEP;
-    depth_stencil_desc.BackFace.StencilFailOp       = D3D11_STENCIL_OP_KEEP;
-    result = directx.device->CreateDepthStencilState(&depth_stencil_desc, &directx.no_depth_test_state);
+    // Make backface cull rasterizer
+    D3D11_RASTERIZER_DESC backface_cull_rasterizer_desc = {};
+    backface_cull_rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+    backface_cull_rasterizer_desc.CullMode = D3D11_CULL_BACK;
+    backface_cull_rasterizer_desc.DepthClipEnable = true;
+    result = directx.device->CreateRasterizerState(&backface_cull_rasterizer_desc, &directx.backface_cull_rasterizer);
+    assert(result == S_OK);
+
+    // Depth test state
+    D3D11_DEPTH_STENCIL_DESC depth_test_stencil_desc = {};
+    depth_test_stencil_desc.DepthEnable                  = true;
+    depth_test_stencil_desc.DepthWriteMask               = D3D11_DEPTH_WRITE_MASK_ALL;
+    depth_test_stencil_desc.DepthFunc                    = D3D11_COMPARISON_LESS_EQUAL;
+    depth_test_stencil_desc.StencilEnable                = true;
+    depth_test_stencil_desc.StencilReadMask              = 0xff;
+    depth_test_stencil_desc.StencilWriteMask             = 0xff;
+    depth_test_stencil_desc.FrontFace.StencilFunc        = D3D11_COMPARISON_ALWAYS;
+    depth_test_stencil_desc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+    depth_test_stencil_desc.FrontFace.StencilPassOp      = D3D11_STENCIL_OP_KEEP;
+    depth_test_stencil_desc.FrontFace.StencilFailOp      = D3D11_STENCIL_OP_KEEP;
+    depth_test_stencil_desc.BackFace.StencilFunc         = D3D11_COMPARISON_ALWAYS;
+    depth_test_stencil_desc.BackFace.StencilDepthFailOp  = D3D11_STENCIL_OP_KEEP;
+    depth_test_stencil_desc.BackFace.StencilPassOp       = D3D11_STENCIL_OP_KEEP;
+    depth_test_stencil_desc.BackFace.StencilFailOp       = D3D11_STENCIL_OP_KEEP;
+    result = directx.device->CreateDepthStencilState(&depth_test_stencil_desc, &directx.depth_test_state);
+    assert(result == S_OK);
+
+    // No depth test state
+    D3D11_DEPTH_STENCIL_DESC no_depth_test_stencil_desc = depth_test_stencil_desc;
+    no_depth_test_stencil_desc.DepthEnable = false;
+    no_depth_test_stencil_desc.DepthFunc   = D3D11_COMPARISON_ALWAYS;
+    result = directx.device->CreateDepthStencilState(&no_depth_test_stencil_desc, &directx.no_depth_test_state);
     assert(result == S_OK);
 
     // linear wrap sampler
@@ -158,17 +204,6 @@ void init_render_backend(Window *window) {
     assert(result == S_OK);
 }
 
-DXGI_FORMAT dx_texture_format(Texture_Format tf) {
-    switch (tf) {
-        case TF_R8G8B8A8_UINT:      return DXGI_FORMAT_R8G8B8A8_UNORM;
-        case TF_R8G8B8A8_UINT_SRGB: return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        default: {
-            assert(false && "unknown format");
-            return (DXGI_FORMAT)0;
-        }
-    }
-}
-
 DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
     switch (vft) {
         case VFT_INT:    return DXGI_FORMAT_R32_SINT;
@@ -193,12 +228,12 @@ DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields) {
     char *dummy_vertex_shader =
     "struct VS_INPUT {\n"
-    "  float3 position : POSITION;\n"
+    "  float3 position : SV_POSITION;\n"
     "  float3 texcoord : TEXCOORD;\n"
     "  float4 color    : COLOR;\n"
     "};"
     "struct PS_INPUT {\n"
-    "  float4 position : POSITION;\n"
+    "  float4 position : SV_POSITION;\n"
     "  float3 texcoord : TEXCOORD;\n"
     "  float4 color    : COLOR;\n"
     "};"
@@ -371,8 +406,11 @@ Texture create_texture(Texture_Description desc) {
     // todo(josh): check for max texture size?
 
     assert(desc.type == TT_2D && "only 2D textures supported right now");
+    assert(desc.format != TF_INVALID);
 
-    DXGI_FORMAT texture_format = dx_texture_format(desc.format);
+    DXGI_FORMAT texture_format = dx_texture_format_mapping[desc.format];
+
+    printf("%d\n", texture_format);
 
     // Create texture
     D3D11_TEXTURE2D_DESC texture_desc = {};
@@ -401,16 +439,23 @@ Texture create_texture(Texture_Description desc) {
     }
     */
 
-    texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
-    if (desc.render_target) {
-        texture_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+    bool do_create_shader_resource = true;
+    if (texture_format_infos[desc.format].is_depth_format) {
+        do_create_shader_resource = false;
+        texture_desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
+    }
+    else {
+        texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+        if (desc.render_target) {
+            texture_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+        }
     }
 
     /*
     do_create_shader_resource := true;
     if texture_format_infos[desc.format].is_depth_format {
         do_create_shader_resource = false;
-        texture_desc.BindFlags |= d3d.D3D11_BIND_DEPTH_STENCIL;
+        texture_desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
     }
     else {
         if !desc.is_cpu_read_target {
@@ -435,33 +480,35 @@ Texture create_texture(Texture_Description desc) {
     }
 
     // Create shader resource view
-    D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
-    texture_shader_resource_desc.Format = texture_format;
-    texture_shader_resource_desc.Texture2D.MipLevels = 1;
-    texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    /*
-    switch desc.type {
-        case .Texture2D: {
-            texture_shader_resource_desc.ViewDimension = d3d.D3D11_SRV_DIMENSION_TEXTURE2D;
+    ID3D11ShaderResourceView *shader_resource_view = {};
+    if (do_create_shader_resource) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
+        texture_shader_resource_desc.Format = texture_format;
+        texture_shader_resource_desc.Texture2D.MipLevels = 1;
+        texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        /*
+        switch desc.type {
+            case .Texture2D: {
+                texture_shader_resource_desc.ViewDimension = d3d.D3D11_SRV_DIMENSION_TEXTURE2D;
+            }
+            case .Texture3D: {
+                panic("Call dx_create_texture3d.");
+            }
+            case .Cubemap: {
+                texture_shader_resource_desc.ViewDimension = d3d.D3D11_SRV_DIMENSION_TEXTURECUBE;
+            }
+            case .Invalid: fallthrough;
+            case: panic(twrite(desc));
         }
-        case .Texture3D: {
-            panic("Call dx_create_texture3d.");
-        }
-        case .Cubemap: {
-            texture_shader_resource_desc.ViewDimension = d3d.D3D11_SRV_DIMENSION_TEXTURECUBE;
-        }
-        case .Invalid: fallthrough;
-        case: panic(twrite(desc));
+        */
+        result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture_handle, &texture_shader_resource_desc, &shader_resource_view);
+        assert(result == S_OK);
     }
-    */
-    ID3D11ShaderResourceView *srv = {};
-    result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture_handle, &texture_shader_resource_desc, &srv);
-    assert(result == S_OK);
 
     Texture texture = {};
     texture.description = desc;
     texture.handle = texture_handle;
-    texture.shader_resource_view = srv;
+    texture.shader_resource_view = shader_resource_view;
     return texture;
 }
 
@@ -503,12 +550,15 @@ void prerender(int viewport_width, int viewport_height) {
     //     directx.current_depth_stencil_view = _dx_create_depth_stencil_view(depth_buffer.handle.texture_handle.(^ID3D11Texture2D), depth_buffer.format);
     // }
 
-    directx.device_context->OMSetRenderTargets(1, &directx.swap_chain_render_target_view, nullptr);
+
+
+    directx.device_context->OMSetRenderTargets(1, &directx.swap_chain_render_target_view, directx.swap_chain_depth_stencil_view);
     float r = 0.3 + ((float)sin(time_now()*1.0f) * (float)sin(time_now()*1.0f)) * 0.7;
     float g = 0.3 + ((float)sin(time_now()*0.7f) * (float)sin(time_now()*0.7f)) * 0.7;
     float b = 0.3 + ((float)sin(time_now()*0.6f) * (float)sin(time_now()*0.6f)) * 0.7;
     float color[4] = {r, g, b, 1.0f};
     directx.device_context->ClearRenderTargetView(directx.swap_chain_render_target_view, color);
+    directx.device_context->ClearDepthStencilView(directx.swap_chain_depth_stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
 
     directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -517,11 +567,12 @@ void prerender(int viewport_width, int viewport_height) {
     viewport.TopLeftY = 0;
     viewport.Width = viewport_width;
     viewport.Height = viewport_height;
+    viewport.MinDepth = 0;
+    viewport.MaxDepth = 1;
     directx.device_context->RSSetViewports(1, &viewport);
-
     directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
-    directx.device_context->RSSetState(directx.rasterizer);
-
+    directx.device_context->RSSetState(directx.backface_cull_rasterizer);
+    directx.device_context->OMSetDepthStencilState(directx.depth_test_state, 0);
 }
 
 void present(bool vsync) {

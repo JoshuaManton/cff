@@ -203,98 +203,106 @@ LRESULT WindowProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
         case WM_KEYDOWN: {
             assert(currently_processing_window != nullptr);
             Input input = windows_key_mapping[w];
-            // if (!currently_processing_window->inputs_held[input]) {
-            //     currently_processing_window->inputs_down[input] = true;
-            // }
+            if (!currently_processing_window->inputs_held[input]) {
+                currently_processing_window->inputs_down[input] = true;
+            }
             currently_processing_window->inputs_held[input] = true;
             return 0;
         }
         case WM_SYSKEYDOWN: {
             assert(currently_processing_window != nullptr);
             Input input = windows_key_mapping[w];
-            // if (!currently_processing_window->inputs_held[input]) {
-            //     currently_processing_window->inputs_down[input] = true;
-            // }
+            if (!currently_processing_window->inputs_held[input]) {
+                currently_processing_window->inputs_down[input] = true;
+            }
             currently_processing_window->inputs_held[input] = true;
             return 0;
         }
         case WM_KEYUP: {
             Input input = windows_key_mapping[w];
-            // g_inputs->inputs_up[input] = true;
+            currently_processing_window->inputs_up[input] = true;
             currently_processing_window->inputs_held[input] = false;
             return 0;
         }
         case WM_SYSKEYUP: {
             Input input = windows_key_mapping[w];
-            // g_inputs->inputs_up[input] = true;
+            currently_processing_window->inputs_up[input] = true;
             currently_processing_window->inputs_held[input] = false;
             return 0;
         }
-        /*
         case WM_CHAR: {
-            when DEVELOPER {
-                imgui.io_add_input_character(imgui.get_io(), u32(wparam));
-            }
+#ifdef DEVELOPER
+            // imgui.io_add_input_character(imgui.get_io(), u32(w));
+#endif
+            return 0;
         }
         case WM_MOUSEWHEEL: {
-            scroll := transmute(i16)HIWORD_W(wparam) / 120; // note(josh): 120 is WHEEL_DELTA in windows
-            currently_processing_window.mouse_scroll = cast(f32)scroll;
+            i16 scroll = ((i16)HIWORD(w)) / 120; // note(josh): 120 is WHEEL_DELTA in windows
+            currently_processing_window->mouse_scroll = (f32)scroll;
+            return 0;
         }
         case WM_LBUTTONDOWN: {
-            if mouse_capture_sum == 0 do set_capture(currently_processing_window.platform_data.window_handle);
-            mouse_capture_sum += 1;
+            if (currently_processing_window->mouse_capture_sum == 0) SetCapture(currently_processing_window->handle);
+            currently_processing_window->mouse_capture_sum += 1;
 
-            if !g_inputs.inputs_held[.Mouse_Left] {
-                g_inputs.inputs_down[.Mouse_Left] = true;
+            if (!currently_processing_window->inputs_held[INPUT_MOUSE_LEFT]) {
+                currently_processing_window->inputs_down[INPUT_MOUSE_LEFT] = true;
             }
-            g_inputs.inputs_held[.Mouse_Left] = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_LEFT] = true;
+            return 0;
         }
         case WM_LBUTTONUP: {
-            mouse_capture_sum -= 1;
-            if mouse_capture_sum == 0 do release_capture();
+            currently_processing_window->mouse_capture_sum -= 1;
+            if (currently_processing_window->mouse_capture_sum == 0) ReleaseCapture();
 
-            g_inputs.inputs_up[.Mouse_Left]   = true;
-            g_inputs.inputs_held[.Mouse_Left] = false;
+            currently_processing_window->inputs_up[INPUT_MOUSE_LEFT]   = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_LEFT] = false;
+            return 0;
         }
         case WM_MBUTTONDOWN: {
-            if mouse_capture_sum == 0 do set_capture(currently_processing_window.platform_data.window_handle);
-            mouse_capture_sum += 1;
+            if (currently_processing_window->mouse_capture_sum == 0) SetCapture(currently_processing_window->handle);
+            currently_processing_window->mouse_capture_sum += 1;
 
-            if !g_inputs.inputs_held[.Mouse_Middle] {
-                g_inputs.inputs_down[.Mouse_Middle] = true;
+            if (!currently_processing_window->inputs_held[INPUT_MOUSE_MIDDLE]) {
+                currently_processing_window->inputs_down[INPUT_MOUSE_MIDDLE] = true;
             }
-            g_inputs.inputs_held[.Mouse_Middle] = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_MIDDLE] = true;
+            return 0;
         }
         case WM_MBUTTONUP: {
-            mouse_capture_sum -= 1;
-            if mouse_capture_sum == 0 do release_capture();
+            currently_processing_window->mouse_capture_sum -= 1;
+            if (currently_processing_window->mouse_capture_sum == 0) ReleaseCapture();
 
-            g_inputs.inputs_up[.Mouse_Middle]   = true;
-            g_inputs.inputs_held[.Mouse_Middle] = false;
+            currently_processing_window->inputs_up[INPUT_MOUSE_MIDDLE]   = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_MIDDLE] = false;
+            return 0;
         }
         case WM_RBUTTONDOWN: {
-            if mouse_capture_sum == 0 do set_capture(currently_processing_window.platform_data.window_handle);
-            mouse_capture_sum += 1;
+            if (currently_processing_window->mouse_capture_sum == 0) SetCapture(currently_processing_window->handle);
+            currently_processing_window->mouse_capture_sum += 1;
 
-            if !g_inputs.inputs_held[.Mouse_Right] {
-                g_inputs.inputs_down[.Mouse_Right] = true;
+            if (!currently_processing_window->inputs_held[INPUT_MOUSE_RIGHT]) {
+                currently_processing_window->inputs_down[INPUT_MOUSE_RIGHT] = true;
             }
-            g_inputs.inputs_held[.Mouse_Right] = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_RIGHT] = true;
+            return 0;
         }
         case WM_RBUTTONUP: {
-            mouse_capture_sum -= 1;
-            if mouse_capture_sum == 0 do release_capture();
+            currently_processing_window->mouse_capture_sum -= 1;
+            if (currently_processing_window->mouse_capture_sum == 0) ReleaseCapture();
 
-            g_inputs.inputs_up[.Mouse_Right]   = true;
-            g_inputs.inputs_held[.Mouse_Right] = false;
+            currently_processing_window->inputs_up[INPUT_MOUSE_RIGHT]   = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_RIGHT] = false;
+            return 0;
         }
         case WM_ACTIVATEAPP: {
-            currently_processing_window.is_focused = cast(bool)wparam;
+            currently_processing_window->is_focused = (bool)w;
+            return 0;
         }
         case WM_CLOSE: {
-            currently_processing_window.should_close = true;
+            currently_processing_window->should_close = true;
+            return 0;
         }
-        */
         case WM_DESTROY: {
             PostQuitMessage(0);
             return 0;

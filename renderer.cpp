@@ -1,9 +1,5 @@
 #include "renderer.h"
 
-#ifdef RENDER_BACKEND_DX11
-#include "dx.cpp"
-#endif
-
 struct Renderer_State {
     Vertex_Format ff_vertex_format;
 };
@@ -13,9 +9,9 @@ static Renderer_State renderer_state;
 void init_renderer(Window *window) {
     // Make vertex format
     Vertex_Field fields[] = {
-        {"POSITION", "position",  offsetof(FFVertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
-        {"TEXCOORD", "tex_coord", offsetof(FFVertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
-        {"COLOR",    "color",     offsetof(FFVertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
+        {"SV_POSITION", "position",  offsetof(FFVertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
+        {"TEXCOORD",    "tex_coord", offsetof(FFVertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
+        {"COLOR",       "color",     offsetof(FFVertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
     renderer_state.ff_vertex_format = create_vertex_format(fields, ARRAYSIZE(fields));
 }
