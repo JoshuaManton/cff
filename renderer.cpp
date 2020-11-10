@@ -1,5 +1,8 @@
 #include "renderer.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 struct Renderer_State {
     Vertex_Format ff_vertex_format;
 };
@@ -14,6 +17,26 @@ void init_renderer(Window *window) {
         {"COLOR",       "color",     offsetof(FFVertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
     renderer_state.ff_vertex_format = create_vertex_format(fields, ARRAYSIZE(fields));
+}
+
+Texture load_texture_from_file(char *filename) {
+    int filedata_len;
+    char *filedata = read_entire_file(filename, &filedata_len);
+    defer(free(filedata));
+    // stbi_set_flip_vertically_on_load(1);
+    int x,y,n;
+    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, &x, &y, &n, 4);
+    assert(color_data);
+    defer(stbi_image_free(color_data));
+
+    Texture_Description texture_description = {};
+    texture_description.width = x;
+    texture_description.height = y;
+    texture_description.color_data = color_data;
+    texture_description.format = TF_R8G8B8A8_UINT;
+    texture_description.type = TT_2D;
+    Texture texture = create_texture(texture_description);
+    return texture;
 }
 
 void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices) {

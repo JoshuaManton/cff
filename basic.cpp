@@ -127,6 +127,7 @@ Allocator arena_allocator() {
 // todo(josh): custom allocator
 char *read_entire_file(char *filename, int *len) {
     auto file = fopen(filename, "rb");
+    assert(file != nullptr && "couldn't find file");
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
     fseek(file, 0, SEEK_SET);
@@ -137,4 +138,27 @@ char *read_entire_file(char *filename, int *len) {
     str[length] = 0;
     *len = length+1;
     return str;
+}
+
+
+
+void String_Builder::print(char *str) {
+    for (char *s = str; *s != '\0'; s++) {
+        buf.append(*s);
+    }
+    buf.data[buf.count] = 0;
+}
+
+char *String_Builder::string() {
+    return buf.data;
+}
+
+String_Builder make_string_builder(Allocator allocator) {
+    String_Builder sb = {};
+    sb.buf.allocator = allocator;
+    return sb;
+}
+
+void destroy_string_builder(String_Builder sb) {
+    sb.buf.destroy();
 }

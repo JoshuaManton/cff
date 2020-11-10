@@ -410,8 +410,6 @@ Texture create_texture(Texture_Description desc) {
 
     DXGI_FORMAT texture_format = dx_texture_format_mapping[desc.format];
 
-    printf("%d\n", texture_format);
-
     // Create texture
     D3D11_TEXTURE2D_DESC texture_desc = {};
     texture_desc.Width            = (u32)desc.width;

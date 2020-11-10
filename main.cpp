@@ -11,9 +11,6 @@
 #include "renderer.h"
 #include "array.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #ifdef DEVELOPER
 #include "assimp_loader.cpp"
 #endif
@@ -36,22 +33,7 @@ void main() {
     Vertex_Shader vertex_shader = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader pixel_shader = compile_pixel_shader_from_file(L"pixel.hlsl");
 
-    int filedata_len;
-    char *filedata = read_entire_file("my_texture.png", &filedata_len);
-    // stbi_set_flip_vertically_on_load(1);
-    int x,y,n;
-    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, &x, &y, &n, 4);
-    assert(color_data);
-
-    Texture_Description texture_description = {};
-    texture_description.width = x;
-    texture_description.height = y;
-    texture_description.color_data = color_data;
-    texture_description.format = TF_R8G8B8A8_UINT;
-    texture_description.type = TT_2D;
-    Texture texture = create_texture(texture_description);
-    stbi_image_free(color_data);
-    free(filedata);
+    Texture texture = load_texture_from_file("my_texture.png");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -114,7 +96,6 @@ void main() {
     Array<Loaded_Mesh> sponza_meshes = {};
     sponza_meshes.allocator = default_allocator();
     load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
-    printf("%d\n", sponza_meshes.count);
 
     while (true) {
         update_window(&g_main_window);
@@ -185,6 +166,11 @@ void main() {
             u32 offsets[1] = {0};
             bind_vertex_buffers(&mesh->vertex_buffer, 1, 0, strides, offsets);
             bind_index_buffer(mesh->index_buffer, 0);
+
+            if (mesh->has_material) {
+                if (mesh->material.albedo.handle) bind_textures(&mesh->material.albedo, 0, 1);
+            }
+
             issue_draw_call(mesh->num_vertices, mesh->num_indices);
         }
 

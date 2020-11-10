@@ -15,6 +15,23 @@ struct Model_CBuffer {
     Matrix4 model_matrix;
 };
 
+struct Material {
+    Texture albedo;
+};
+
+struct Loaded_Mesh {
+    Buffer vertex_buffer;
+    int num_vertices;
+    Buffer index_buffer;
+    int num_indices;
+    Material material;
+    bool has_material;
+};
+
+enum Texture_Slot {
+    TS_ALBEDO,
+};
+
 struct Vertex {
     Vector3 position;
     Vector3 tex_coord;
@@ -32,6 +49,8 @@ struct Fixed_Function {
     int max_vertices;
     int num_vertices;
 };
+
+Texture load_texture_from_file(char *filename);
 
 void ff_begin(Fixed_Function *ff, FFVertex *buffer, int max_vertices);
 void ff_end(Fixed_Function *ff);

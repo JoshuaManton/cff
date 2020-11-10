@@ -1,4 +1,5 @@
 SamplerState main_sampler;
+
 Texture2D albedo : register(t0);
 
 struct PS_INPUT {
