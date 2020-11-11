@@ -5,6 +5,31 @@
 #include "renderer.h"
 #include "render_backend.h"
 
+void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *vert2) {
+    Vector3 delta_pos1 = vert1->position - vert0->position;
+    Vector3 delta_pos2 = vert2->position - vert0->position;
+
+    Vector3 delta_uv1 = vert1->tex_coord - vert0->tex_coord;
+    Vector3 delta_uv2 = vert2->tex_coord - vert0->tex_coord;
+
+    float r = 1.0f / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
+    Vector3 tangent   = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
+    Vector3 bitangent = (delta_pos2 * delta_uv1.x - delta_pos1 * delta_uv2.x) * r;
+
+    // note(josh): we += here instead of = because in the case of indexing we could hit
+    // the same vertex more than once, so we want an "average" of all the tangents/bitangents
+    // for that vertex. explained here under the "Indexing" heading
+    // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/#computing-the-tangents-and-bitangents
+
+    vert0->tangent += tangent;
+    vert1->tangent += tangent;
+    vert2->tangent += tangent;
+
+    vert0->bitangent += bitangent;
+    vert1->bitangent += bitangent;
+    vert2->bitangent += bitangent;
+}
+
 void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_array) {
     for (int i = 0; i < node->mNumMeshes; i++) {
         aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
@@ -36,13 +61,11 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                 vertex.normal.z = (float)mesh->mNormals[i].z;
             }
 
-            if (mesh->mTangents) {
+            if (mesh->HasTangentsAndBitangents()) {
                 vertex.tangent.x = (float)mesh->mTangents[i].x;
                 vertex.tangent.y = (float)mesh->mTangents[i].y;
                 vertex.tangent.z = (float)mesh->mTangents[i].z;
-            }
 
-            if (mesh->mBitangents) {
                 vertex.bitangent.x = (float)mesh->mBitangents[i].x;
                 vertex.bitangent.y = (float)mesh->mBitangents[i].y;
                 vertex.bitangent.z = (float)mesh->mBitangents[i].z;
@@ -55,6 +78,29 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
             aiFace face = mesh->mFaces[i];
             for (int j = 0; j < face.mNumIndices; j++) {
                 indices.append(face.mIndices[j]);
+            }
+        }
+
+        if (!mesh->HasTangentsAndBitangents()) {
+            if (indices.count) {
+                for (int i = 0; i < indices.count; i += 3) {
+                    int index0 = indices[i+0];
+                    int index1 = indices[i+1];
+                    int index2 = indices[i+2];
+
+                    Vertex *vert0 = &vertices[index0];
+                    Vertex *vert1 = &vertices[index1];
+                    Vertex *vert2 = &vertices[index2];
+                    calculate_tangents_and_bitangents(vert0, vert1, vert2);
+                }
+            }
+            else {
+                for (int i = 0; i < vertices.count; i += 3) {
+                    Vertex *vert0 = &vertices[i+0];
+                    Vertex *vert1 = &vertices[i+1];
+                    Vertex *vert2 = &vertices[i+2];
+                    calculate_tangents_and_bitangents(vert0, vert1, vert2);
+                }
             }
         }
 

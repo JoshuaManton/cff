@@ -34,6 +34,23 @@ TODO:
 static Window g_main_window;
 static float g_time_at_startup;
 
+void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
+    Render_Pass_Desc pass = {};
+    pass.camera_position = v3(0, 0, 0);
+    pass.camera_orientation = quaternion_identity();
+    pass.projection_matrix = orthographic(0, g_main_window.width, 0, g_main_window.height, -1, 1);
+    begin_render_pass(&pass);
+    Vertex ffverts[7];
+    Fixed_Function ff = {};
+    ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), texture, vertex_shader, pixel_shader);
+    Vector2 uvs[2] = {
+        v2(0, 1),
+        v2(1, 0),
+    };
+    ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
+    ff_end(&ff);
+}
+
 void main() {
     init_platform();
 
@@ -227,6 +244,8 @@ void main() {
         ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_end(&ff);
+
+        draw_texture(helmet_meshes[0].material.normal_map, v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
 
         present(true);
     }

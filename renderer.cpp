@@ -99,7 +99,7 @@ void begin_render_pass(Render_Pass_Desc *pass) {
 }
 
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options) {
-    Foreach(mesh, meshes) {
+    Foreach (mesh, meshes) {
         Model_CBuffer model_cbuffer = {};
         model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
         model_cbuffer.visualize_normals = options.visualize_normals;
