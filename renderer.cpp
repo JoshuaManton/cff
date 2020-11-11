@@ -57,6 +57,7 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
     Foreach(mesh, meshes) {
         Model_CBuffer model_cbuffer = {};
         model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
+        model_cbuffer.visualize_normals = options.visualize_normals;
         if (mesh->has_material) {
             model_cbuffer.ambient   = mesh->material.ambient;
             model_cbuffer.metallic  = mesh->material.metallic;

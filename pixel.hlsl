@@ -35,9 +35,9 @@ cbuffer CBUFFER_MODEL : register(b1) {
     float ambient;
     float metallic;
     float roughness;
+    int visualize_normals;
     float pad0;
     float pad1;
-    float pad2;
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
@@ -66,7 +66,7 @@ float distribution_ggx(float3 N, float3 H, float roughness) {
 }
 
 float geometry_schlick_ggx(float NdotV, float roughness, int analytic) {
-    // todo(josh): (roughness + 1) should only be used for analytic light sources, not IBL
+    // node(josh): (roughness + 1) should only be used for analytic light sources, not IBL
     // "if applied to image-based lighting, the results at glancing angles will be much too dark"
     // page 3
     // https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
@@ -113,7 +113,6 @@ float3 calculate_light(float3 albedo, float metallic, float roughness, float3 N,
     float denominator = 4.0 * max(dot(N, V), 0.001) * max(dot(N, L), 0.001);
     float3 specular   = numerator / max(denominator, 0.001);
 
-    // add to outgoing incoming_radiance Lo
     float NdotL = max(dot(N, L), 0.001);
     return (kD * albedo / PI + specular) * incoming_radiance * NdotL;
 }
@@ -125,6 +124,9 @@ float4 main(PS_INPUT input) : SV_Target {
         N = N * 2.0 - 1.0;
         N = normalize(mul(input.tbn, N));
     }
+    if (visualize_normals == 1) {
+        return float4(N * 0.5 + 0.5, 1.0);
+    }
 
     float3 V = normalize(camera_position - input.world_position);
 
@@ -133,11 +135,11 @@ float4 main(PS_INPUT input) : SV_Target {
         output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
     }
 
+    float3 albedo = output_color.rgb;
+
     if (has_ao_map) {
         output_color *= ao_map.Sample(main_sampler, input.texcoord.xy).r;
     }
-
-    float3 albedo = output_color.rgb;
 
     output_color *= ambient;
 

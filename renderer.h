@@ -31,9 +31,9 @@ struct Model_CBuffer {
     float ambient;
     float metallic;
     float roughness;
+    int visualize_normals;
     float pad0;
     float pad1;
-    float pad2;
 };
 
 struct Material {
@@ -96,6 +96,7 @@ struct Render_Options {
     bool do_roughness;
     bool do_emission;
     bool do_ao;
+    bool visualize_normals;
 };
 
 struct Render_Pass_Desc {

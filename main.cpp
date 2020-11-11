@@ -15,6 +15,22 @@
 #include "assimp_loader.cpp"
 #endif
 
+/*
+TODO:
+-text
+-directional lights
+-point lights
+-spot lights
+-shadow maps
+-hdr
+-bloom
+-skybox
+-AO?
+-instancing
+-anti aliasing
+-transparency handling
+*/
+
 static Window g_main_window;
 static float g_time_at_startup;
 
@@ -109,7 +125,17 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
 
+    Quaternion helmet_orientation = quaternion_identity();
+
+    float time_since_startup = 0;
+    const double time_at_startup = time_now();
+    double last_frame_start_time = time_now();
     while (true) {
+        double this_frame_start_time = time_now();
+        time_since_startup = (float)(this_frame_start_time - time_at_startup);
+        double true_delta_time = this_frame_start_time - last_frame_start_time;
+        defer(last_frame_start_time = this_frame_start_time);
+
         update_window(&g_main_window);
         if (g_main_window.should_close) {
             break;
@@ -119,12 +145,13 @@ void main() {
             break;
         }
 
-        if (get_input_down(&g_main_window, INPUT_1)) { render_options.do_albedo    = !render_options.do_albedo;    printf("do_albedo: %d\n",    render_options.do_albedo);    }
-        if (get_input_down(&g_main_window, INPUT_2)) { render_options.do_normal    = !render_options.do_normal;    printf("do_normal: %d\n",    render_options.do_normal);    }
-        if (get_input_down(&g_main_window, INPUT_3)) { render_options.do_metallic  = !render_options.do_metallic;  printf("do_metallic: %d\n",  render_options.do_metallic);  }
-        if (get_input_down(&g_main_window, INPUT_4)) { render_options.do_roughness = !render_options.do_roughness; printf("do_roughness: %d\n", render_options.do_roughness); }
-        if (get_input_down(&g_main_window, INPUT_5)) { render_options.do_emission  = !render_options.do_emission;  printf("do_emission: %d\n",  render_options.do_emission);  }
-        if (get_input_down(&g_main_window, INPUT_6)) { render_options.do_ao        = !render_options.do_ao;        printf("do_ao: %d\n",        render_options.do_ao);        }
+        if (get_input_down(&g_main_window, INPUT_1)) { render_options.do_albedo         = !render_options.do_albedo;         printf("do_albedo: %d\n",         render_options.do_albedo);         }
+        if (get_input_down(&g_main_window, INPUT_2)) { render_options.do_normal         = !render_options.do_normal;         printf("do_normal: %d\n",         render_options.do_normal);         }
+        if (get_input_down(&g_main_window, INPUT_3)) { render_options.do_metallic       = !render_options.do_metallic;       printf("do_metallic: %d\n",       render_options.do_metallic);       }
+        if (get_input_down(&g_main_window, INPUT_4)) { render_options.do_roughness      = !render_options.do_roughness;      printf("do_roughness: %d\n",      render_options.do_roughness);      }
+        if (get_input_down(&g_main_window, INPUT_5)) { render_options.do_emission       = !render_options.do_emission;       printf("do_emission: %d\n",       render_options.do_emission);       }
+        if (get_input_down(&g_main_window, INPUT_6)) { render_options.do_ao             = !render_options.do_ao;             printf("do_ao: %d\n",             render_options.do_ao);             }
+        if (get_input_down(&g_main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; printf("visualize_normals: %d\n", render_options.visualize_normals); }
 
         const float CAMERA_SPEED = 0.025f;
 
@@ -158,12 +185,12 @@ void main() {
         bind_shaders(vertex_shader, pixel_shader);
 
         Lighting_CBuffer lighting = {};
-        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_now()) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 20;
-        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_now() * 0.6) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 20;
-        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_now() * 0.7) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 20;
+        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup) * 3, 6, 0, 1);
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 50;
+        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.6) * 3, 6, 0, 1);
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 50;
+        lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 50;
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
@@ -173,8 +200,10 @@ void main() {
         pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
         begin_render_pass(&pass);
 
+        helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
+
         draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
-        draw_meshes(helmet_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
+        draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options);
 
         present(true);
     }

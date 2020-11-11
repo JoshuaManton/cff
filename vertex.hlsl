@@ -35,9 +35,9 @@ cbuffer CBUFFER_SPECIFIC : register(b1) {
     float ambient;
     float metallic;
     float roughness;
+    int visualize_normals;
     float pad0;
     float pad1;
-    float pad2;
 };
 
 PS_INPUT main(VS_INPUT input) {
