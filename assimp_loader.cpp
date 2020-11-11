@@ -31,16 +31,19 @@ void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *ver
 }
 
 void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_array) {
+    Array<Vertex> vertices = {};
+    vertices.allocator = default_allocator();
+    defer(vertices.destroy());
+
+    Array<u32> indices = {};
+    indices.allocator = default_allocator();
+    defer(indices.destroy());
+
     for (int i = 0; i < node->mNumMeshes; i++) {
+        vertices.clear();
+        indices.clear();
+
         aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
-
-        Array<Vertex> vertices = {};
-        vertices.allocator = default_allocator();
-        defer(vertices.destroy());
-
-        Array<u32> indices = {};
-        indices.allocator = default_allocator();
-        defer(indices.destroy());
 
         for (int i = 0; i < mesh->mNumVertices; i++) {
             Vertex vertex = {};

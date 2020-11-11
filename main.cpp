@@ -29,14 +29,11 @@ TODO:
 -anti aliasing
 */
 
-static Window g_main_window;
-static float g_time_at_startup;
-
-void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
+void draw_texture(int window_width, int window_height, Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
     Render_Pass_Desc pass = {};
     pass.camera_position = v3(0, 0, 0);
     pass.camera_orientation = quaternion_identity();
-    pass.projection_matrix = orthographic(0, g_main_window.width, 0, g_main_window.height, -1, 1);
+    pass.projection_matrix = orthographic(0, window_width, 0, window_height, -1, 1);
     begin_render_pass(&pass);
     Vertex ffverts[6];
     Fixed_Function ff = {};
@@ -60,14 +57,12 @@ void draw_scene(Render_Options render_options, float time_since_startup, Array<L
 void main() {
     init_platform();
 
-    g_time_at_startup = time_now();
-
     Allocator global_allocator = default_allocator();
 
-    g_main_window = create_window(1920, 1080);
+    static Window main_window = create_window(1920, 1080);
 
-    init_render_backend(&g_main_window);
-    init_renderer(&g_main_window);
+    init_render_backend(&main_window);
+    init_renderer(&main_window);
 
     Vertex_Shader vertex_shader       = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader  pixel_shader        = compile_pixel_shader_from_file(L"pixel.hlsl");
@@ -158,7 +153,7 @@ void main() {
 
     Texture hdr_color_buffer = {};
     Texture hdr_depth_buffer = {};
-    create_color_and_depth_buffers(g_main_window.width, g_main_window.height, TF_R16G16B16A16_FLOAT, &hdr_color_buffer, &hdr_depth_buffer);
+    create_color_and_depth_buffers(main_window.width, main_window.height, TF_R16G16B16A16_FLOAT, &hdr_color_buffer, &hdr_depth_buffer);
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
 
@@ -171,34 +166,34 @@ void main() {
         double true_delta_time = this_frame_start_time - last_frame_start_time;
         defer(last_frame_start_time = this_frame_start_time);
 
-        update_window(&g_main_window);
-        if (g_main_window.should_close) {
+        update_window(&main_window);
+        if (main_window.should_close) {
             break;
         }
 
-        if (get_input(&g_main_window, INPUT_ESCAPE)) {
+        if (get_input(&main_window, INPUT_ESCAPE)) {
             break;
         }
 
-        if (get_input_down(&g_main_window, INPUT_1)) { render_options.do_albedo_map     = !render_options.do_albedo_map;     }
-        if (get_input_down(&g_main_window, INPUT_2)) { render_options.do_normal_map     = !render_options.do_normal_map;     }
-        if (get_input_down(&g_main_window, INPUT_3)) { render_options.do_metallic_map   = !render_options.do_metallic_map;   }
-        if (get_input_down(&g_main_window, INPUT_4)) { render_options.do_roughness_map  = !render_options.do_roughness_map;  }
-        if (get_input_down(&g_main_window, INPUT_5)) { render_options.do_emission_map   = !render_options.do_emission_map;   }
-        if (get_input_down(&g_main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
-        if (get_input_down(&g_main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
+        if (get_input_down(&main_window, INPUT_1)) { render_options.do_albedo_map     = !render_options.do_albedo_map;     }
+        if (get_input_down(&main_window, INPUT_2)) { render_options.do_normal_map     = !render_options.do_normal_map;     }
+        if (get_input_down(&main_window, INPUT_3)) { render_options.do_metallic_map   = !render_options.do_metallic_map;   }
+        if (get_input_down(&main_window, INPUT_4)) { render_options.do_roughness_map  = !render_options.do_roughness_map;  }
+        if (get_input_down(&main_window, INPUT_5)) { render_options.do_emission_map   = !render_options.do_emission_map;   }
+        if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
+        if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
 
         const float CAMERA_SPEED = 0.025f;
 
-        if (get_input(&g_main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * CAMERA_SPEED;
-        if (get_input(&g_main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * CAMERA_SPEED;
+        if (get_input(&main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * CAMERA_SPEED;
+        if (get_input(&main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * CAMERA_SPEED;
+        if (get_input(&main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * CAMERA_SPEED;
+        if (get_input(&main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * CAMERA_SPEED;
+        if (get_input(&main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * CAMERA_SPEED;
+        if (get_input(&main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * CAMERA_SPEED;
 
-        if (get_input(&g_main_window, INPUT_MOUSE_RIGHT)) {
-            Vector2 delta = g_main_window.mouse_position_pixel_delta * 0.25f;
+        if (get_input(&main_window, INPUT_MOUSE_RIGHT)) {
+            Vector2 delta = main_window.mouse_position_pixel_delta * 0.25f;
             Vector3 rotate_vector = v3(-delta.y, delta.x, 0);
 
             Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
@@ -266,7 +261,7 @@ void main() {
             Render_Pass_Desc scene_pass = {};
             scene_pass.camera_position = camera_position;
             scene_pass.camera_orientation = camera_orientation;
-            scene_pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
+            scene_pass.projection_matrix = perspective(to_radians(60), (float)main_window.width / (float)main_window.height, 0.001, 1000);
             begin_render_pass(&scene_pass);
             bind_shaders(vertex_shader, pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
@@ -274,19 +269,19 @@ void main() {
 
         set_render_targets(nullptr, nullptr);
 
-        draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(g_main_window.width, g_main_window.height, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(shadow_map_color_buffer, v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(main_window.width, main_window.height, hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(main_window.width, main_window.height, shadow_map_color_buffer, v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
 
         Render_Pass_Desc ui_pass = {};
         ui_pass.camera_position = v3(0, 0, 0);
         ui_pass.camera_orientation = quaternion_identity();
-        ui_pass.projection_matrix = orthographic(0, g_main_window.width, 0, g_main_window.height, -1, 1);
+        ui_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
         begin_render_pass(&ui_pass);
         Vertex ffverts[1024];
         Fixed_Function ff = {};
         ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), roboto_mono.texture, vertex_shader, text_pixel_shader);
 
-        Vector3 text_pos = v3(10, g_main_window.height-roboto_mono.pixel_height, 0);
+        Vector3 text_pos = v3(10, main_window.height-roboto_mono.pixel_height, 0);
         const float text_size = 1;
         ff_text(&ff, "1. do_albedo_map",     roboto_mono, v4(1, 1, 1, render_options.do_albedo_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_text(&ff, "2. do_normal_map",     roboto_mono, v4(1, 1, 1, render_options.do_normal_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
