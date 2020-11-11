@@ -130,13 +130,13 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                         case aiTextureType_AMBIENT_OCCLUSION: { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
                         case aiTextureType_LIGHTMAP:          { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
                         case aiTextureType_EMISSIVE:          { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_SPECULAR:          { printf("Unhandled: aiTextureType_SPECULAR: %s\n", path_sb.string());     break; }
-                        case aiTextureType_AMBIENT:           { printf("Unhandled: aiTextureType_AMBIENT: %s\n", path_sb.string());      break; }
-                        case aiTextureType_HEIGHT:            { printf("Unhandled: aiTextureType_HEIGHT: %s\n", path_sb.string());       break; }
-                        case aiTextureType_SHININESS:         { printf("Unhandled: aiTextureType_SHININESS: %s\n", path_sb.string());    break; }
-                        case aiTextureType_OPACITY:           { printf("Unhandled: aiTextureType_OPACITY: %s\n", path_sb.string());      break; }
+                        case aiTextureType_SPECULAR:          { printf("Unhandled: aiTextureType_SPECULAR: %s\n",     path_sb.string()); break; }
+                        case aiTextureType_AMBIENT:           { printf("Unhandled: aiTextureType_AMBIENT: %s\n",      path_sb.string()); break; }
+                        case aiTextureType_HEIGHT:            { printf("Unhandled: aiTextureType_HEIGHT: %s\n",       path_sb.string()); break; }
+                        case aiTextureType_SHININESS:         { printf("Unhandled: aiTextureType_SHININESS: %s\n",    path_sb.string()); break; }
+                        case aiTextureType_OPACITY:           { printf("Unhandled: aiTextureType_OPACITY: %s\n",      path_sb.string()); break; }
                         case aiTextureType_DISPLACEMENT:      { printf("Unhandled: aiTextureType_DISPLACEMENT: %s\n", path_sb.string()); break; }
-                        case aiTextureType_REFLECTION:        { printf("Unhandled: aiTextureType_REFLECTION: %s\n", path_sb.string());   break; }
+                        case aiTextureType_REFLECTION:        { printf("Unhandled: aiTextureType_REFLECTION: %s\n",   path_sb.string()); break; }
                         case aiTextureType_NONE:              { assert(false); }
                         case aiTextureType_UNKNOWN: {
                             printf("Unknown texture type: %s\n", path_sb.string());

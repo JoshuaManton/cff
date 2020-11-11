@@ -45,6 +45,8 @@ cbuffer CBUFFER_LIGHTING : register(b2) {
     float4 point_light_positions[MAX_POINT_LIGHTS];
     float4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
+    float3 sun_direction;
+    float3 sun_color;
 };
 
 #define PI 3.14159265359
@@ -145,13 +147,17 @@ float4 main(PS_INPUT input) : SV_Target {
 
     for (int point_light_index = 0; point_light_index < num_point_lights; point_light_index++) {
         float3 light_position = point_light_positions[point_light_index].xyz;
-        float3 light_color    = point_light_colors[point_light_index].xyz;
+        float3 light_color    = point_light_colors[point_light_index].rgb;
 
         float3 offset_to_light = light_position - input.world_position;
         float distance_to_light = length(offset_to_light);
         float attenuation = 1.0 / (distance_to_light * distance_to_light);
         float3 L = normalize(offset_to_light);
         output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, L, light_color * attenuation, 1);
+    }
+
+    if (length(sun_direction) > 0) {
+        output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, -sun_direction, sun_color, 1);
     }
 
     output_color.rgb *= 1.0f-smoothstep(-5, 35.0f, length(camera_position - input.world_position)); // note(josh): garbage depth-darkness thing

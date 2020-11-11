@@ -213,6 +213,8 @@ void main() {
         lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 50;
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
         lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 50;
+        lighting.sun_direction = normalize(v3(0.5, -1, 0.5));
+        lighting.sun_color = v3(1, 1, 1) * 20;
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
