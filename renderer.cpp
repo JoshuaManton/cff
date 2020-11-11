@@ -156,7 +156,7 @@ void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices, Texture text
 }
 
 void ff_end(Fixed_Function *ff) {
-    assert(ff->num_vertices < ff->max_vertices);
+    assert(ff->num_vertices <= ff->max_vertices);
     // todo(josh): should this create() go in ff_begin?
     Buffer vertex_buffer = create_buffer(BT_VERTEX, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
     u32 strides[1] = { sizeof(ff->vertices[0]) };

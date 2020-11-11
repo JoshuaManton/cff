@@ -40,7 +40,7 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader verte
     pass.camera_orientation = quaternion_identity();
     pass.projection_matrix = orthographic(0, g_main_window.width, 0, g_main_window.height, -1, 1);
     begin_render_pass(&pass);
-    Vertex ffverts[7];
+    Vertex ffverts[6];
     Fixed_Function ff = {};
     ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), texture, vertex_shader, pixel_shader);
     Vector2 uvs[2] = {
@@ -49,6 +49,12 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader verte
     };
     ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
     ff_end(&ff);
+}
+
+void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
+    Quaternion helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
+    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
+    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options);
 }
 
 void main() {
@@ -63,10 +69,11 @@ void main() {
     init_render_backend(&g_main_window);
     init_renderer(&g_main_window);
 
-    Vertex_Shader vertex_shader = compile_vertex_shader_from_file(L"vertex.hlsl");
-    Pixel_Shader pixel_shader = compile_pixel_shader_from_file(L"pixel.hlsl");
-    Pixel_Shader simple_pixel_shader = compile_pixel_shader_from_file(L"ff_pixel.hlsl");
-    Pixel_Shader text_pixel_shader = compile_pixel_shader_from_file(L"text_pixel.hlsl");
+    Vertex_Shader vertex_shader       = compile_vertex_shader_from_file(L"vertex.hlsl");
+    Pixel_Shader  pixel_shader        = compile_pixel_shader_from_file(L"pixel.hlsl");
+    Pixel_Shader  simple_pixel_shader = compile_pixel_shader_from_file(L"ff_pixel.hlsl");
+    Pixel_Shader  text_pixel_shader   = compile_pixel_shader_from_file(L"text_pixel.hlsl");
+    Pixel_Shader  shadow_pixel_shader = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -145,9 +152,15 @@ void main() {
     render_options.do_emission_map  = true;
     render_options.do_ao_map        = true;
 
-    Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
+    Texture shadow_map_color_buffer = {};
+    Texture shadow_map_depth_buffer = {};
+    create_color_and_depth_buffers(2048, 2048, TF_R16G16B16A16_FLOAT, &shadow_map_color_buffer, &shadow_map_depth_buffer);
 
-    Quaternion helmet_orientation = quaternion_identity();
+    Texture hdr_color_buffer = {};
+    Texture hdr_depth_buffer = {};
+    create_color_and_depth_buffers(g_main_window.width, g_main_window.height, TF_R16G16B16A16_FLOAT, &hdr_color_buffer, &hdr_depth_buffer);
+
+    Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
 
     float time_since_startup = 0;
     const double time_at_startup = time_now();
@@ -198,34 +211,69 @@ void main() {
             camera_orientation = result;
         }
 
-        prerender(g_main_window.width, g_main_window.height);
+        prerender();
 
         set_render_targets(nullptr, nullptr);
         clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
 
         bind_vertex_format(default_vertex_format);
-        bind_shaders(vertex_shader, pixel_shader);
+
+        Matrix4 sun_transform = {};
+
+        // draw scene to shadow map
+        {
+            Texture *color_buffers[MAX_COLOR_BUFFERS] = {
+                &shadow_map_color_buffer,
+            };
+            set_render_targets(color_buffers, &shadow_map_depth_buffer);
+            clear_bound_render_targets(v4(0, 0, 0, 0));
+
+            Render_Pass_Desc scene_pass = {};
+            scene_pass.camera_position = v3(0, 20, 0);
+            scene_pass.camera_orientation = axis_angle(v3(1, 0, 0), to_radians(90));
+            scene_pass.projection_matrix = orthographic(-20, 20, -20, 20, -100, 100);
+            sun_transform = scene_pass.projection_matrix * view_matrix(scene_pass.camera_position, scene_pass.camera_orientation);
+            begin_render_pass(&scene_pass);
+            bind_shaders(vertex_shader, shadow_pixel_shader);
+            draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
+        }
 
         Lighting_CBuffer lighting = {};
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 50;
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 400;
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.6) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 50;
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 400;
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 50;
-        lighting.sun_direction = normalize(v3(0.5, -1, 0.5));
-        lighting.sun_color = v3(1, 1, 1) * 20;
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 400;
+        lighting.sun_direction = v3(0, -1, 0);
+        lighting.sun_color = v3(1, 1, 1) * 100;
+        lighting.sun_transform = sun_transform;
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
-        Render_Pass_Desc scene_pass = {};
-        scene_pass.camera_position = camera_position;
-        scene_pass.camera_orientation = camera_orientation;
-        scene_pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
-        begin_render_pass(&scene_pass);
-        helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
-        draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
-        draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options);
+        // draw scene to hdr buffer
+        {
+            Texture *color_buffers[MAX_COLOR_BUFFERS] = {
+                &hdr_color_buffer,
+            };
+            set_render_targets(color_buffers, &hdr_depth_buffer);
+            clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
+
+            bind_textures(&shadow_map_color_buffer, 1, TS_SHADOW_MAP);
+
+            Render_Pass_Desc scene_pass = {};
+            scene_pass.camera_position = camera_position;
+            scene_pass.camera_orientation = camera_orientation;
+            scene_pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
+            begin_render_pass(&scene_pass);
+            bind_shaders(vertex_shader, pixel_shader);
+            draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
+        }
+
+        set_render_targets(nullptr, nullptr);
+
+        draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(g_main_window.width, g_main_window.height, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(shadow_map_color_buffer, v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
 
         Render_Pass_Desc ui_pass = {};
         ui_pass.camera_position = v3(0, 0, 0);
@@ -246,8 +294,6 @@ void main() {
         ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_end(&ff);
-
-        draw_texture(helmet_meshes[0].material.normal_map, v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
 
         present(true);
     }

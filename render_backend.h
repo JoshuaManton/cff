@@ -31,6 +31,10 @@ enum Texture_Format {
     TF_INVALID,
 
     TF_R8_UINT,
+    TF_R32_INT,
+    TF_R32_FLOAT,
+    TF_R16G16B16A16_FLOAT,
+    TF_R32G32B32A32_FLOAT,
     TF_R8G8B8A8_UINT,
     TF_R8G8B8A8_UINT_SRGB,
     TF_DEPTH_STENCIL,
@@ -118,6 +122,9 @@ enum Buffer_Type {
 
 
 void init_render_backend(Window *window);
+void create_color_and_depth_buffers(int width, int height, Texture_Format format, Texture *out_color_buffer, Texture *out_depth_buffer);
+
+
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader);
 void          destroy_vertex_format(Vertex_Format format);
@@ -144,6 +151,8 @@ void set_render_targets(Texture *color_buffers[MAX_COLOR_BUFFERS], Texture *dept
 void unset_render_targets();
 void clear_bound_render_targets(Vector4 color);
 
-void prerender(int viewport_width, int viewport_height);
+void set_viewport(int x, int y, int width, int height);
+
+void prerender();
 void issue_draw_call(int vertex_count, int index_count, int instance_count = 0);
 void present(bool vsync);

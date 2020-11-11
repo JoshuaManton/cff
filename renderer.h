@@ -71,6 +71,8 @@ enum Texture_Slot {
     TS_ROUGHNESS,
     TS_EMISSION,
     TS_AO,
+    TS_SHADOW_MAP,
+
     TS_COUNT,
 };
 
@@ -79,7 +81,12 @@ struct Lighting_CBuffer {
     Vector4 point_light_positions[MAX_POINT_LIGHTS];
     Vector4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
-    float pad[3];
+    float pad1[3];
+    Matrix4 sun_transform;
+    Vector3 sun_direction;
+    float pad2;
+    Vector3 sun_color;
+    float pad3;
 };
 
 Texture load_texture_from_file(char *filename, Texture_Format format = TF_R8G8B8A8_UINT);

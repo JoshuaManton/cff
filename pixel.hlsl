@@ -6,6 +6,7 @@ Texture2D metallic_map  : register(t2);
 Texture2D roughness_map : register(t3);
 Texture2D emission_map  : register(t4);
 Texture2D ao_map        : register(t5);
+Texture2D shadow_map    : register(t6);
 
 struct PS_INPUT {
     float4 position         : SV_POSITION;
@@ -45,6 +46,7 @@ cbuffer CBUFFER_LIGHTING : register(b2) {
     float4 point_light_positions[MAX_POINT_LIGHTS];
     float4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
+    matrix sun_transform;
     float3 sun_direction;
     float3 sun_color;
 };
@@ -119,6 +121,46 @@ float3 calculate_light(float3 albedo, float metallic, float roughness, float3 N,
     return (kD * albedo / PI + specular) * incoming_radiance * NdotL;
 }
 
+float calculate_shadow(Texture2D shadow_map_texture, row_major matrix sun_matrix, float3 world_pos, float3 N) {
+    float4 frag_position_light_space = mul(sun_matrix, float4(world_pos, 1.0));
+    float3 proj_coords = frag_position_light_space.xyz / frag_position_light_space.w; // todo(josh): check for divide by zero?
+    proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+    proj_coords.y = 1.0 - proj_coords.y;
+    if (proj_coords.z > 1.0) {
+        proj_coords.z = 1.0;
+    }
+
+    float dot_to_sun = clamp(dot(N, -sun_direction), 0, 1);
+    float bias = max(0.01 * (1.0 - dot_to_sun), 0.001);
+    // float bias = 0.01;
+
+    float2 texel_size = 1.0 / 2048;
+    float shadow = 0;
+#if 0
+    shadow = shadow_map_texture.Sample(main_sampler, proj_coords.xy).r + bias < proj_coords.z ? 1.0 : 0.0;
+#elif 1
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2(-1, -1) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2( 0, -1) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2( 1, -1) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2(-1,  0) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2( 0,  0) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2( 1,  0) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2(-1,  1) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2( 0,  1) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow += shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2( 1,  1) * texel_size).r + bias < proj_coords.z ? 1.0 : 0.0;
+    shadow /= 9.0;
+#else
+    for (int x = -2; x <= 2; x += 1) {
+        for (int y = -2; y <= 2; y += 1) {
+            float pcf_depth = shadow_map_texture.Sample(main_sampler, proj_coords.xy + float2(x, y) * texel_size).r;
+            shadow += pcf_depth + bias < proj_coords.z ? 1.0 : 0.0;
+        }
+    }
+    shadow /= 25.0;
+#endif
+    return shadow;
+}
+
 float4 main(PS_INPUT input) : SV_Target {
     float3 N = normalize(input.normal);
     if (has_normal_map == 1) {
@@ -157,9 +199,13 @@ float4 main(PS_INPUT input) : SV_Target {
     }
 
     if (length(sun_direction) > 0) {
-        output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, -sun_direction, sun_color, 1);
+        float shadow = calculate_shadow(shadow_map, sun_transform, input.world_position, N);
+        output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, -sun_direction, sun_color, 1) * (1.0f - shadow);
     }
 
-    output_color.rgb *= 1.0f-smoothstep(-5, 35.0f, length(camera_position - input.world_position)); // note(josh): garbage depth-darkness thing
+    // output_color.rgb *= 1.0f-smoothstep(-5, 35.0f, length(camera_position - input.world_position)); // note(josh): garbage depth-darkness thing
+    const float exposure = 0.25;
+    output_color.rgb = float3(1.0, 1.0, 1.0) - exp(-output_color.rgb * exposure);
+
     return output_color;
 }

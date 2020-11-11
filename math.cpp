@@ -485,12 +485,12 @@ Matrix4 perspective(float fovy_radians, float aspect, float near, float far) {
 
 Matrix4 orthographic(float left, float right, float bottom, float top, float near, float far) {
     Matrix4 result = {};
-    result[0][0] = +2.0f / (right - left);
-    result[1][1] = +2.0f / (top - bottom);
-    result[2][2] = +2.0f / (far - near);
-    result[3][0] = -(right + left)   / (right - left);
-    result[3][1] = -(top   + bottom) / (top - bottom);
-    result[3][2] = -(far + near) / (far- near);
+    result[0][0] = 2.0f / (right - left);
+    result[1][1] = 2.0f / (top - bottom);
+    result[2][2] = 2.0f / (far - near);
+    result[3][0] = (right + left)   / (left - right);
+    result[3][1] = (top   + bottom) / (bottom - top);
+    result[3][2] = (far + near) / (near - far);
     result[3][3] = 1.0f;
 
     // note(josh): uncomment to support right-handed coords. right-handed would be flip_z_axis=true
