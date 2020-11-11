@@ -47,6 +47,7 @@ ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_te
 }
 
 void init_graphics_driver(Window *window) {
+    dx_texture_format_mapping[TF_R8_UINT]            = DXGI_FORMAT_R8_UNORM;
     dx_texture_format_mapping[TF_R8G8B8A8_UINT]      = DXGI_FORMAT_R8G8B8A8_UNORM;
     dx_texture_format_mapping[TF_R8G8B8A8_UINT_SRGB] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     dx_texture_format_mapping[TF_DEPTH_STENCIL]      = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -441,7 +442,7 @@ Texture create_texture(Texture_Description desc) {
     assert(result == S_OK);
     if (desc.color_data) {
         // num_channels := cast(u32)texture_format_infos[desc.format].num_channels;
-        directx.device_context->UpdateSubresource((ID3D11Resource *)texture_handle, 0, nullptr, desc.color_data, 4 * (u32)desc.width, 0); // todo(josh): replace the hardcoded for when we have different formats
+        directx.device_context->UpdateSubresource((ID3D11Resource *)texture_handle, 0, nullptr, desc.color_data, texture_format_infos[desc.format].num_channels * (u32)desc.width, 0); // todo(josh): replace the hardcoded for when we have different formats
     }
 
     // Create shader resource view
@@ -475,6 +476,13 @@ Texture create_texture(Texture_Description desc) {
     texture.handle = texture_handle;
     texture.shader_resource_view = shader_resource_view;
     return texture;
+}
+
+void destroy_texture(Texture texture) {
+    texture.handle->Release();
+    if (texture.shader_resource_view) {
+        texture.shader_resource_view->Release();
+    }
 }
 
 void bind_textures(Texture *textures, int num_textures, int start_slot) {
@@ -574,6 +582,10 @@ void prerender(int viewport_width, int viewport_height) {
     directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
     directx.device_context->RSSetState(directx.backface_cull_rasterizer);
     directx.device_context->OMSetDepthStencilState(directx.depth_test_state, 0);
+
+    float blend_factor[4] = {0, 0, 0, 0};
+    u32 sample_mask = 0xffffffff;
+    directx.device_context->OMSetBlendState(directx.alpha_blend_state, blend_factor, sample_mask);
 }
 
 void present(bool vsync) {

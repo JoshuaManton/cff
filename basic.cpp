@@ -126,7 +126,7 @@ Allocator arena_allocator() {
 
 // todo(josh): custom allocator
 char *read_entire_file(char *filename, int *len) {
-    auto file = fopen(filename, "rb");
+    FILE *file = fopen(filename, "rb");
     if (file == nullptr) {
         printf("read_entire_file couldn't find file: %s\n", filename);
         assert(false);

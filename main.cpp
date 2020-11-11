@@ -48,6 +48,8 @@ void main() {
 
     Vertex_Shader vertex_shader = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader pixel_shader = compile_pixel_shader_from_file(L"pixel.hlsl");
+    Pixel_Shader simple_pixel_shader = compile_pixel_shader_from_file(L"ff_pixel.hlsl");
+    Pixel_Shader text_pixel_shader = compile_pixel_shader_from_file(L"text_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -107,6 +109,9 @@ void main() {
     Vector3 camera_position = {};
     Quaternion camera_orientation = quaternion_identity();
 
+    Font roboto_mono = load_font_from_file("fonts/roboto_mono.ttf", 32);
+    Font roboto      = load_font_from_file("fonts/roboto.ttf", 32);
+
     Array<Loaded_Mesh> helmet_meshes = {};
     helmet_meshes.allocator = default_allocator();
     load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
@@ -116,12 +121,12 @@ void main() {
     load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
 
     Render_Options render_options = {};
-    render_options.do_albedo    = true;
-    render_options.do_normal    = true;
-    render_options.do_metallic  = true;
-    render_options.do_roughness = true;
-    render_options.do_emission  = true;
-    render_options.do_ao        = true;
+    render_options.do_albedo_map    = true;
+    render_options.do_normal_map    = true;
+    render_options.do_metallic_map  = true;
+    render_options.do_roughness_map = true;
+    render_options.do_emission_map  = true;
+    render_options.do_ao_map        = true;
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
 
@@ -145,13 +150,13 @@ void main() {
             break;
         }
 
-        if (get_input_down(&g_main_window, INPUT_1)) { render_options.do_albedo         = !render_options.do_albedo;         printf("do_albedo: %d\n",         render_options.do_albedo);         }
-        if (get_input_down(&g_main_window, INPUT_2)) { render_options.do_normal         = !render_options.do_normal;         printf("do_normal: %d\n",         render_options.do_normal);         }
-        if (get_input_down(&g_main_window, INPUT_3)) { render_options.do_metallic       = !render_options.do_metallic;       printf("do_metallic: %d\n",       render_options.do_metallic);       }
-        if (get_input_down(&g_main_window, INPUT_4)) { render_options.do_roughness      = !render_options.do_roughness;      printf("do_roughness: %d\n",      render_options.do_roughness);      }
-        if (get_input_down(&g_main_window, INPUT_5)) { render_options.do_emission       = !render_options.do_emission;       printf("do_emission: %d\n",       render_options.do_emission);       }
-        if (get_input_down(&g_main_window, INPUT_6)) { render_options.do_ao             = !render_options.do_ao;             printf("do_ao: %d\n",             render_options.do_ao);             }
-        if (get_input_down(&g_main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; printf("visualize_normals: %d\n", render_options.visualize_normals); }
+        if (get_input_down(&g_main_window, INPUT_1)) { render_options.do_albedo_map     = !render_options.do_albedo_map;     }
+        if (get_input_down(&g_main_window, INPUT_2)) { render_options.do_normal_map     = !render_options.do_normal_map;     }
+        if (get_input_down(&g_main_window, INPUT_3)) { render_options.do_metallic_map   = !render_options.do_metallic_map;   }
+        if (get_input_down(&g_main_window, INPUT_4)) { render_options.do_roughness_map  = !render_options.do_roughness_map;  }
+        if (get_input_down(&g_main_window, INPUT_5)) { render_options.do_emission_map   = !render_options.do_emission_map;   }
+        if (get_input_down(&g_main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
+        if (get_input_down(&g_main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
 
         const float CAMERA_SPEED = 0.025f;
 
@@ -194,16 +199,34 @@ void main() {
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
-        Render_Pass_Desc pass = {};
-        pass.camera_position = camera_position;
-        pass.camera_orientation = camera_orientation;
-        pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
-        begin_render_pass(&pass);
-
+        Render_Pass_Desc scene_pass = {};
+        scene_pass.camera_position = camera_position;
+        scene_pass.camera_orientation = camera_orientation;
+        scene_pass.projection_matrix = perspective(to_radians(60), (float)g_main_window.width / (float)g_main_window.height, 0.001, 1000);
+        begin_render_pass(&scene_pass);
         helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
-
         draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
         draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options);
+
+        Render_Pass_Desc ui_pass = {};
+        ui_pass.camera_position = v3(0, 0, 0);
+        ui_pass.camera_orientation = quaternion_identity();
+        ui_pass.projection_matrix = orthographic(0, g_main_window.width, 0, g_main_window.height, -1, 1);
+        begin_render_pass(&ui_pass);
+        Vertex ffverts[1024];
+        Fixed_Function ff = {};
+        ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), roboto_mono.texture, vertex_shader, text_pixel_shader);
+
+        Vector3 text_pos = v3(10, g_main_window.height-roboto_mono.pixel_height, 0);
+        const float text_size = 1;
+        ff_text(&ff, "1. do_albedo_map",     roboto_mono, v4(1, 1, 1, render_options.do_albedo_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_text(&ff, "2. do_normal_map",     roboto_mono, v4(1, 1, 1, render_options.do_normal_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_text(&ff, "3. do_metallic_map",   roboto_mono, v4(1, 1, 1, render_options.do_metallic_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_text(&ff, "4. do_roughness_map",  roboto_mono, v4(1, 1, 1, render_options.do_roughness_map  ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_text(&ff, "5. do_emission_map",   roboto_mono, v4(1, 1, 1, render_options.do_emission_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+        ff_end(&ff);
 
         present(true);
     }

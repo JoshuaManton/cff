@@ -138,10 +138,10 @@ float4 main(PS_INPUT input) : SV_Target {
     float3 albedo = output_color.rgb;
 
     if (has_ao_map) {
-        output_color *= ao_map.Sample(main_sampler, input.texcoord.xy).r;
+        output_color.rgb *= ao_map.Sample(main_sampler, input.texcoord.xy).r;
     }
 
-    output_color *= ambient;
+    output_color.rgb *= ambient;
 
     for (int point_light_index = 0; point_light_index < num_point_lights; point_light_index++) {
         float3 light_position = point_light_positions[point_light_index].xyz;

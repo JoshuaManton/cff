@@ -29,6 +29,8 @@ void init_renderer(Window *window);
 
 enum Texture_Format {
     TF_INVALID,
+
+    TF_R8_UINT,
     TF_R8G8B8A8_UINT,
     TF_R8G8B8A8_UINT_SRGB,
     TF_DEPTH_STENCIL,
@@ -131,8 +133,10 @@ void   bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot);
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename);
 Pixel_Shader  compile_pixel_shader_from_file(wchar_t *filename);
 void          bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
+// todo(josh): destroy shaders
 
 Texture create_texture(Texture_Description desc);
+void    destroy_texture(Texture texture);
 void    bind_textures(Texture *textures, int num_textures, int slot);
 void    unbind_all_textures();
 

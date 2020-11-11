@@ -3,6 +3,7 @@
 #include "window.h"
 #include "math.h"
 #include "render_backend.h"
+#include "stb_truetype.h"
 
 struct Vertex {
     Vector3 position;
@@ -81,21 +82,25 @@ struct Lighting_CBuffer {
     float pad[3];
 };
 
-struct Fixed_Function {
-    Vertex *vertices;
-    int max_vertices;
-    int num_vertices;
-};
-
 Texture load_texture_from_file(char *filename, Texture_Format format = TF_R8G8B8A8_UINT);
 
+struct Font {
+    Texture texture;
+    stbtt_bakedchar chars[128];
+    int dim;
+    float pixel_height;
+};
+
+Font load_font_from_file(char *filename, float size);
+void destroy_font(Font font);
+
 struct Render_Options {
-    bool do_albedo;
-    bool do_normal;
-    bool do_metallic;
-    bool do_roughness;
-    bool do_emission;
-    bool do_ao;
+    bool do_albedo_map;
+    bool do_normal_map;
+    bool do_metallic_map;
+    bool do_roughness_map;
+    bool do_emission_map;
+    bool do_ao_map;
     bool visualize_normals;
 };
 
@@ -108,9 +113,20 @@ struct Render_Pass_Desc {
 void begin_render_pass(Render_Pass_Desc *pass);
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options);
 
-void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices);
+struct Fixed_Function {
+    Vertex *vertices;
+    int max_vertices;
+    int num_vertices;
+    Texture texture;
+    Vertex_Shader vertex_shader;
+    Pixel_Shader pixel_shader;
+};
+
+void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices, Texture texture, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader);
 void ff_end(Fixed_Function *ff);
 void ff_vertex(Fixed_Function *ff, Vector3 position);
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord);
 void ff_color(Fixed_Function *ff, Vector4 color);
 void ff_next(Fixed_Function *ff);
+void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector2 uv_overrides[2]);
+void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size);
