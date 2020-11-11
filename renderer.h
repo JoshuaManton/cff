@@ -47,6 +47,7 @@ struct Material {
     float ambient;
     float metallic;
     float roughness;
+    bool has_transparency;
 };
 
 struct Loaded_Mesh {
@@ -118,7 +119,7 @@ struct Render_Pass_Desc {
 };
 
 void begin_render_pass(Render_Pass_Desc *pass);
-void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options);
+void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency);
 
 struct Fixed_Function {
     Vertex *vertices;

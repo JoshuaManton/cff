@@ -17,18 +17,13 @@
 
 /*
 TODO:
--text
--directional lights
--point lights
 -spot lights
--shadow maps
--hdr
+-cascaded shadow maps
 -bloom
 -skybox
 -AO?
--instancing
+-instancing (do we support this already?)
 -anti aliasing
--transparency handling
 */
 
 static Window g_main_window;
@@ -53,8 +48,10 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader verte
 
 void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
     Quaternion helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
-    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options);
-    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options);
+    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options, false);
+    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options, false);
+    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options, true);
+    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options, true);
 }
 
 void main() {
@@ -220,6 +217,8 @@ void main() {
 
         Matrix4 sun_transform = {};
 
+        Quaternion sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
+
         // draw scene to shadow map
         {
             Texture *color_buffers[MAX_COLOR_BUFFERS] = {
@@ -230,7 +229,7 @@ void main() {
 
             Render_Pass_Desc scene_pass = {};
             scene_pass.camera_position = v3(0, 20, 0);
-            scene_pass.camera_orientation = axis_angle(v3(1, 0, 0), to_radians(90));
+            scene_pass.camera_orientation = sun_orientation;
             scene_pass.projection_matrix = orthographic(-20, 20, -20, 20, -100, 100);
             sun_transform = scene_pass.projection_matrix * view_matrix(scene_pass.camera_position, scene_pass.camera_orientation);
             begin_render_pass(&scene_pass);
@@ -245,7 +244,7 @@ void main() {
         lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 400;
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
         lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 400;
-        lighting.sun_direction = v3(0, -1, 0);
+        lighting.sun_direction = quaternion_forward(sun_orientation);
         lighting.sun_color = v3(1, 1, 1) * 100;
         lighting.sun_transform = sun_transform;
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));

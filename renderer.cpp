@@ -98,12 +98,16 @@ void begin_render_pass(Render_Pass_Desc *pass) {
     bind_constant_buffers(&renderer_state.pass_cbuffer_handle, 1, CBS_PASS);
 }
 
-void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options) {
+void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency) {
     Foreach (mesh, meshes) {
         Model_CBuffer model_cbuffer = {};
         model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
         model_cbuffer.visualize_normals = options.visualize_normals;
         if (mesh->has_material) {
+            if (mesh->material.has_transparency != draw_transparency) {
+                continue;
+            }
+
             model_cbuffer.ambient   = mesh->material.ambient;
             model_cbuffer.metallic  = mesh->material.metallic;
             model_cbuffer.roughness = mesh->material.roughness;

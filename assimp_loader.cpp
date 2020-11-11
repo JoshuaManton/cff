@@ -156,6 +156,19 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                     assert(property->mType == aiPTI_Float);
                     material.roughness = *(float *)property->mData;
                 }
+                else if (strcmp(property->mKey.data, "$mat.gltf.alphaMode") == 0) {
+                    assert(property->mType == aiPTI_String);
+                    char *cstr = ((aiString *)property->mData)->data;
+                    if (strcmp(cstr, "MASK") == 0) {
+                        material.has_transparency = true;
+                    }
+                    else {
+                        if (strcmp(cstr, "OPAQUE") != 0) {
+                            printf("%s\n", cstr);
+                            assert(false);
+                        }
+                    }
+                }
                 else {
                     // switch (property->mType) {
                     //     case aiPTI_Float:   printf("%s -> %f\n", property->mKey.data, *(float *)property->mData);           break;
