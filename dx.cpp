@@ -483,14 +483,14 @@ Texture create_texture(Texture_Description desc) {
     Texture texture = {};
     texture.description = desc;
     texture.handle = texture_handle;
-    texture.shader_resource_view = shader_resource_view;
+    texture.backend.shader_resource_view = shader_resource_view;
     return texture;
 }
 
 void destroy_texture(Texture texture) {
     texture.handle->Release();
-    if (texture.shader_resource_view) {
-        texture.shader_resource_view->Release();
+    if (texture.backend.shader_resource_view) {
+        texture.backend.shader_resource_view->Release();
     }
 }
 
@@ -504,8 +504,8 @@ void bind_textures(Texture *textures, int num_textures, int start_slot) {
 
         Texture *texture = textures + i;
         if (texture) {
-            assert(texture->shader_resource_view);
-            directx.cur_srvs[slot] = texture->shader_resource_view;
+            assert(texture->backend.shader_resource_view);
+            directx.cur_srvs[slot] = texture->backend.shader_resource_view;
         }
     }
     directx.device_context->PSSetShaderResources((u32)start_slot, num_textures, &directx.cur_srvs[start_slot]);

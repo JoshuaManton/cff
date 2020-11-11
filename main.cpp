@@ -157,53 +157,68 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
 
+    const float FIXED_DT = 1.0f / 120;
+
     float time_since_startup = 0;
     const double time_at_startup = time_now();
     double last_frame_start_time = time_now();
-    while (true) {
+    float dt_acc = 0;
+    while (!main_window.should_close) {
         double this_frame_start_time = time_now();
         time_since_startup = (float)(this_frame_start_time - time_at_startup);
-        double true_delta_time = this_frame_start_time - last_frame_start_time;
         defer(last_frame_start_time = this_frame_start_time);
+        double true_delta_time = this_frame_start_time - last_frame_start_time;
+        true_delta_time = min(0.2, true_delta_time); // note(josh): stop spiral of death
+        dt_acc += true_delta_time;
+        while (dt_acc >= FIXED_DT) {
+            dt_acc -= FIXED_DT;
+            float dt = FIXED_DT;
 
-        update_window(&main_window);
-        if (main_window.should_close) {
-            break;
-        }
+            update_window(&main_window);
+            if (get_input(&main_window, INPUT_ESCAPE)) {
+                main_window.should_close = true;
+                break;
+            }
 
-        if (get_input(&main_window, INPUT_ESCAPE)) {
-            break;
-        }
+            if (get_input_down(&main_window, INPUT_1)) { render_options.do_albedo_map     = !render_options.do_albedo_map;     }
+            if (get_input_down(&main_window, INPUT_2)) { render_options.do_normal_map     = !render_options.do_normal_map;     }
+            if (get_input_down(&main_window, INPUT_3)) { render_options.do_metallic_map   = !render_options.do_metallic_map;   }
+            if (get_input_down(&main_window, INPUT_4)) { render_options.do_roughness_map  = !render_options.do_roughness_map;  }
+            if (get_input_down(&main_window, INPUT_5)) { render_options.do_emission_map   = !render_options.do_emission_map;   }
+            if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
+            if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
 
-        if (get_input_down(&main_window, INPUT_1)) { render_options.do_albedo_map     = !render_options.do_albedo_map;     }
-        if (get_input_down(&main_window, INPUT_2)) { render_options.do_normal_map     = !render_options.do_normal_map;     }
-        if (get_input_down(&main_window, INPUT_3)) { render_options.do_metallic_map   = !render_options.do_metallic_map;   }
-        if (get_input_down(&main_window, INPUT_4)) { render_options.do_roughness_map  = !render_options.do_roughness_map;  }
-        if (get_input_down(&main_window, INPUT_5)) { render_options.do_emission_map   = !render_options.do_emission_map;   }
-        if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
-        if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
+            // camera movement
+            {
+                const float CAMERA_SPEED_BASE = 5;
+                const float CAMERA_SPEED_FAST = 20;
+                const float CAMERA_SPEED_SLOW = 0.5;
 
-        const float CAMERA_SPEED = 0.025f;
+                float camera_speed = CAMERA_SPEED_BASE;
+                     if (get_input(&main_window, INPUT_SHIFT)) camera_speed = CAMERA_SPEED_FAST;
+                else if (get_input(&main_window, INPUT_ALT))   camera_speed = CAMERA_SPEED_SLOW;
 
-        if (get_input(&main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * CAMERA_SPEED;
-        if (get_input(&main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * CAMERA_SPEED;
-        if (get_input(&main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * CAMERA_SPEED;
-        if (get_input(&main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * CAMERA_SPEED;
-        if (get_input(&main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * CAMERA_SPEED;
-        if (get_input(&main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * CAMERA_SPEED;
+                if (get_input(&main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * camera_speed * dt;
+                if (get_input(&main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * camera_speed * dt;
+                if (get_input(&main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * camera_speed * dt;
+                if (get_input(&main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * camera_speed * dt;
+                if (get_input(&main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * camera_speed * dt;
+                if (get_input(&main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * camera_speed * dt;
 
-        if (get_input(&main_window, INPUT_MOUSE_RIGHT)) {
-            Vector2 delta = main_window.mouse_position_pixel_delta * 0.25f;
-            Vector3 rotate_vector = v3(-delta.y, delta.x, 0);
+                if (get_input(&main_window, INPUT_MOUSE_RIGHT)) {
+                    Vector2 delta = main_window.mouse_position_pixel_delta * 0.25f;
+                    Vector3 rotate_vector = v3(-delta.y, delta.x, 0);
 
-            Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
-            Quaternion y = axis_angle(v3(0, 1, 0), to_radians(rotate_vector.y));
-            Quaternion z = axis_angle(v3(0, 0, 1), to_radians(rotate_vector.z));
-            Quaternion result = y * camera_orientation;
-            result = result * x;
-            result = result * z;
-            result = normalize(result);
-            camera_orientation = result;
+                    Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
+                    Quaternion y = axis_angle(v3(0, 1, 0), to_radians(rotate_vector.y));
+                    Quaternion z = axis_angle(v3(0, 0, 1), to_radians(rotate_vector.z));
+                    Quaternion result = y * camera_orientation;
+                    result = result * x;
+                    result = result * z;
+                    result = normalize(result);
+                    camera_orientation = result;
+                }
+            }
         }
 
         prerender();

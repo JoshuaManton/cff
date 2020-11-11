@@ -1,10 +1,16 @@
 #pragma once
 
+
+
 #ifdef RENDER_BACKEND_DX11
 #include <d3d11.h>
 #include <d3dcompiler.h>
 
 typedef ID3D11Buffer *Buffer;
+
+typedef struct {
+    ID3D11ShaderResourceView *shader_resource_view;
+} Texture_Backend_Data;
 
 typedef struct {
     ID3D11VertexShader *handle;
@@ -17,6 +23,8 @@ typedef ID3D11Texture2D *Texture_Handle;
 
 typedef ID3D11InputLayout *Vertex_Format;
 #endif
+
+
 
 #include "math.h"
 #include "window.h"
@@ -70,9 +78,7 @@ struct Texture_Description {
 struct Texture {
     Texture_Handle handle;
     Texture_Description description;
-#ifdef RENDER_BACKEND_DX11
-    ID3D11ShaderResourceView *shader_resource_view;
-#endif
+    Texture_Backend_Data backend;
 };
 
 
