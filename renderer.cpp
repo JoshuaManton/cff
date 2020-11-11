@@ -24,7 +24,7 @@ void init_renderer(Window *window) {
     renderer_state.model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
 }
 
-Texture load_texture_from_file(char *filename, Texture_Format format) {
+Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
     int filedata_len;
     char *filedata = read_entire_file(filename, &filedata_len);
     defer(free(filedata));
@@ -39,6 +39,7 @@ Texture load_texture_from_file(char *filename, Texture_Format format) {
     texture_description.height = y;
     texture_description.color_data = color_data;
     texture_description.format = format;
+    texture_description.wrap_mode = wrap_mode;
     texture_description.type = TT_2D;
     Texture texture = create_texture(texture_description);
     return texture;
@@ -80,6 +81,7 @@ Font load_font_from_file(char *filename, float size) {
     desc.width = font.dim;
     desc.height = font.dim;
     desc.format = TF_R8_UINT;
+    desc.wrap_mode = TWM_POINT_CLAMP; // todo(josh): should this be linear for pretty text or would that look awful?
     desc.color_data = pixels;
     font.texture = create_texture(desc);
     return font;

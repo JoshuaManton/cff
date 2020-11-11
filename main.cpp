@@ -157,17 +157,18 @@ void main() {
 
     Texture shadow_map_color_buffer = {};
     Texture shadow_map_depth_buffer = {};
-    create_color_and_depth_buffers(2048, 2048, TF_R16G16B16A16_FLOAT, &shadow_map_color_buffer, &shadow_map_depth_buffer);
+    create_color_and_depth_buffers(2048, 2048, TF_R16G16B16A16_FLOAT, TWM_LINEAR_CLAMP, &shadow_map_color_buffer, &shadow_map_depth_buffer);
 
     Texture hdr_color_buffer = {};
     Texture hdr_depth_buffer = {};
-    create_color_and_depth_buffers(main_window.width, main_window.height, TF_R16G16B16A16_FLOAT, &hdr_color_buffer, &hdr_depth_buffer);
+    create_color_and_depth_buffers(main_window.width, main_window.height, TF_R16G16B16A16_FLOAT, TWM_LINEAR_CLAMP, &hdr_color_buffer, &hdr_depth_buffer);
 
     Texture_Description bloom_desc = {};
     bloom_desc.width  = main_window.width;
     bloom_desc.height = main_window.height;
     bloom_desc.type = TT_2D;
     bloom_desc.format = TF_R16G16B16A16_FLOAT;
+    bloom_desc.wrap_mode = TWM_LINEAR_CLAMP;
     bloom_desc.render_target = true;
     Texture bloom_color_buffer = create_texture(bloom_desc);
 
@@ -175,6 +176,7 @@ void main() {
     bloom_ping_pong_desc.width  = main_window.width;
     bloom_ping_pong_desc.height = main_window.height;
     bloom_ping_pong_desc.type = TT_2D;
+    bloom_ping_pong_desc.wrap_mode = TWM_LINEAR_CLAMP;
     bloom_ping_pong_desc.format = TF_R16G16B16A16_FLOAT;
     bloom_ping_pong_desc.render_target = true;
     Texture bloom_ping_pong_color_buffers[2] = {};
@@ -347,9 +349,9 @@ void main() {
 
         bind_textures(last_bloom_blur_texture, 1, TS_FINAL_BLOOM_MAP);
         draw_texture(main_window.width, main_window.height, hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(main_window.width, main_window.height, bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
 
         Render_Pass_Desc ui_pass = {};
         ui_pass.camera_position = v3(0, 0, 0);

@@ -90,7 +90,7 @@ struct Lighting_CBuffer {
     float pad3;
 };
 
-Texture load_texture_from_file(char *filename, Texture_Format format = TF_R8G8B8A8_UINT);
+Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
 
 struct Font {
     Texture texture;

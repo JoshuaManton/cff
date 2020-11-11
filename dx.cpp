@@ -110,6 +110,7 @@ void init_graphics_driver(Window *window) {
     Texture_Description depth_texture_desc = {};
     depth_texture_desc.type = TT_2D;
     depth_texture_desc.format = TF_DEPTH_STENCIL;
+    depth_texture_desc.wrap_mode = TWM_POINT_CLAMP;
     depth_texture_desc.width = window->width;
     depth_texture_desc.height = window->height;
     directx.swap_chain_depth_buffer = create_texture(depth_texture_desc);
@@ -384,6 +385,7 @@ void issue_draw_call(int vertex_count, int index_count, int instance_count) {
 Texture create_texture(Texture_Description desc) {
     // todo(josh): check for max texture size?
 
+    assert(desc.wrap_mode != TWM_INVALID && "no wrap mode specified for texture");
     assert(desc.type == TT_2D && "only 2D textures supported right now");
     assert(desc.format != TF_INVALID);
 
@@ -508,6 +510,18 @@ void bind_textures(Texture *textures, int num_textures, int start_slot) {
         if (texture) {
             assert(texture->backend.shader_resource_view);
             directx.cur_srvs[slot] = texture->backend.shader_resource_view;
+
+            // todo(josh): if a wrap mode isn't specified should we just default to point_wrap or something?
+
+            switch (texture->description.wrap_mode) {
+                case TWM_LINEAR_WRAP:  directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);  break;
+                case TWM_LINEAR_CLAMP: directx.device_context->PSSetSamplers(0, 1, &directx.linear_clamp_sampler); break;
+                case TWM_POINT_WRAP:   directx.device_context->PSSetSamplers(0, 1, &directx.point_wrap_sampler);   break;
+                case TWM_POINT_CLAMP:  directx.device_context->PSSetSamplers(0, 1, &directx.point_clamp_sampler);  break;
+                default: {
+                    assert(false && "No wrap mode specified for texture.");
+                }
+            }
         }
     }
     directx.device_context->PSSetShaderResources((u32)start_slot, num_textures, &directx.cur_srvs[start_slot]);

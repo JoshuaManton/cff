@@ -66,6 +66,14 @@ enum Texture_Type {
 };
 
 enum Texture_Wrap_Mode {
+    TWM_INVALID,
+
+    TWM_LINEAR_WRAP,
+    TWM_LINEAR_CLAMP,
+    TWM_POINT_WRAP,
+    TWM_POINT_CLAMP,
+
+    TWM_COUNT,
 };
 
 struct Texture_Description {
@@ -132,7 +140,7 @@ enum Buffer_Type {
 
 
 void init_render_backend(Window *window);
-void create_color_and_depth_buffers(int width, int height, Texture_Format format, Texture *out_color_buffer, Texture *out_depth_buffer);
+void create_color_and_depth_buffers(int width, int height, Texture_Format format, Texture_Wrap_Mode wrap_mode, Texture *out_color_buffer, Texture *out_depth_buffer);
 
 
 

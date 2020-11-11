@@ -211,11 +211,9 @@ PS_OUTPUT main(PS_INPUT input) {
         output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, -sun_direction, sun_color, 1) * (1.0f - shadow);
     }
 
-    // output_color.rgb *= 1.0f-smoothstep(-5, 35.0f, length(camera_position - input.world_position)); // note(josh): garbage depth-darkness thing
-
     PS_OUTPUT output;
     output.color = output_color;
-    output.bloom_color = float4(0, 0, 0, 0);
+    output.bloom_color = float4(0, 0, 0, output.color.a);
     float color_magnitude = length(output.color.rgb);
     const float BLOOM_THRESHOLD = 10.0;
     if (color_magnitude > BLOOM_THRESHOLD) {

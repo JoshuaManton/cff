@@ -123,16 +123,22 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                     path_sb.print("sponza/");
                     path_sb.print(cstr);
                     switch (property->mSemantic) {
-                        case aiTextureType_DIFFUSE:           { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT_SRGB); } break; }
-                        case aiTextureType_NORMALS:           { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_BASE_COLOR:        { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_NORMAL_CAMERA:     { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_EMISSION_COLOR:    { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_METALNESS:         { if (material.metallic_map.handle  == nullptr) {  material.metallic_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_DIFFUSE_ROUGHNESS: { if (material.roughness_map.handle == nullptr) {  material.roughness_map = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_AMBIENT_OCCLUSION: { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_LIGHTMAP:          { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
-                        case aiTextureType_EMISSIVE:          { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT);      } break; }
+                        // todo(josh): there is probably a material parameter for the wrap mode
+                        // todo(josh): there is probably a material parameter for the wrap mode
+                        // todo(josh): there is probably a material parameter for the wrap mode
+                        // todo(josh): there is probably a material parameter for the wrap mode
+                        // todo(josh): there is probably a material parameter for the wrap mode
+                        // todo(josh): there is probably a material parameter for the wrap mode
+                        case aiTextureType_DIFFUSE:           { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_NORMALS:           { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_BASE_COLOR:        { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_NORMAL_CAMERA:     { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_EMISSION_COLOR:    { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_METALNESS:         { if (material.metallic_map.handle  == nullptr) {  material.metallic_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_DIFFUSE_ROUGHNESS: { if (material.roughness_map.handle == nullptr) {  material.roughness_map = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_AMBIENT_OCCLUSION: { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_LIGHTMAP:          { if (material.ao_map.handle        == nullptr) {  material.ao_map        = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
+                        case aiTextureType_EMISSIVE:          { if (material.emission_map.handle  == nullptr) {  material.emission_map  = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
                         case aiTextureType_SPECULAR:          { printf("Unhandled: aiTextureType_SPECULAR: %s\n",     path_sb.string()); break; }
                         case aiTextureType_AMBIENT:           { printf("Unhandled: aiTextureType_AMBIENT: %s\n",      path_sb.string()); break; }
                         case aiTextureType_HEIGHT:            { printf("Unhandled: aiTextureType_HEIGHT: %s\n",       path_sb.string()); break; }
