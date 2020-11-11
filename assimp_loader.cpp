@@ -123,12 +123,12 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                     path_sb.print("sponza/");
                     path_sb.print(cstr);
                     switch (property->mSemantic) {
-                        // todo(josh): there is probably a material parameter for the wrap mode
-                        // todo(josh): there is probably a material parameter for the wrap mode
-                        // todo(josh): there is probably a material parameter for the wrap mode
-                        // todo(josh): there is probably a material parameter for the wrap mode
-                        // todo(josh): there is probably a material parameter for the wrap mode
-                        // todo(josh): there is probably a material parameter for the wrap mode
+                        // todo(josh): there is probably a material parameter for the wrap mode ???
+                        // todo(josh): there is probably a material parameter for the wrap mode ???
+                        // todo(josh): there is probably a material parameter for the wrap mode ???
+                        // todo(josh): there is probably a material parameter for the wrap mode ???
+                        // todo(josh): there is probably a material parameter for the wrap mode ???
+                        // todo(josh): there is probably a material parameter for the wrap mode ???
                         case aiTextureType_DIFFUSE:           { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP); } break; }
                         case aiTextureType_NORMALS:           { if (material.normal_map.handle    == nullptr) {  material.normal_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
                         case aiTextureType_BASE_COLOR:        { if (material.albedo_map.handle    == nullptr) {  material.albedo_map    = load_texture_from_file(path_sb.string(), TF_R8G8B8A8_UINT,      TWM_LINEAR_WRAP); } break; }
@@ -153,6 +153,10 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                         }
                     }
                 }
+                // todo(josh): apparently property->mData can be an array (of floats, for example).
+                //             we should use property->mDataLength to pull the right values out.
+                //             the only one I've seen be an array is for ambient but all the values
+                //             are the same and our current Material system only does scalar ambient.
                 else if (strcmp(property->mKey.data, "$mat.gltf.pbrMetallicRoughness.baseColorFactor") == 0) {
                     assert(property->mType == aiPTI_Float);
                     material.ambient = *(float *)property->mData;
