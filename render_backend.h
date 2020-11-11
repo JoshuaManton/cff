@@ -65,6 +65,9 @@ enum Texture_Type {
     TT_COUNT,
 };
 
+enum Texture_Wrap_Mode {
+};
+
 struct Texture_Description {
     int width;
     int height;
@@ -72,6 +75,7 @@ struct Texture_Description {
     Texture_Format format;
     Texture_Type type;
     // is_cpu_read_target
+    Texture_Wrap_Mode wrap_mode;
     byte *color_data;
 };
 

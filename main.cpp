@@ -54,6 +54,12 @@ void draw_scene(Render_Options render_options, float time_since_startup, Array<L
     draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options, true);
 }
 
+struct Blur_CBuffer {
+    int horizontal;
+    Vector2 screen_dimensions;
+    float _pad;
+};
+
 void main() {
     init_platform();
 
@@ -69,6 +75,8 @@ void main() {
     Pixel_Shader  simple_pixel_shader = compile_pixel_shader_from_file(L"ff_pixel.hlsl");
     Pixel_Shader  text_pixel_shader   = compile_pixel_shader_from_file(L"text_pixel.hlsl");
     Pixel_Shader  shadow_pixel_shader = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
+    Pixel_Shader  blur_pixel_shader   = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
+    Pixel_Shader  final_pixel_shader  = compile_pixel_shader_from_file(L"final_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -155,7 +163,26 @@ void main() {
     Texture hdr_depth_buffer = {};
     create_color_and_depth_buffers(main_window.width, main_window.height, TF_R16G16B16A16_FLOAT, &hdr_color_buffer, &hdr_depth_buffer);
 
+    Texture_Description bloom_desc = {};
+    bloom_desc.width  = main_window.width;
+    bloom_desc.height = main_window.height;
+    bloom_desc.type = TT_2D;
+    bloom_desc.format = TF_R16G16B16A16_FLOAT;
+    bloom_desc.render_target = true;
+    Texture bloom_color_buffer = create_texture(bloom_desc);
+
+    Texture_Description bloom_ping_pong_desc = {};
+    bloom_ping_pong_desc.width  = main_window.width;
+    bloom_ping_pong_desc.height = main_window.height;
+    bloom_ping_pong_desc.type = TT_2D;
+    bloom_ping_pong_desc.format = TF_R16G16B16A16_FLOAT;
+    bloom_ping_pong_desc.render_target = true;
+    Texture bloom_ping_pong_color_buffers[2] = {};
+    bloom_ping_pong_color_buffers[0] = create_texture(bloom_ping_pong_desc);
+    bloom_ping_pong_color_buffers[1] = create_texture(bloom_ping_pong_desc);
+
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
+    Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
 
     const float FIXED_DT = 1.0f / 120;
 
@@ -223,9 +250,6 @@ void main() {
 
         prerender();
 
-        set_render_targets(nullptr, nullptr);
-        clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
-
         bind_vertex_format(default_vertex_format);
 
         Matrix4 sun_transform = {};
@@ -252,13 +276,13 @@ void main() {
 
         Lighting_CBuffer lighting = {};
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 400;
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(1, 0, 0, 1) * 500;
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.6) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 400;
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 500;
         lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
-        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 400;
+        lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 500;
         lighting.sun_direction = quaternion_forward(sun_orientation);
-        lighting.sun_color = v3(1, 1, 1) * 100;
+        lighting.sun_color = v3(1, 1, 1) * 200;
         lighting.sun_transform = sun_transform;
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
@@ -267,9 +291,10 @@ void main() {
         {
             Texture *color_buffers[MAX_COLOR_BUFFERS] = {
                 &hdr_color_buffer,
+                &bloom_color_buffer,
             };
             set_render_targets(color_buffers, &hdr_depth_buffer);
-            clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
+            clear_bound_render_targets(v4(0, 0, 0, 0));
 
             bind_textures(&shadow_map_color_buffer, 1, TS_SHADOW_MAP);
 
@@ -282,10 +307,49 @@ void main() {
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
         }
 
-        set_render_targets(nullptr, nullptr);
+        Texture *last_bloom_blur_texture = {};
 
-        draw_texture(main_window.width, main_window.height, hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, shadow_map_color_buffer, v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
+        // blur bloom
+        {
+            Render_Pass_Desc bloom_pass = {};
+            bloom_pass.camera_position = v3(0, 0, 0);
+            bloom_pass.camera_orientation = quaternion_identity();
+            bloom_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
+            begin_render_pass(&bloom_pass);
+
+            for (int i = 0; i < 4; i++) {
+                int ping_pong_index = i % 2;
+                last_bloom_blur_texture = &bloom_ping_pong_color_buffers[ping_pong_index];
+                Texture *color_buffers[MAX_COLOR_BUFFERS] = {
+                    last_bloom_blur_texture,
+                };
+
+                Texture source_texture = bloom_color_buffer;
+                if (i > 0) {
+                    source_texture = bloom_ping_pong_color_buffers[(i+1) % 2];
+                }
+                bind_textures(&source_texture, 1, TS_ALBEDO);
+
+                Blur_CBuffer blur_cbuffer = {};
+                blur_cbuffer.horizontal = i % 2;
+                blur_cbuffer.screen_dimensions = v2(main_window.width, main_window.height);
+                update_buffer(blur_cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
+                bind_constant_buffers(&blur_cbuffer_handle, 1, CBS_BLUR);
+
+                set_render_targets(color_buffers, nullptr);
+                clear_bound_render_targets(v4(0, 0, 0, 1));
+                draw_texture(main_window.width, main_window.height, source_texture, v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, blur_pixel_shader);
+            }
+        }
+
+        set_render_targets(nullptr, nullptr);
+        clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
+
+        bind_textures(last_bloom_blur_texture, 1, TS_FINAL_BLOOM_MAP);
+        draw_texture(main_window.width, main_window.height, hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
+        // draw_texture(main_window.width, main_window.height, bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
 
         Render_Pass_Desc ui_pass = {};
         ui_pass.camera_position = v3(0, 0, 0);

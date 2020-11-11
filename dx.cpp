@@ -29,6 +29,7 @@ static DirectX directx;
 static DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
 
 ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
+    assert(format != TF_INVALID);
     D3D11_RENDER_TARGET_VIEW_DESC render_target_view_desc = {};
     render_target_view_desc.Format        = dx_texture_format_mapping[format];
     render_target_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -39,6 +40,7 @@ ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_te
 }
 
 ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
+    assert(format != TF_INVALID);
     assert(texture_format_infos[format].is_depth_format);
     D3D11_DEPTH_STENCIL_VIEW_DESC depth_stencil_view_desc = {};
     depth_stencil_view_desc.Format = dx_texture_format_mapping[format];

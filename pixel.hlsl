@@ -19,6 +19,11 @@ struct PS_INPUT {
     float3 world_position   : WORLDPOS;
 };
 
+struct PS_OUTPUT {
+    float4 color       : SV_Target0;
+    float4 bloom_color : SV_Target1;
+};
+
 cbuffer CBUFFER_PASS : register(b0) {
     matrix view_matrix;
     matrix projection_matrix;
@@ -161,7 +166,7 @@ float calculate_shadow(Texture2D shadow_map_texture, row_major matrix sun_matrix
     return shadow;
 }
 
-float4 main(PS_INPUT input) : SV_Target {
+PS_OUTPUT main(PS_INPUT input) {
     float3 N = normalize(input.normal);
     if (has_normal_map == 1) {
         N = normal_map.Sample(main_sampler, input.texcoord.xy).rgb;
@@ -169,7 +174,10 @@ float4 main(PS_INPUT input) : SV_Target {
         N = normalize(mul(input.tbn, N));
     }
     if (visualize_normals == 1) {
-        return float4(N * 0.5 + 0.5, 1.0);
+        PS_OUTPUT output;
+        output.color = float4(N * 0.5 + 0.5, 1.0);
+        output.bloom_color = float4(0, 0, 0, 0);
+        return output;
     }
 
     float3 V = normalize(camera_position - input.world_position);
@@ -204,8 +212,16 @@ float4 main(PS_INPUT input) : SV_Target {
     }
 
     // output_color.rgb *= 1.0f-smoothstep(-5, 35.0f, length(camera_position - input.world_position)); // note(josh): garbage depth-darkness thing
-    const float exposure = 0.25;
-    output_color.rgb = float3(1.0, 1.0, 1.0) - exp(-output_color.rgb * exposure);
 
-    return output_color;
+    PS_OUTPUT output;
+    output.color = output_color;
+    output.bloom_color = float4(0, 0, 0, 0);
+    float color_magnitude = length(output.color.rgb);
+    const float BLOOM_THRESHOLD = 10.0;
+    if (color_magnitude > BLOOM_THRESHOLD) {
+        const float SLOPE = 0.5;
+        output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * BLOOM_THRESHOLD)) * SLOPE;
+        output.bloom_color.a = output.color.a;
+    }
+    return output;
 }

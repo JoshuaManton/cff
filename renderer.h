@@ -60,21 +60,21 @@ struct Loaded_Mesh {
 };
 
 enum CBuffer_Slot {
-    CBS_PASS,
-    CBS_MODEL,
-    CBS_LIGHTING,
+    CBS_PASS     = 0,
+    CBS_MODEL    = 1,
+    CBS_LIGHTING = 2,
+    CBS_BLUR     = 2,
 };
 
 enum Texture_Slot {
-    TS_ALBEDO,
-    TS_NORMAL,
-    TS_METALLIC,
-    TS_ROUGHNESS,
-    TS_EMISSION,
-    TS_AO,
-    TS_SHADOW_MAP,
-
-    TS_COUNT,
+    TS_ALBEDO = 0,
+    TS_NORMAL = 1,
+    TS_FINAL_BLOOM_MAP = 1,
+    TS_METALLIC = 2,
+    TS_ROUGHNESS = 3,
+    TS_EMISSION = 4,
+    TS_AO = 5,
+    TS_SHADOW_MAP = 6,
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
