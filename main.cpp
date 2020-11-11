@@ -17,6 +17,9 @@
 
 /*
 TODO:
+-draw commands
+-depth sorting
+-transparency sorting
 -spot lights
 -cascaded shadow maps
 -bloom
