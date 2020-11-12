@@ -238,7 +238,7 @@ PS_OUTPUT main(PS_INPUT input) {
         float ray_distance = length(camera_position - ray_position);
         if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transform, shadow_map)) {
             float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
-            total_density += fog_amount / MAX_STEPS;
+            total_density += fog_amount * STEP_SIZE;
         }
     }
     output_color.rgb = lerp(output_color.rgb, fog_base_color, saturate(total_density));

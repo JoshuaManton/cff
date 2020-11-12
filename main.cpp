@@ -284,8 +284,8 @@ void main() {
         lighting.sun_color = v3(1, 1, 1) * 200;
         lighting.sun_transform = sun_transform;
         lighting.fog_base_color = v3(1, 1, 1);
-        lighting.fog_density    = 100;
-        lighting.fog_y_level    = 0;
+        lighting.fog_density    = 0.05;
+        lighting.fog_y_level    = -1;
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
