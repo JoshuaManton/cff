@@ -87,7 +87,9 @@ struct Lighting_CBuffer {
     Vector3 sun_direction;
     float pad2;
     Vector3 sun_color;
-    float pad3;
+    float fog_y_level;
+    float fog_density;
+    Vector3 fog_base_color;
 };
 
 Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);

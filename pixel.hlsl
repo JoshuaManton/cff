@@ -54,6 +54,9 @@ cbuffer CBUFFER_LIGHTING : register(b2) {
     matrix sun_transform;
     float3 sun_direction;
     float3 sun_color;
+    float fog_y_level;
+    float fog_density;
+    float3 fog_base_color;
 };
 
 #define PI 3.14159265359
@@ -126,6 +129,21 @@ float3 calculate_light(float3 albedo, float metallic, float roughness, float3 N,
     return (kD * albedo / PI + specular) * incoming_radiance * NdotL;
 }
 
+int sun_can_see_point(float3 position, row_major matrix sun_matrix, Texture2D shadow_map_texture) {
+    float4 position_sun_space = mul(sun_matrix, float4(position, 1.0));
+    float3 proj_coords = position_sun_space.xyz / position_sun_space.w; // todo(josh): check for divide by zero?
+    proj_coords.xy = proj_coords.xy * 0.5 + 0.5;
+    proj_coords.y = 1.0 - proj_coords.y;
+    if (proj_coords.z > 1.0) {
+        proj_coords.z = 1.0;
+    }
+    float sun_depth = shadow_map_texture.Sample(main_sampler, proj_coords.xy).r;
+    if (sun_depth < (proj_coords.z-0.001)) {
+        return 0;
+    }
+    return 1;
+}
+
 float calculate_shadow(Texture2D shadow_map_texture, row_major matrix sun_matrix, float3 world_pos, float3 N) {
     float4 frag_position_light_space = mul(sun_matrix, float4(world_pos, 1.0));
     float3 proj_coords = frag_position_light_space.xyz / frag_position_light_space.w; // todo(josh): check for divide by zero?
@@ -180,7 +198,8 @@ PS_OUTPUT main(PS_INPUT input) {
         return output;
     }
 
-    float3 V = normalize(camera_position - input.world_position);
+    float distance_to_pixel_position = length(camera_position - input.world_position);
+    float3 V = (camera_position - input.world_position) / distance_to_pixel_position;
 
     float4 output_color = float4(1, 1, 1, 1);
     if (has_albedo_map) {
@@ -210,6 +229,20 @@ PS_OUTPUT main(PS_INPUT input) {
         float shadow = calculate_shadow(shadow_map, sun_transform, input.world_position, N);
         output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, -sun_direction, sun_color, 1) * (1.0f - shadow);
     }
+
+    float total_density = 0;
+    const float STEP_SIZE = 0.1;
+    const int MAX_STEPS = 200;
+    for (int step = 0; step < MAX_STEPS; step++) {
+        float3 ray_position = camera_position - V * STEP_SIZE * step;
+        float ray_distance = length(camera_position - ray_position);
+        if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transform, shadow_map)) {
+            float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
+            total_density += fog_amount / MAX_STEPS;
+        }
+    }
+    output_color.rgb = lerp(output_color.rgb, fog_base_color, saturate(total_density));
+
 
     PS_OUTPUT output;
     output.color = output_color;

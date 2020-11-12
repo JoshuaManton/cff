@@ -40,5 +40,9 @@ float4 main(PS_INPUT input) : SV_Target {
     if (has_albedo_map) {
         output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
     }
-    return output_color * input.color;
+    output_color *= input.color;
+    if (output_color.a > 1.1) {
+        output_color = float4(1, 0, 1, 1);
+    }
+    return output_color;
 }

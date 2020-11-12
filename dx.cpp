@@ -201,7 +201,7 @@ void init_graphics_driver(Window *window) {
     alpha_blend_desc.RenderTarget[0].DestBlend      = D3D11_BLEND_INV_SRC_ALPHA;
     alpha_blend_desc.RenderTarget[0].BlendOp        = D3D11_BLEND_OP_ADD;
     alpha_blend_desc.RenderTarget[0].SrcBlendAlpha  = D3D11_BLEND_SRC_ALPHA;
-    alpha_blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_DEST_ALPHA;
+    alpha_blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
     alpha_blend_desc.RenderTarget[0].BlendOpAlpha   = D3D11_BLEND_OP_ADD;
     alpha_blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     result = directx.device->CreateBlendState(&alpha_blend_desc, &directx.alpha_blend_state);
@@ -534,22 +534,24 @@ void unbind_all_textures() {
     directx.device_context->PSSetShaderResources(0, ARRAYSIZE(directx.cur_srvs), &directx.cur_srvs[0]);
 }
 
-void set_render_targets(Texture *color_buffers[MAX_COLOR_BUFFERS], Texture *depth_buffer) {
+void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
+    assert(num_color_buffers <= MAX_COLOR_BUFFERS);
+
     unset_render_targets();
 
     int viewport_width  = 0;
     int viewport_height = 0;
-    if (color_buffers != nullptr) {
-        for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
-            Texture *color_buffer = color_buffers[i];
+    if (num_color_buffers > 0) {
+        for (int i = 0; i < num_color_buffers; i++) {
+            Texture color_buffer = color_buffers[i];
             assert(directx.cur_rtvs[i] == nullptr);
-            if (color_buffer != nullptr) {
+            if (color_buffer.handle != nullptr) {
                 if (viewport_width == 0) {
-                    viewport_width  = color_buffer->description.width;
-                    viewport_height = color_buffer->description.height;
+                    viewport_width  = color_buffer.description.width;
+                    viewport_height = color_buffer.description.height;
                 }
-                assert(color_buffer->description.render_target);
-                directx.cur_rtvs[i] = dx_create_render_target_view(color_buffer->handle, color_buffer->description.format);
+                assert(color_buffer.description.render_target);
+                directx.cur_rtvs[i] = dx_create_render_target_view(color_buffer.handle, color_buffer.description.format);
             }
         }
     }
