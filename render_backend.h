@@ -12,7 +12,7 @@ typedef struct {
     ID3D11Texture2D *handle_2d;
     ID3D11Texture2D *handle_msaa_2d;
     ID3D11Texture3D *handle_3d;
-    // todo(josh): 3d msaa?
+    // todo(josh): 3d msaa? is that even a thing?
 
     ID3D11ShaderResourceView *shader_resource_view;
 } Texture_Backend_Data;

@@ -62,10 +62,6 @@ struct Blur_CBuffer {
 #define BLOOM_BUFFER_DOWNSCALE 8.0
 
 void main() {
-    String_Builder sb = make_string_builder(default_allocator());
-    sb.print("asd");
-    sb.printf("qwe%s", sb.string());
-
     init_platform();
 
     Allocator global_allocator = default_allocator();
@@ -75,13 +71,34 @@ void main() {
     init_render_backend(&main_window);
     init_renderer(&main_window);
 
-    Vertex_Shader vertex_shader       = compile_vertex_shader_from_file(L"vertex.hlsl");
-    Pixel_Shader  pixel_shader        = compile_pixel_shader_from_file(L"pixel.hlsl");
-    Pixel_Shader  simple_pixel_shader = compile_pixel_shader_from_file(L"simple_pixel.hlsl");
-    Pixel_Shader  text_pixel_shader   = compile_pixel_shader_from_file(L"text_pixel.hlsl");
-    Pixel_Shader  shadow_pixel_shader = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
-    Pixel_Shader  blur_pixel_shader   = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
-    Pixel_Shader  final_pixel_shader  = compile_pixel_shader_from_file(L"final_pixel.hlsl");
+    #define NUM_BYTES_IN_3D_TEXTURE (4 * 256 * 256 * 256)
+
+    byte *texture_3d_color = (byte *)alloc(default_allocator(), NUM_BYTES_IN_3D_TEXTURE);
+    for (int i = 0; i < NUM_BYTES_IN_3D_TEXTURE; i += 4) {
+        texture_3d_color[i+0] = (byte)(((float)i / (float)NUM_BYTES_IN_3D_TEXTURE) * 255);
+        texture_3d_color[i+1] = (byte)(((float)i / (float)NUM_BYTES_IN_3D_TEXTURE) * 200);
+        texture_3d_color[i+2] = (byte)(((float)i / (float)NUM_BYTES_IN_3D_TEXTURE) * 64);
+        texture_3d_color[i+3] = 255;
+    }
+
+    Texture_Description test_3d_texture_description = {};
+    test_3d_texture_description.width  = 256;
+    test_3d_texture_description.height = 256;
+    test_3d_texture_description.depth  = 256;
+    test_3d_texture_description.color_data = texture_3d_color;
+    test_3d_texture_description.type = TT_3D;
+    test_3d_texture_description.format = TF_R8G8B8A8_UINT;
+    Texture test_3d_texture = create_texture(test_3d_texture_description);
+    free(default_allocator(), texture_3d_color);
+
+    Vertex_Shader vertex_shader          = compile_vertex_shader_from_file(L"vertex.hlsl");
+    Pixel_Shader  pixel_shader           = compile_pixel_shader_from_file(L"pixel.hlsl");
+    Pixel_Shader  simple_pixel_shader    = compile_pixel_shader_from_file(L"simple_pixel.hlsl");
+    Pixel_Shader  simple_pixel_3d_shader = compile_pixel_shader_from_file(L"simple_pixel_3d.hlsl");
+    Pixel_Shader  text_pixel_shader      = compile_pixel_shader_from_file(L"text_pixel.hlsl");
+    Pixel_Shader  shadow_pixel_shader    = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
+    Pixel_Shader  blur_pixel_shader      = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
+    Pixel_Shader  final_pixel_shader     = compile_pixel_shader_from_file(L"final_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -205,14 +222,6 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
-
-    // Texture_Description test_3d_texture_description = {};
-    // test_3d_texture_description.width  = 256;
-    // test_3d_texture_description.height = 256;
-    // test_3d_texture_description.depth  = 256;
-    // test_3d_texture_description.type = TT_3D;
-    // test_3d_texture_description.format = TF_R8G8B8A8_UINT;
-    // Texture test_3d_texture = create_texture(test_3d_texture_description);
 
     const float FIXED_DT = 1.0f / 120;
 
@@ -404,6 +413,7 @@ void main() {
         draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(128, 128, 0), vertex_shader, simple_pixel_shader);
         draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0), vertex_shader, simple_pixel_shader);
         draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(test_3d_texture,                  v3(384, 0, 0), v3(512, 128, 0), vertex_shader, simple_pixel_3d_shader, sin(time_since_startup));
 
         Vertex ffverts[1024];
         Fixed_Function ff = {};
