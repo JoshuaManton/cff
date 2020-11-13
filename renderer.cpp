@@ -7,6 +7,7 @@
 #include "stb_truetype.h"
 
 struct Renderer_State {
+    Render_Pass_Desc *current_render_pass;
     Buffer pass_cbuffer_handle;
     Buffer model_cbuffer_handle;
 };
@@ -92,12 +93,22 @@ void destroy_font(Font font) {
 }
 
 void begin_render_pass(Render_Pass_Desc *pass) {
+    assert(renderer_state.current_render_pass == nullptr);
+    renderer_state.current_render_pass = pass;
     Pass_CBuffer pass_cbuffer = {};
     pass_cbuffer.view_matrix = view_matrix(pass->camera_position, pass->camera_orientation);
     pass_cbuffer.projection_matrix = pass->projection_matrix;
     pass_cbuffer.camera_position = pass->camera_position;
     update_buffer(renderer_state.pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
     bind_constant_buffers(&renderer_state.pass_cbuffer_handle, 1, CBS_PASS);
+}
+
+void end_render_pass() {
+    assert(renderer_state.current_render_pass != nullptr);
+    renderer_state.current_render_pass = nullptr;
+
+    // todo(josh): delete this
+    dx_end_render_pass();
 }
 
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency) {

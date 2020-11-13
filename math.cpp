@@ -348,6 +348,22 @@ Quaternion axis_angle(Vector3 axis, float angle_radians) {
     return result;
 }
 
+Quaternion slerp(Quaternion a, Quaternion b, float t) {
+    float cos_theta = dot(a, b);
+    float angle = cos(cos_theta);
+
+    float s1 = sin((1.0f - t) * angle);
+    float s2 = sin(t * angle);
+    float is = 1.0f / sin(angle);
+
+    Quaternion left  = a * s1;
+    Quaternion right = b * s2;
+
+    Quaternion result = left + right;
+    result = result * is;
+    return result;
+}
+
 Vector3 quaternion_right  (Quaternion q) { return q * v3(1, 0, 0); }
 Vector3 quaternion_up     (Quaternion q) { return q * v3(0, 1, 0); }
 Vector3 quaternion_forward(Quaternion q) { return q * v3(0, 0, 1); }

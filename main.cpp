@@ -44,6 +44,7 @@ void draw_texture(int viewport_width, int viewport_height, Texture texture, Vect
     };
     ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
     ff_end(&ff);
+    end_render_pass();
 }
 
 void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
@@ -157,11 +158,22 @@ void main() {
 
     Texture shadow_map_color_buffer = {};
     Texture shadow_map_depth_buffer = {};
-    create_color_and_depth_buffers(2048, 2048, TF_R16G16B16A16_FLOAT, TWM_LINEAR_CLAMP, &shadow_map_color_buffer, &shadow_map_depth_buffer);
+    Texture_Description shadow_map_description = {};
+    shadow_map_description.width = 2048;
+    shadow_map_description.height = 2048;
+    shadow_map_description.format = TF_R16G16B16A16_FLOAT;
+    shadow_map_description.wrap_mode = TWM_POINT_CLAMP;
+    create_color_and_depth_buffers(shadow_map_description, &shadow_map_color_buffer, &shadow_map_depth_buffer);
 
     Texture hdr_color_buffer = {};
     Texture hdr_depth_buffer = {};
-    create_color_and_depth_buffers(main_window.width, main_window.height, TF_R16G16B16A16_FLOAT, TWM_LINEAR_CLAMP, &hdr_color_buffer, &hdr_depth_buffer);
+    Texture_Description hdr_description = {};
+    hdr_description.width = main_window.width;
+    hdr_description.height = main_window.height;
+    hdr_description.format = TF_R16G16B16A16_FLOAT;
+    hdr_description.wrap_mode = TWM_LINEAR_CLAMP;
+    hdr_description.sample_count = 8;
+    create_color_and_depth_buffers(hdr_description, &hdr_color_buffer, &hdr_depth_buffer);
 
     Texture_Description bloom_desc = {};
     bloom_desc.width  = main_window.width;
@@ -170,6 +182,7 @@ void main() {
     bloom_desc.format = TF_R16G16B16A16_FLOAT;
     bloom_desc.wrap_mode = TWM_LINEAR_CLAMP;
     bloom_desc.render_target = true;
+    bloom_desc.sample_count = 8;
     Texture bloom_color_buffer = create_texture(bloom_desc);
 
     Texture_Description bloom_ping_pong_desc = {};
@@ -182,6 +195,9 @@ void main() {
     Texture bloom_ping_pong_color_buffers[2] = {};
     bloom_ping_pong_color_buffers[0] = create_texture(bloom_ping_pong_desc);
     bloom_ping_pong_color_buffers[1] = create_texture(bloom_ping_pong_desc);
+    Texture_Description bloom_ping_pong_depth_desc = bloom_ping_pong_desc;
+    bloom_ping_pong_depth_desc.format = TF_DEPTH_STENCIL;
+    Texture bloom_ping_pong_depth_buffer = create_texture(bloom_ping_pong_depth_desc);
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
@@ -271,6 +287,7 @@ void main() {
             begin_render_pass(&scene_pass);
             bind_shaders(vertex_shader, shadow_pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
+            end_render_pass();
         }
 
         Lighting_CBuffer lighting = {};
@@ -307,19 +324,14 @@ void main() {
             begin_render_pass(&scene_pass);
             bind_shaders(vertex_shader, pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
+            end_render_pass();
         }
 
         Texture *last_bloom_blur_render_target = {};
 
         // blur bloom
         {
-            Render_Pass_Desc bloom_pass = {};
-            bloom_pass.camera_position = v3(0, 0, 0);
-            bloom_pass.camera_orientation = quaternion_identity();
-            bloom_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
-            begin_render_pass(&bloom_pass);
-
-            set_render_targets(&bloom_ping_pong_color_buffers[1], 1, nullptr);
+            set_render_targets(&bloom_ping_pong_color_buffers[1], 1, &bloom_ping_pong_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 1));
             draw_texture(
                 bloom_ping_pong_color_buffers[1].description.width,
@@ -342,7 +354,7 @@ void main() {
                 update_buffer(blur_cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
                 bind_constant_buffers(&blur_cbuffer_handle, 1, CBS_BLUR);
 
-                set_render_targets(last_bloom_blur_render_target, 1, nullptr);
+                set_render_targets(last_bloom_blur_render_target, 1, &bloom_ping_pong_depth_buffer);
                 clear_bound_render_targets(v4(0, 0, 0, 1));
                 draw_texture(main_window.width, main_window.height, source_texture, v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, blur_pixel_shader);
             }
@@ -376,6 +388,8 @@ void main() {
         ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_end(&ff);
+        end_render_pass();
+
 
         present(true);
     }

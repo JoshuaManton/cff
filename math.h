@@ -149,6 +149,7 @@ float      sqr_length         (Quaternion q);
 Quaternion normalize          (Quaternion q);
 Quaternion inverse            (Quaternion q);
 Quaternion axis_angle         (Vector3 axis, float angle_radians);
+Quaternion slerp              (Quaternion a, Quaternion b, float t);
 Quaternion operator +         (Quaternion a, Quaternion b);
 Quaternion operator +=        (Quaternion &a, Quaternion b);
 Quaternion operator -         (Quaternion a, Quaternion b);

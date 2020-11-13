@@ -10,6 +10,7 @@ typedef ID3D11Buffer *Buffer;
 
 typedef struct {
     ID3D11ShaderResourceView *shader_resource_view;
+    ID3D11Texture2D *msaa_texture;
 } Texture_Backend_Data;
 
 typedef struct {
@@ -80,6 +81,8 @@ struct Texture_Description {
     int width;
     int height;
     bool render_target;
+    int sample_count;
+    int mipmap_count;
     Texture_Format format;
     Texture_Type type;
     // is_cpu_read_target
@@ -140,7 +143,7 @@ enum Buffer_Type {
 
 
 void init_render_backend(Window *window);
-void create_color_and_depth_buffers(int width, int height, Texture_Format format, Texture_Wrap_Mode wrap_mode, Texture *out_color_buffer, Texture *out_depth_buffer);
+void create_color_and_depth_buffers(Texture_Description description, Texture *out_color_buffer, Texture *out_depth_buffer);
 
 
 
@@ -164,6 +167,10 @@ Texture create_texture(Texture_Description desc);
 void    destroy_texture(Texture texture);
 void    bind_textures(Texture *textures, int num_textures, int slot);
 void    unbind_all_textures();
+void    copy_texture(Texture *dst, Texture *src);
+
+// todo(josh): delete this
+void dx_end_render_pass();
 
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer);
 void unset_render_targets();

@@ -14,29 +14,6 @@ struct Vertex {
     Vector3 bitangent;
 };
 
-struct Pass_CBuffer {
-    Matrix4 view_matrix;
-    Matrix4 projection_matrix;
-    Vector3 camera_position;
-    f32 pad0;
-};
-
-struct Model_CBuffer {
-    Matrix4 model_matrix;
-    int has_albedo_map;
-    int has_normal_map;
-    int has_metallic_map;
-    int has_roughness_map;
-    int has_emission_map;
-    int has_ao_map;
-    float ambient;
-    float metallic;
-    float roughness;
-    int visualize_normals;
-    float pad0;
-    float pad1;
-};
-
 struct Material {
     Texture albedo_map;
     Texture normal_map;
@@ -66,15 +43,27 @@ enum CBuffer_Slot {
     CBS_BLUR     = 2,
 };
 
-enum Texture_Slot {
-    TS_ALBEDO = 0,
-    TS_NORMAL = 1,
-    TS_FINAL_BLOOM_MAP = 1,
-    TS_METALLIC = 2,
-    TS_ROUGHNESS = 3,
-    TS_EMISSION = 4,
-    TS_AO = 5,
-    TS_SHADOW_MAP = 6,
+struct Pass_CBuffer {
+    Matrix4 view_matrix;
+    Matrix4 projection_matrix;
+    Vector3 camera_position;
+    f32 pad0;
+};
+
+struct Model_CBuffer {
+    Matrix4 model_matrix;
+    int has_albedo_map;
+    int has_normal_map;
+    int has_metallic_map;
+    int has_roughness_map;
+    int has_emission_map;
+    int has_ao_map;
+    float ambient;
+    float metallic;
+    float roughness;
+    int visualize_normals;
+    float pad0;
+    float pad1;
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
@@ -90,6 +79,17 @@ struct Lighting_CBuffer {
     float fog_y_level;
     float fog_density;
     Vector3 fog_base_color;
+};
+
+enum Texture_Slot {
+    TS_ALBEDO = 0,
+    TS_NORMAL = 1,
+    TS_FINAL_BLOOM_MAP = 1,
+    TS_METALLIC = 2,
+    TS_ROUGHNESS = 3,
+    TS_EMISSION = 4,
+    TS_AO = 5,
+    TS_SHADOW_MAP = 6,
 };
 
 Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
@@ -121,6 +121,7 @@ struct Render_Pass_Desc {
 };
 
 void begin_render_pass(Render_Pass_Desc *pass);
+void end_render_pass();
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency);
 
 struct Fixed_Function {

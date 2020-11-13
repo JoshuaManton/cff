@@ -20,6 +20,8 @@ struct DirectX {
     ID3D11BlendState *no_alpha_blend_state;
 
     ID3D11RenderTargetView   *cur_rtvs[MAX_COLOR_BUFFERS];
+    // todo(josh): this is bad, move this somewhere else
+    Texture current_render_targets[MAX_COLOR_BUFFERS];
     ID3D11DepthStencilView   *cur_dsv;
     ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
 };
@@ -28,22 +30,33 @@ static DirectX directx;
 
 static DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
 
-ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
+ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format, bool msaa) {
     assert(format != TF_INVALID);
     D3D11_RENDER_TARGET_VIEW_DESC render_target_view_desc = {};
     render_target_view_desc.Format        = dx_texture_format_mapping[format];
-    render_target_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    if (msaa) {
+        render_target_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMS;
+    }
+    else {
+        render_target_view_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+    }
     ID3D11RenderTargetView *render_target_view = {};
     auto result = directx.device->CreateRenderTargetView(backing_texture, &render_target_view_desc, &render_target_view);
     assert(result == S_OK);
     return render_target_view;
 }
 
-ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_texture, Texture_Format format) {
+ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_texture, Texture_Format format, bool msaa) {
     assert(format != TF_INVALID);
     assert(texture_format_infos[format].is_depth_format);
     D3D11_DEPTH_STENCIL_VIEW_DESC depth_stencil_view_desc = {};
     depth_stencil_view_desc.Format = dx_texture_format_mapping[format];
+    if (msaa) {
+        depth_stencil_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+    }
+    else {
+        depth_stencil_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+    }
     ID3D11DepthStencilView *depth_stencil_view = {};
     auto result = directx.device->CreateDepthStencilView((ID3D11Resource *)backing_texture, nullptr, &depth_stencil_view);
     assert(result == S_OK);
@@ -120,6 +133,7 @@ void init_graphics_driver(Window *window) {
     no_cull_rasterizer_desc.FillMode = D3D11_FILL_SOLID;
     no_cull_rasterizer_desc.CullMode = D3D11_CULL_NONE;
     no_cull_rasterizer_desc.DepthClipEnable = false;
+    no_cull_rasterizer_desc.MultisampleEnable = true; // todo(josh): can I just have multisample enabled on all rasterizers?
     result = directx.device->CreateRasterizerState(&no_cull_rasterizer_desc, &directx.no_cull_rasterizer);
     assert(result == S_OK);
 
@@ -128,6 +142,7 @@ void init_graphics_driver(Window *window) {
     backface_cull_rasterizer_desc.FillMode = D3D11_FILL_SOLID;
     backface_cull_rasterizer_desc.CullMode = D3D11_CULL_BACK;
     backface_cull_rasterizer_desc.DepthClipEnable = true;
+    backface_cull_rasterizer_desc.MultisampleEnable = true; // todo(josh): can I just have multisample enabled on all rasterizers?
     result = directx.device->CreateRasterizerState(&backface_cull_rasterizer_desc, &directx.backface_cull_rasterizer);
     assert(result == S_OK);
 
@@ -163,6 +178,8 @@ void init_graphics_driver(Window *window) {
     linear_wrap_sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
     linear_wrap_sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
     linear_wrap_sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    linear_wrap_sampler_desc.MinLOD = -FLT_MAX;
+    linear_wrap_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&linear_wrap_sampler_desc, &directx.linear_wrap_sampler);
     assert(result == S_OK);
 
@@ -172,6 +189,8 @@ void init_graphics_driver(Window *window) {
     linear_clamp_sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     linear_clamp_sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     linear_clamp_sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    linear_clamp_sampler_desc.MinLOD = -FLT_MAX;
+    linear_clamp_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&linear_clamp_sampler_desc, &directx.linear_clamp_sampler);
     assert(result == S_OK);
 
@@ -181,6 +200,8 @@ void init_graphics_driver(Window *window) {
     point_wrap_sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
     point_wrap_sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
     point_wrap_sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    point_wrap_sampler_desc.MinLOD = -FLT_MAX;
+    point_wrap_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&point_wrap_sampler_desc, &directx.point_wrap_sampler);
     assert(result == S_OK);
 
@@ -190,6 +211,8 @@ void init_graphics_driver(Window *window) {
     point_clamp_sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     point_clamp_sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     point_clamp_sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    point_clamp_sampler_desc.MinLOD = -FLT_MAX;
+    point_clamp_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&point_clamp_sampler_desc, &directx.point_clamp_sampler);
     assert(result == S_OK);
 
@@ -384,10 +407,29 @@ void issue_draw_call(int vertex_count, int index_count, int instance_count) {
 
 Texture create_texture(Texture_Description desc) {
     // todo(josh): check for max texture size?
+    assert(desc.width > 0);
+    assert(desc.height > 0);
+    if (desc.type == TT_INVALID) {
+        desc.type = TT_2D;
+    }
 
-    assert(desc.wrap_mode != TWM_INVALID && "no wrap mode specified for texture");
-    assert(desc.type == TT_2D && "only 2D textures supported right now");
-    assert(desc.format != TF_INVALID);
+    if (desc.format == TF_INVALID) {
+        desc.format = TF_R8G8B8A8_UINT;
+    }
+
+    if (desc.wrap_mode == TWM_INVALID) {
+        desc.wrap_mode = TWM_POINT_CLAMP;
+    }
+
+    if (desc.sample_count == 0) {
+        desc.sample_count = 1;
+    }
+
+    if (desc.mipmap_count == 0) {
+        desc.mipmap_count = 1;
+    }
+
+    assert(desc.mipmap_count <= 1 && "mipmaps are not supported yet");
 
     DXGI_FORMAT texture_format = dx_texture_format_mapping[desc.format];
 
@@ -395,11 +437,10 @@ Texture create_texture(Texture_Description desc) {
     D3D11_TEXTURE2D_DESC texture_desc = {};
     texture_desc.Width            = (u32)desc.width;
     texture_desc.Height           = (u32)desc.height;
-    texture_desc.MipLevels        = 1;
+    texture_desc.MipLevels        = desc.mipmap_count;
     texture_desc.Format           = texture_format;
     texture_desc.SampleDesc.Count = 1;
     texture_desc.Usage = D3D11_USAGE_DEFAULT;
-
     texture_desc.ArraySize = 1; // texture2D only
 
     /*
@@ -449,13 +490,32 @@ Texture create_texture(Texture_Description desc) {
     }
     */
 
+    u32 pixel_size = (u32)texture_format_infos[desc.format].pixel_size_in_bytes;
+    D3D11_SUBRESOURCE_DATA subresource_data[6] = {
+        {desc.color_data, pixel_size * (u32)desc.width,    0},
+        {desc.color_data, pixel_size * (u32)desc.width/2,  0},
+        {desc.color_data, pixel_size * (u32)desc.width/4,  0},
+        {desc.color_data, pixel_size * (u32)desc.width/8,  0},
+        {desc.color_data, pixel_size * (u32)desc.width/16, 0},
+        {desc.color_data, pixel_size * (u32)desc.width/32, 0},
+    };
+
     // Send the initial data
     ID3D11Texture2D *texture_handle = {};
-    auto result = directx.device->CreateTexture2D(&texture_desc, nullptr, &texture_handle);
+    auto result = directx.device->CreateTexture2D(&texture_desc, desc.color_data == nullptr ? nullptr : &subresource_data[0], &texture_handle);
     assert(result == S_OK);
-    if (desc.color_data) {
-        u32 pixel_size = (u32)texture_format_infos[desc.format].pixel_size_in_bytes;
-        directx.device_context->UpdateSubresource((ID3D11Resource *)texture_handle, 0, nullptr, desc.color_data, pixel_size * (u32)desc.width, 0);
+    // if (desc.color_data) {
+    //     directx.device_context->UpdateSubresource((ID3D11Resource *)texture_handle, 0, nullptr, desc.color_data, pixel_size * (u32)desc.width, 0);
+    // }
+
+    ID3D11Texture2D *msaa_texture = {};
+    if (desc.sample_count > 1) {
+        assert(desc.render_target);
+        D3D11_TEXTURE2D_DESC msaa_texture_desc = texture_desc;
+        msaa_texture_desc.SampleDesc.Count = desc.sample_count;
+        msaa_texture_desc.SampleDesc.Quality = D3D11_STANDARD_MULTISAMPLE_PATTERN;
+        result = directx.device->CreateTexture2D(&msaa_texture_desc, nullptr, &msaa_texture);
+        assert(result == S_OK);
     }
 
     // Create shader resource view
@@ -463,7 +523,7 @@ Texture create_texture(Texture_Description desc) {
     if (do_create_shader_resource) {
         D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
         texture_shader_resource_desc.Format = texture_format;
-        texture_shader_resource_desc.Texture2D.MipLevels = 1;
+        texture_shader_resource_desc.Texture2D.MipLevels = desc.mipmap_count;
         texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
         /*
         switch desc.type {
@@ -488,6 +548,7 @@ Texture create_texture(Texture_Description desc) {
     texture.description = desc;
     texture.handle = texture_handle;
     texture.backend.shader_resource_view = shader_resource_view;
+    texture.backend.msaa_texture = msaa_texture;
     return texture;
 }
 
@@ -534,6 +595,27 @@ void unbind_all_textures() {
     directx.device_context->PSSetShaderResources(0, ARRAYSIZE(directx.cur_srvs), &directx.cur_srvs[0]);
 }
 
+void copy_texture(Texture dst, Texture src) {
+    if (src.description.sample_count > 1) {
+        assert(dst.description.format == src.description.format);
+        directx.device_context->ResolveSubresource((ID3D11Resource *)dst.handle, 0, (ID3D11Resource *)src.handle, 0, dx_texture_format_mapping[dst.description.format]);
+    }
+    else {
+        directx.device_context->CopyResource((ID3D11Resource *)dst.handle, (ID3D11Resource *)src.handle);
+    }
+}
+
+void dx_end_render_pass() {
+    for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
+        Texture target = directx.current_render_targets[i];
+        if (target.handle != nullptr) {
+            if (target.backend.msaa_texture != nullptr) {
+                directx.device_context->ResolveSubresource((ID3D11Resource *)target.handle, 0, (ID3D11Resource *)target.backend.msaa_texture, 0, dx_texture_format_mapping[target.description.format]);
+            }
+        }
+    }
+}
+
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
     assert(num_color_buffers <= MAX_COLOR_BUFFERS);
 
@@ -545,13 +627,18 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
         for (int i = 0; i < num_color_buffers; i++) {
             Texture color_buffer = color_buffers[i];
             assert(directx.cur_rtvs[i] == nullptr);
+            directx.current_render_targets[i] = color_buffer;
             if (color_buffer.handle != nullptr) {
                 if (viewport_width == 0) {
                     viewport_width  = color_buffer.description.width;
                     viewport_height = color_buffer.description.height;
                 }
                 assert(color_buffer.description.render_target);
-                directx.cur_rtvs[i] = dx_create_render_target_view(color_buffer.handle, color_buffer.description.format);
+                bool msaa = color_buffer.description.sample_count > 1;
+                if (msaa) {
+                    assert(color_buffer.backend.msaa_texture != nullptr);
+                }
+                directx.cur_rtvs[i] = dx_create_render_target_view(msaa ? color_buffer.backend.msaa_texture : color_buffer.handle, color_buffer.description.format, msaa);
             }
         }
     }
@@ -562,7 +649,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
         auto result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
         assert(result == S_OK);
         assert(directx.cur_rtvs[0] == nullptr);
-        directx.cur_rtvs[0] = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT); // todo(josh): srgb backbuffer
+        directx.cur_rtvs[0] = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT, false); // todo(josh): swap chain msaa
         back_buffer_texture->Release();
     }
 
@@ -571,7 +658,8 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
         depth_buffer_to_use = &directx.swap_chain_depth_buffer;
     }
     assert(directx.cur_dsv == nullptr);
-    directx.cur_dsv = dx_create_depth_stencil_view(depth_buffer_to_use->handle, depth_buffer_to_use->description.format);
+    bool depth_msaa = depth_buffer_to_use->description.sample_count > 1;
+    directx.cur_dsv = dx_create_depth_stencil_view(depth_msaa ? depth_buffer_to_use->backend.msaa_texture : depth_buffer_to_use->handle, depth_buffer_to_use->description.format, depth_msaa);
 
     directx.device_context->OMSetRenderTargets(MAX_COLOR_BUFFERS, &directx.cur_rtvs[0], directx.cur_dsv);
 
@@ -583,6 +671,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
 void unset_render_targets() {
     for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
+        directx.current_render_targets[i] = {};
         if (directx.cur_rtvs[i] != nullptr) {
             directx.cur_rtvs[i]->Release();
             directx.cur_rtvs[i] = nullptr;

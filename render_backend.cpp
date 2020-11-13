@@ -32,21 +32,14 @@ void init_render_backend(Window *window) {
     init_graphics_driver(window);
 }
 
-void create_color_and_depth_buffers(int width, int height, Texture_Format format, Texture_Wrap_Mode wrap_mode, Texture *out_color_buffer, Texture *out_depth_buffer) {
+void create_color_and_depth_buffers(Texture_Description description, Texture *out_color_buffer, Texture *out_depth_buffer) {
     assert(out_color_buffer != nullptr);
     assert(out_depth_buffer != nullptr);
 
-    Texture_Description color_buffer_desc = {};
-    color_buffer_desc.type = TT_2D;
-    color_buffer_desc.width = width;
-    color_buffer_desc.height = height;
-    color_buffer_desc.format = format;
-    color_buffer_desc.wrap_mode = wrap_mode;
-    color_buffer_desc.render_target = true;
-    *out_color_buffer = create_texture(color_buffer_desc);
+    description.render_target = true;
+    *out_color_buffer = create_texture(description);
 
-    Texture_Description depth_buffer_desc = color_buffer_desc;
-    color_buffer_desc.wrap_mode = TWM_POINT_CLAMP;
-    depth_buffer_desc.format = TF_DEPTH_STENCIL;
-    *out_depth_buffer = create_texture(depth_buffer_desc);
+    description.wrap_mode = TWM_POINT_CLAMP;
+    description.format = TF_DEPTH_STENCIL;
+    *out_depth_buffer = create_texture(description);
 }
