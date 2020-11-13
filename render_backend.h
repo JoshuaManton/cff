@@ -31,8 +31,17 @@ typedef ID3D11InputLayout *Vertex_Format;
 #include "window.h"
 #include "basic.h"
 
-#define MAX_BOUND_TEXTURES 12
-#define MAX_COLOR_BUFFERS   8
+#ifndef RB_MAX_BOUND_TEXTURES
+#define RB_MAX_BOUND_TEXTURES 12
+#endif
+
+#ifndef RB_MAX_COLOR_BUFFERS
+#define RB_MAX_COLOR_BUFFERS 8
+#endif
+
+#ifndef RB_MAX_VERTEX_FIELDS
+#define RB_MAX_VERTEX_FIELDS 32
+#endif
 
 void init_renderer(Window *window);
 

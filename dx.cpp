@@ -19,10 +19,10 @@ struct DirectX {
     ID3D11BlendState *alpha_blend_state;
     ID3D11BlendState *no_alpha_blend_state;
 
-    ID3D11RenderTargetView   *cur_rtvs[MAX_COLOR_BUFFERS];
-    Texture current_render_targets[MAX_COLOR_BUFFERS]; // note(josh): for resolving MSAA
+    ID3D11RenderTargetView   *cur_rtvs[RB_MAX_COLOR_BUFFERS];
+    Texture current_render_targets[RB_MAX_COLOR_BUFFERS]; // note(josh): for resolving MSAA
     ID3D11DepthStencilView   *cur_dsv;
-    ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
+    ID3D11ShaderResourceView *cur_srvs[RB_MAX_BOUND_TEXTURES];
 };
 
 static DirectX directx;
@@ -277,8 +277,8 @@ DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
 }
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader) {
-    // todo(josh): this doesn't have to be an allocation. we could just have a MAX_VERTEX_FIELDS?
-    D3D11_INPUT_ELEMENT_DESC *input_elements = MAKE(default_allocator(), D3D11_INPUT_ELEMENT_DESC, num_fields);
+    assert(num_fields <= RB_MAX_VERTEX_FIELDS && "Too many vertex fields. You can override the max vertex fields by defining RB_MAX_VERTEX_FIELDS before including render_backend.h");
+    D3D11_INPUT_ELEMENT_DESC input_elements[RB_MAX_VERTEX_FIELDS] = {};
     for (int idx = 0; idx < num_fields; idx++) {
         D3D11_INPUT_ELEMENT_DESC *desc = &input_elements[idx];
         Vertex_Field *field = &fields[idx];
@@ -308,7 +308,6 @@ Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_
     Vertex_Format vertex_format = {};
     auto result = directx.device->CreateInputLayout(input_elements, num_fields, shader.blob->GetBufferPointer(), shader.blob->GetBufferSize(), &vertex_format);
     assert(result == S_OK);
-    free(default_allocator(), input_elements);
     return vertex_format;
 }
 
@@ -589,7 +588,7 @@ void destroy_texture(Texture texture) {
 }
 
 void bind_textures(Texture *textures, int num_textures, int start_slot) {
-    assert((start_slot + num_textures) < MAX_BOUND_TEXTURES);
+    assert((start_slot + num_textures) < RB_MAX_BOUND_TEXTURES);
     for (int i = 0; i < num_textures; i++) {
         int slot = start_slot + i;
         if (directx.cur_srvs[slot]) {
@@ -600,9 +599,6 @@ void bind_textures(Texture *textures, int num_textures, int start_slot) {
         if (texture) {
             assert(texture->backend.shader_resource_view);
             directx.cur_srvs[slot] = texture->backend.shader_resource_view;
-
-            // todo(josh): if a wrap mode isn't specified should we just default to point_wrap or something?
-
             switch (texture->description.wrap_mode) {
                 case TWM_LINEAR_WRAP:  directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);  break;
                 case TWM_LINEAR_CLAMP: directx.device_context->PSSetSamplers(0, 1, &directx.linear_clamp_sampler); break;
@@ -635,7 +631,7 @@ void copy_texture(Texture dst, Texture src) {
 }
 
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
-    assert(num_color_buffers <= MAX_COLOR_BUFFERS);
+    assert(num_color_buffers <= RB_MAX_COLOR_BUFFERS);
 
     unset_render_targets();
 
@@ -679,7 +675,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
     bool depth_msaa = depth_buffer_to_use->description.sample_count > 1;
     directx.cur_dsv = dx_create_depth_stencil_view(depth_msaa ? depth_buffer_to_use->backend.msaa_texture : depth_buffer_to_use->handle, depth_buffer_to_use->description.format, depth_msaa);
 
-    directx.device_context->OMSetRenderTargets(MAX_COLOR_BUFFERS, &directx.cur_rtvs[0], directx.cur_dsv);
+    directx.device_context->OMSetRenderTargets(RB_MAX_COLOR_BUFFERS, &directx.cur_rtvs[0], directx.cur_dsv);
 
     assert(viewport_width  != 0);
     assert(viewport_height != 0);
@@ -687,7 +683,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
 }
 
 void unset_render_targets() {
-    for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
+    for (int i = 0; i < RB_MAX_COLOR_BUFFERS; i++) {
         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
         if (directx.cur_rtvs[i] != nullptr) {
             Texture target = directx.current_render_targets[i];
@@ -709,7 +705,7 @@ void unset_render_targets() {
 }
 
 void clear_bound_render_targets(Vector4 color) {
-    for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
+    for (int i = 0; i < RB_MAX_COLOR_BUFFERS; i++) {
         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
         if (rtv != nullptr) {
             float color_elements[4] = { color.x, color.y, color.z, color.w };

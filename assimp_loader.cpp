@@ -32,10 +32,10 @@ void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *ver
 }
 
 void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_array) {
-    Array<Vertex> vertices = make_array<Vertex>(default_allocator());
+    Array<Vertex> vertices = make_array<Vertex>(default_allocator(), 1024);
     defer(vertices.destroy());
 
-    Array<u32> indices = make_array<u32>(default_allocator());
+    Array<u32> indices = make_array<u32>(default_allocator(), 1024);
     defer(indices.destroy());
 
     for (int i = 0; i < node->mNumMeshes; i++) {

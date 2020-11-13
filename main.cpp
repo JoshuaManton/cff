@@ -21,11 +21,12 @@ TODO:
 -depth sorting
 -transparency sorting
 -spot lights
+-cubemaps
+-3D textures
 -cascaded shadow maps
 -skybox
 -AO?
 -instancing (do we support this already?)
--anti aliasing
 -fix alpha blending without ruining bloom
 */
 
