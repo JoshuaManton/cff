@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 
 
@@ -161,6 +162,23 @@ void String_Builder::print(char *str) {
     }
     BOUNDS_CHECK(buf.count, 0, buf.capacity);
     buf.data[buf.count] = 0;
+}
+
+void String_Builder::printf(char *fmt, ...) {
+    va_list args;
+    buf.reserve(32); // ensure at least 32 bytes in the buffer
+    int length_would_have_written = 0;
+    do {
+        buf.reserve(buf.count + length_would_have_written+1);
+        va_start(args, fmt);
+        length_would_have_written = vsnprintf(&buf.data[buf.count], buf.capacity - buf.count, fmt, args);
+        va_end(args);
+    } while (length_would_have_written >= (buf.capacity - buf.count));
+
+    assert(length_would_have_written < buf.capacity - buf.count);
+    buf.data[buf.count+length_would_have_written+1] = '\0';
+    buf.count += length_would_have_written;
+    BOUNDS_CHECK(buf.count, 0, buf.capacity);
 }
 
 void String_Builder::clear() {

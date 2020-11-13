@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>
+#include <float.h>
 
 typedef unsigned char      byte; static_assert(sizeof(byte) == 1, "byte size was not 1");
 typedef unsigned char      u8;   static_assert(sizeof(u8)   == 1, "u8 size was not 1");
@@ -272,6 +273,7 @@ struct String_Builder {
     Array<char> buf;
 
     void print(char *str);
+    void printf(char *fmt, ...);
     void clear();
     char *string();
 };
