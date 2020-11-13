@@ -119,27 +119,27 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
     material_cbuffer.roughness = material.roughness;
     material_cbuffer.visualize_normals = options.visualize_normals;
 
-    if (material.albedo_map.handle && options.do_albedo_map) {
+    if (material.albedo_map.valid && options.do_albedo_map) {
         bind_textures(&material.albedo_map, 1, TS_ALBEDO);
         material_cbuffer.has_albedo_map = 1;
     }
-    if (material.normal_map.handle && options.do_normal_map) {
+    if (material.normal_map.valid && options.do_normal_map) {
         bind_textures(&material.normal_map, 1, TS_NORMAL);
         material_cbuffer.has_normal_map = 1;
     }
-    if (material.metallic_map.handle && options.do_metallic_map) {
+    if (material.metallic_map.valid && options.do_metallic_map) {
         bind_textures(&material.metallic_map, 1, TS_METALLIC);
         material_cbuffer.has_metallic_map = 1;
     }
-    if (material.roughness_map.handle && options.do_roughness_map) {
+    if (material.roughness_map.valid && options.do_roughness_map) {
         bind_textures(&material.roughness_map, 1, TS_ROUGHNESS);
         material_cbuffer.has_roughness_map = 1;
     }
-    if (material.emission_map.handle && options.do_emission_map) {
+    if (material.emission_map.valid && options.do_emission_map) {
         bind_textures(&material.emission_map, 1, TS_EMISSION);
         material_cbuffer.has_emission_map = 1;
     }
-    if (material.ao_map.handle && options.do_ao_map) {
+    if (material.ao_map.valid && options.do_ao_map) {
         bind_textures(&material.ao_map, 1, TS_AO);
         material_cbuffer.has_ao_map = 1;
     }
@@ -150,7 +150,7 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
 
 void flush_simple_material(Buffer buffer, Simple_Material material) {
     Simple_Material_CBuffer material_cbuffer = {};
-    if (material.albedo_map.handle) {
+    if (material.albedo_map.valid) {
         material_cbuffer.has_albedo_map = 1;
         bind_textures(&material.albedo_map, 1, TS_ALBEDO);
     }
@@ -234,13 +234,14 @@ void ff_next(Fixed_Function *ff) {
     ff->num_vertices += 1;
 }
 
-void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector2 uv_overrides[2]) {
-    ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, 0)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(min.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[1].y, 0)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[1].y, 0)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[1].y, 0)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[0].y, 0)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, 0)); } ff_color(ff, color); ff_next(ff);
+void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2]) {
+    // note(josh): only uv_overrides[0].z is used for the z value
+    ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(min.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(max.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(max.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(max.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
 }
 
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size) {
@@ -254,9 +255,9 @@ void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 st
         float y1 = start_pos.y + quad.y1 * size;
         float miny = start_pos.y - (y1 - start_pos.y);
         float character_height = y1 - y0;
-        Vector2 uvs[2] = {
-            v2(quad.s0, quad.t1),
-            v2(quad.s1, quad.t0),
+        Vector3 uvs[2] = {
+            v3(quad.s0, quad.t1, 0),
+            v3(quad.s1, quad.t0, 0),
         };
         ff_quad(ff, v3(x0, miny, start_pos.z), v3(x1, miny + character_height, start_pos.z), color, uvs);
     }

@@ -17,26 +17,29 @@
 
 /*
 TODO:
+-3D textures
+-compute shaders
+
 -draw commands
 -depth sorting
 -transparency sorting
 -spot lights
 -cubemaps
--3D textures
 -cascaded shadow maps
 -skybox
+-particle systems
 -AO?
 -instancing (do we support this already?)
 -fix alpha blending without ruining bloom
 */
 
-void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
+void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader, float z_override = 0) {
     Vertex ffverts[6];
     Fixed_Function ff = {};
     ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), texture, vertex_shader, pixel_shader);
-    Vector2 uvs[2] = {
-        v2(0, 1),
-        v2(1, 0),
+    Vector3 uvs[2] = {
+        v3(0, 1, z_override),
+        v3(1, 0, z_override),
     };
     ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
     ff_end(&ff);
@@ -202,6 +205,14 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
+
+    // Texture_Description test_3d_texture_description = {};
+    // test_3d_texture_description.width  = 256;
+    // test_3d_texture_description.height = 256;
+    // test_3d_texture_description.depth  = 256;
+    // test_3d_texture_description.type = TT_3D;
+    // test_3d_texture_description.format = TF_R8G8B8A8_UINT;
+    // Texture test_3d_texture = create_texture(test_3d_texture_description);
 
     const float FIXED_DT = 1.0f / 120;
 
@@ -390,9 +401,9 @@ void main() {
 
         bind_textures(last_bloom_blur_render_target, 1, TS_FINAL_BLOOM_MAP);
         draw_texture(hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
-        // draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(128, 128, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0), vertex_shader, simple_pixel_shader);
 
         Vertex ffverts[1024];
         Fixed_Function ff = {};

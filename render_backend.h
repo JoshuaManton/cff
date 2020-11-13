@@ -9,8 +9,12 @@
 typedef ID3D11Buffer *Buffer;
 
 typedef struct {
+    ID3D11Texture2D *handle_2d;
+    ID3D11Texture2D *handle_msaa_2d;
+    ID3D11Texture3D *handle_3d;
+    // todo(josh): 3d msaa?
+
     ID3D11ShaderResourceView *shader_resource_view;
-    ID3D11Texture2D *msaa_texture;
 } Texture_Backend_Data;
 
 typedef struct {
@@ -19,8 +23,6 @@ typedef struct {
 } Vertex_Shader;
 
 typedef ID3D11PixelShader *Pixel_Shader;
-
-typedef ID3D11Texture2D *Texture_Handle;
 
 typedef ID3D11InputLayout *Vertex_Format;
 #endif
@@ -89,6 +91,7 @@ enum Texture_Wrap_Mode {
 struct Texture_Description {
     int width;
     int height;
+    int depth;
     bool render_target;
     int sample_count;
     int mipmap_count;
@@ -100,7 +103,7 @@ struct Texture_Description {
 };
 
 struct Texture {
-    Texture_Handle handle;
+    bool valid; // note(josh): just for checking against zero-value
     Texture_Description description;
     Texture_Backend_Data backend;
 };

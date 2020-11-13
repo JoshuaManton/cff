@@ -154,5 +154,5 @@ void ff_vertex(Fixed_Function *ff, Vector3 position);
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord);
 void ff_color(Fixed_Function *ff, Vector4 color);
 void ff_next(Fixed_Function *ff);
-void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector2 uv_overrides[2]);
+void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2]);
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size);
