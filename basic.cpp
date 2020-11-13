@@ -148,7 +148,7 @@ char *read_entire_file(char *filename, int *len) {
 
 String_Builder make_string_builder(Allocator allocator) {
     String_Builder sb = {};
-    sb.buf.allocator = allocator;
+    sb.buf = make_array<char>(allocator);
     return sb;
 }
 

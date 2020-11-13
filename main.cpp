@@ -55,7 +55,13 @@ struct Blur_CBuffer {
     float _pad;
 };
 
+#define BLOOM_BUFFER_DOWNSCALE 8.0
+
 void main() {
+    String_Builder sb = make_string_builder(default_allocator());
+    sb.print("asd");
+    sb.printf("qwe%s", sb.string());
+
     init_platform();
 
     Allocator global_allocator = default_allocator();
@@ -180,8 +186,8 @@ void main() {
     Texture bloom_color_buffer = create_texture(bloom_desc);
 
     Texture_Description bloom_ping_pong_desc = {};
-    bloom_ping_pong_desc.width  = (int)((float)main_window.width  / 8.0);
-    bloom_ping_pong_desc.height = (int)((float)main_window.height / 8.0);
+    bloom_ping_pong_desc.width  = main_window.width  / BLOOM_BUFFER_DOWNSCALE;
+    bloom_ping_pong_desc.height = main_window.height / BLOOM_BUFFER_DOWNSCALE;
     bloom_ping_pong_desc.type = TT_2D;
     bloom_ping_pong_desc.wrap_mode = TWM_LINEAR_CLAMP;
     bloom_ping_pong_desc.format = TF_R16G16B16A16_FLOAT;
@@ -261,6 +267,16 @@ void main() {
         }
 
         prerender();
+
+        ensure_swap_chain_size(main_window.width, main_window.height);
+
+        ensure_texture_size(&hdr_color_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&hdr_depth_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&bloom_color_buffer, main_window.width, main_window.height);
+        for (int i = 0; i < ARRAYSIZE(bloom_ping_pong_color_buffers); i++) {
+            ensure_texture_size(&bloom_ping_pong_color_buffers[i], main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
+        }
+        ensure_texture_size(&bloom_ping_pong_depth_buffer, main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
 
         bind_vertex_format(default_vertex_format);
 
@@ -373,9 +389,9 @@ void main() {
 
         bind_textures(last_bloom_blur_render_target, 1, TS_FINAL_BLOOM_MAP);
         draw_texture(hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
-        draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
-        draw_texture(bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
-        draw_texture(bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
+        // draw_texture(bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
 
         Vertex ffverts[1024];
         Fixed_Function ff = {};

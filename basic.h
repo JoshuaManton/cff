@@ -216,6 +216,14 @@ T Array<T>::unordered_remove(int index) {
     return t;
 }
 
+template<typename T>
+Array<T> make_array(Allocator allocator, int capacity = 16) {
+    Array<T> array = {};
+    array.allocator = allocator;
+    array.reserve(capacity);
+    return array;
+}
+
 #define Foreach(var, array) for (auto *var = array.data; (uintptr_t)var < (uintptr_t)(&array.data[array.count]); var++)
 
 

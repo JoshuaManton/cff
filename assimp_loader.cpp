@@ -2,6 +2,7 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
+#include "basic.h"
 #include "renderer.h"
 #include "render_backend.h"
 
@@ -31,12 +32,10 @@ void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *ver
 }
 
 void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_array) {
-    Array<Vertex> vertices = {};
-    vertices.allocator = default_allocator();
+    Array<Vertex> vertices = make_array<Vertex>(default_allocator());
     defer(vertices.destroy());
 
-    Array<u32> indices = {};
-    indices.allocator = default_allocator();
+    Array<u32> indices = make_array<u32>(default_allocator());
     defer(indices.destroy());
 
     for (int i = 0; i < node->mNumMeshes; i++) {

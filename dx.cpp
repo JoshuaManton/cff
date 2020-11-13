@@ -62,6 +62,8 @@ ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_te
     return depth_stencil_view;
 }
 
+#define SWAP_CHAIN_BUFFER_COUNT 2
+
 void init_graphics_driver(Window *window) {
     dx_texture_format_mapping[TF_R8_UINT]            = DXGI_FORMAT_R8_UNORM;
     dx_texture_format_mapping[TF_R32_INT]            = DXGI_FORMAT_R32_SINT;
@@ -84,7 +86,7 @@ void init_graphics_driver(Window *window) {
 
     // Create swap chain
     DXGI_SWAP_CHAIN_DESC swap_chain_desc = {};
-    swap_chain_desc.BufferCount                        = 2;
+    swap_chain_desc.BufferCount                        = SWAP_CHAIN_BUFFER_COUNT;
     swap_chain_desc.SwapEffect                         = DXGI_SWAP_EFFECT_FLIP_DISCARD; // todo(josh): use DXGI_SWAP_EFFECT_DISCARD (or something else) on non-Windows 10
     swap_chain_desc.BufferDesc.Width                   = (u32)window->width;
     swap_chain_desc.BufferDesc.Height                  = (u32)window->height;
@@ -237,6 +239,22 @@ void init_graphics_driver(Window *window) {
     assert(result == S_OK);
 }
 
+void ensure_swap_chain_size(int width, int height) {
+    assert(width != 0);
+    assert(height != 0);
+
+    if (directx.swap_chain_width != width || directx.swap_chain_height != height) {
+        printf("Resizing swap chain %dx%d...\n", width, height);
+
+        auto result = directx.swap_chain_handle->ResizeBuffers(SWAP_CHAIN_BUFFER_COUNT, (u32)width, (u32)height, dx_texture_format_mapping[SWAP_CHAIN_FORMAT], 0);
+        assert(result == S_OK);
+        directx.swap_chain_width  = width;
+        directx.swap_chain_height = height;
+
+        ensure_texture_size(&directx.swap_chain_depth_buffer, width, height);
+    }
+}
+
 DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
     switch (vft) {
         case VFT_INT:    return DXGI_FORMAT_R32_SINT;
@@ -382,6 +400,15 @@ Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): 
 void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
     directx.device_context->VSSetShader(vertex.handle, 0, 0);
     directx.device_context->PSSetShader(pixel, 0, 0);
+}
+
+void destroy_vertex_shader(Vertex_Shader shader) {
+    shader.handle->Release();
+    shader.blob->Release();
+}
+
+void destroy_pixel_shader(Pixel_Shader shader) {
+    shader->Release();
 }
 
 void issue_draw_call(int vertex_count, int index_count, int instance_count) {
@@ -555,6 +582,9 @@ void destroy_texture(Texture texture) {
     texture.handle->Release();
     if (texture.backend.shader_resource_view) {
         texture.backend.shader_resource_view->Release();
+    }
+    if (texture.backend.msaa_texture) {
+        texture.backend.msaa_texture->Release();
     }
 }
 

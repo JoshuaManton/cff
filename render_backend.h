@@ -144,8 +144,13 @@ enum Buffer_Type {
 
 void init_render_backend(Window *window);
 void create_color_and_depth_buffers(Texture_Description description, Texture *out_color_buffer, Texture *out_depth_buffer);
+void ensure_texture_size(Texture *texture, int width, int height);
 
 
+
+// the following are all defined by the specific graphics backend we are compiling with.
+
+void ensure_swap_chain_size(int width, int height);
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader);
 void          destroy_vertex_format(Vertex_Format format);
@@ -161,7 +166,8 @@ void   bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot);
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename);
 Pixel_Shader  compile_pixel_shader_from_file(wchar_t *filename);
 void          bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
-// todo(josh): destroy shaders
+void          destroy_vertex_shader(Vertex_Shader shader);
+void          destroy_pixel_shader(Pixel_Shader shader);
 
 Texture create_texture(Texture_Description desc);
 void    destroy_texture(Texture texture);

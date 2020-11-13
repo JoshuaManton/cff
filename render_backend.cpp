@@ -43,3 +43,17 @@ void create_color_and_depth_buffers(Texture_Description description, Texture *ou
     description.format = TF_DEPTH_STENCIL;
     *out_depth_buffer = create_texture(description);
 }
+
+void ensure_texture_size(Texture *texture, int width, int height) {
+    assert(width != 0);
+    assert(height != 0);
+
+    if (texture->description.width != width || texture->description.height != height) {
+        printf("Resizing texture %dx%d...\n", width, height);
+        Texture_Description desc = texture->description;
+        destroy_texture(*texture);
+        desc.width  = width;
+        desc.height = height;
+        *texture = create_texture(desc);
+    }
+}
