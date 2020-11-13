@@ -14,7 +14,7 @@ struct Vertex {
     Vector3 bitangent;
 };
 
-struct Material {
+struct PBR_Material {
     Texture albedo_map;
     Texture normal_map;
     Texture metallic_map;
@@ -27,20 +27,25 @@ struct Material {
     bool has_transparency;
 };
 
+struct Simple_Material {
+    Texture albedo_map;
+};
+
 struct Loaded_Mesh {
     Buffer vertex_buffer;
     int num_vertices;
     Buffer index_buffer;
     int num_indices;
-    Material material;
+    PBR_Material material;
     bool has_material;
 };
 
 enum CBuffer_Slot {
-    CBS_PASS     = 0,
-    CBS_MODEL    = 1,
-    CBS_LIGHTING = 2,
-    CBS_BLUR     = 2,
+    CBS_PASS     = 0, // :PassCBufferSlot
+    CBS_MODEL    = 1, // :ModelCBufferSlot
+    CBS_MATERIAL = 2, // :MaterialCBufferSlot
+    CBS_LIGHTING = 3, // :LightingCBufferSlot
+    CBS_BLUR     = 3, // :BlurCBufferSlot
 };
 
 struct Pass_CBuffer {
@@ -52,6 +57,9 @@ struct Pass_CBuffer {
 
 struct Model_CBuffer {
     Matrix4 model_matrix;
+};
+
+struct PBR_Material_CBuffer {
     int has_albedo_map;
     int has_normal_map;
     int has_metallic_map;
@@ -64,6 +72,11 @@ struct Model_CBuffer {
     int visualize_normals;
     float pad0;
     float pad1;
+};
+
+struct Simple_Material_CBuffer {
+    int has_albedo_map;
+    float pad[3];
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
@@ -122,6 +135,8 @@ struct Render_Pass_Desc {
 
 void begin_render_pass(Render_Pass_Desc *pass);
 void end_render_pass();
+void flush_pbr_material(Buffer buffer, PBR_Material material);
+void flush_simple_material(Buffer buffer, Simple_Material material);
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency);
 
 struct Fixed_Function {

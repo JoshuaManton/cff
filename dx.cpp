@@ -20,8 +20,7 @@ struct DirectX {
     ID3D11BlendState *no_alpha_blend_state;
 
     ID3D11RenderTargetView   *cur_rtvs[MAX_COLOR_BUFFERS];
-    // todo(josh): this is bad, move this somewhere else
-    Texture current_render_targets[MAX_COLOR_BUFFERS];
+    Texture current_render_targets[MAX_COLOR_BUFFERS]; // note(josh): for resolving MSAA
     ID3D11DepthStencilView   *cur_dsv;
     ID3D11ShaderResourceView *cur_srvs[MAX_BOUND_TEXTURES];
 };
@@ -605,17 +604,6 @@ void copy_texture(Texture dst, Texture src) {
     }
 }
 
-void dx_end_render_pass() {
-    for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
-        Texture target = directx.current_render_targets[i];
-        if (target.handle != nullptr) {
-            if (target.backend.msaa_texture != nullptr) {
-                directx.device_context->ResolveSubresource((ID3D11Resource *)target.handle, 0, (ID3D11Resource *)target.backend.msaa_texture, 0, dx_texture_format_mapping[target.description.format]);
-            }
-        }
-    }
-}
-
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
     assert(num_color_buffers <= MAX_COLOR_BUFFERS);
 
@@ -627,13 +615,13 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
         for (int i = 0; i < num_color_buffers; i++) {
             Texture color_buffer = color_buffers[i];
             assert(directx.cur_rtvs[i] == nullptr);
-            directx.current_render_targets[i] = color_buffer;
             if (color_buffer.handle != nullptr) {
+                assert(color_buffer.description.render_target);
+                directx.current_render_targets[i] = color_buffer;
                 if (viewport_width == 0) {
                     viewport_width  = color_buffer.description.width;
                     viewport_height = color_buffer.description.height;
                 }
-                assert(color_buffer.description.render_target);
                 bool msaa = color_buffer.description.sample_count > 1;
                 if (msaa) {
                     assert(color_buffer.backend.msaa_texture != nullptr);
@@ -671,8 +659,15 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
 void unset_render_targets() {
     for (int i = 0; i < MAX_COLOR_BUFFERS; i++) {
         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
-        directx.current_render_targets[i] = {};
         if (directx.cur_rtvs[i] != nullptr) {
+            Texture target = directx.current_render_targets[i];
+            if (target.handle != nullptr) {
+                directx.current_render_targets[i] = {};
+                if (target.backend.msaa_texture != nullptr) {
+                    directx.device_context->ResolveSubresource((ID3D11Resource *)target.handle, 0, (ID3D11Resource *)target.backend.msaa_texture, 0, dx_texture_format_mapping[target.description.format]);
+                }
+            }
+
             directx.cur_rtvs[i]->Release();
             directx.cur_rtvs[i] = nullptr;
         }

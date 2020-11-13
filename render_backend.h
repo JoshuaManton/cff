@@ -169,9 +169,6 @@ void    bind_textures(Texture *textures, int num_textures, int slot);
 void    unbind_all_textures();
 void    copy_texture(Texture *dst, Texture *src);
 
-// todo(josh): delete this
-void dx_end_render_pass();
-
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer);
 void unset_render_targets();
 void clear_bound_render_targets(Vector4 color);

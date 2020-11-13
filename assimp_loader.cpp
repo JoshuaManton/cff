@@ -107,7 +107,7 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
             }
         }
 
-        Material material = {};
+        PBR_Material material = {};
         bool has_material = false;
         if (scene->mNumMaterials > 0) {
             has_material = true;

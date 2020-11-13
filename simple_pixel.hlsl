@@ -13,26 +13,18 @@ struct PS_INPUT {
     float3 world_position   : WORLDPOS;
 };
 
-cbuffer CBUFFER_PASS : register(b0) {
+cbuffer CBUFFER_PASS : register(b0) { // :PassCBufferSlot
     matrix view_matrix;
     matrix projection_matrix;
     float3 camera_position;
 };
 
-cbuffer CBUFFER_MODEL : register(b1) {
+cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
+};
+
+cbuffer CBUFFER_MATERIAL : register(b2) { // :MaterialCBufferSlot
     int has_albedo_map;
-    int has_normal_map;
-    int has_metallic_map;
-    int has_roughness_map;
-    int has_emission_map;
-    int has_ao_map;
-    float ambient;
-    float metallic;
-    float roughness;
-    int visualize_normals;
-    float pad0;
-    float pad1;
 };
 
 float4 main(PS_INPUT input) : SV_Target {

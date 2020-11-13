@@ -24,14 +24,17 @@ struct PS_OUTPUT {
     float4 bloom_color : SV_Target1;
 };
 
-cbuffer CBUFFER_PASS : register(b0) {
+cbuffer CBUFFER_PASS : register(b0) { // :PassCBufferSlot
     matrix view_matrix;
     matrix projection_matrix;
     float3 camera_position;
 };
 
-cbuffer CBUFFER_MODEL : register(b1) {
+cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
+};
+
+cbuffer CBUFFER_MATERIAL : register(b2) { // :MaterialCBufferSlot
     int has_albedo_map;
     int has_normal_map;
     int has_metallic_map;
@@ -47,7 +50,7 @@ cbuffer CBUFFER_MODEL : register(b1) {
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
-cbuffer CBUFFER_LIGHTING : register(b2) {
+cbuffer CBUFFER_LIGHTING : register(b3) { // :LightingCBufferSlot
     float4 point_light_positions[MAX_POINT_LIGHTS];
     float4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;

@@ -29,12 +29,7 @@ TODO:
 -fix alpha blending without ruining bloom
 */
 
-void draw_texture(int viewport_width, int viewport_height, Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
-    Render_Pass_Desc pass = {};
-    pass.camera_position = v3(0, 0, 0);
-    pass.camera_orientation = quaternion_identity();
-    pass.projection_matrix = orthographic(0, viewport_width, 0, viewport_height, -1, 1);
-    begin_render_pass(&pass);
+void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
     Vertex ffverts[6];
     Fixed_Function ff = {};
     ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), texture, vertex_shader, pixel_shader);
@@ -44,7 +39,6 @@ void draw_texture(int viewport_width, int viewport_height, Texture texture, Vect
     };
     ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
     ff_end(&ff);
-    end_render_pass();
 }
 
 void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
@@ -325,17 +319,21 @@ void main() {
             bind_shaders(vertex_shader, pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
             end_render_pass();
+            unset_render_targets();
         }
 
         Texture *last_bloom_blur_render_target = {};
 
         // blur bloom
         {
+            Render_Pass_Desc bloom_pass = {};
+            bloom_pass.camera_orientation = quaternion_identity();
+            bloom_pass.projection_matrix = orthographic(0, bloom_ping_pong_color_buffers[1].description.width, 0, bloom_ping_pong_color_buffers[1].description.height, -1, 1);
+            begin_render_pass(&bloom_pass);
+
             set_render_targets(&bloom_ping_pong_color_buffers[1], 1, &bloom_ping_pong_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 1));
             draw_texture(
-                bloom_ping_pong_color_buffers[1].description.width,
-                bloom_ping_pong_color_buffers[1].description.height,
                 bloom_color_buffer,
                 v3(0, 0, 0),
                 v3(bloom_ping_pong_color_buffers[1].description.width, bloom_ping_pong_color_buffers[1].description.height, 0),
@@ -356,24 +354,29 @@ void main() {
 
                 set_render_targets(last_bloom_blur_render_target, 1, &bloom_ping_pong_depth_buffer);
                 clear_bound_render_targets(v4(0, 0, 0, 1));
-                draw_texture(main_window.width, main_window.height, source_texture, v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, blur_pixel_shader);
+                draw_texture(source_texture, v3(0, 0, 0), v3(last_bloom_blur_render_target->description.width, last_bloom_blur_render_target->description.height, 0), vertex_shader, blur_pixel_shader);
+                unset_render_targets();
             }
+
+            unset_render_targets();
+            end_render_pass();
         }
 
         set_render_targets(nullptr, 0, nullptr);
         clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
 
-        bind_textures(last_bloom_blur_render_target, 1, TS_FINAL_BLOOM_MAP);
-        draw_texture(main_window.width, main_window.height, hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
-        // draw_texture(main_window.width, main_window.height, bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
+        Render_Pass_Desc screen_pass = {};
+        screen_pass.camera_position = v3(0, 0, 0);
+        screen_pass.camera_orientation = quaternion_identity();
+        screen_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
+        begin_render_pass(&screen_pass);
 
-        Render_Pass_Desc ui_pass = {};
-        ui_pass.camera_position = v3(0, 0, 0);
-        ui_pass.camera_orientation = quaternion_identity();
-        ui_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
-        begin_render_pass(&ui_pass);
+        bind_textures(last_bloom_blur_render_target, 1, TS_FINAL_BLOOM_MAP);
+        draw_texture(hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
+        draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(256, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(bloom_ping_pong_color_buffers[0], v3(256, 0, 0), v3(512, 256, 0), vertex_shader, simple_pixel_shader);
+        draw_texture(bloom_ping_pong_color_buffers[1], v3(512, 0, 0), v3(768, 256, 0), vertex_shader, simple_pixel_shader);
+
         Vertex ffverts[1024];
         Fixed_Function ff = {};
         ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), roboto_mono.texture, vertex_shader, text_pixel_shader);
@@ -389,6 +392,8 @@ void main() {
         ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_end(&ff);
         end_render_pass();
+
+        unset_render_targets();
 
 
         present(true);

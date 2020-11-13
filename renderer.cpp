@@ -10,6 +10,8 @@ struct Renderer_State {
     Render_Pass_Desc *current_render_pass;
     Buffer pass_cbuffer_handle;
     Buffer model_cbuffer_handle;
+    Buffer pbr_material_cbuffer_handle;
+    Buffer simple_material_cbuffer_handle;
 };
 
 Renderer_State renderer_state;
@@ -21,8 +23,10 @@ void init_renderer(Window *window) {
         {"TEXCOORD",    "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
         {"COLOR",       "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
     };
-    renderer_state.pass_cbuffer_handle  = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
-    renderer_state.model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
+    renderer_state.pass_cbuffer_handle            = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
+    renderer_state.model_cbuffer_handle           = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
+    renderer_state.pbr_material_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
+    renderer_state.simple_material_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Simple_Material_CBuffer));
 }
 
 Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
@@ -82,7 +86,7 @@ Font load_font_from_file(char *filename, float size) {
     desc.width = font.dim;
     desc.height = font.dim;
     desc.format = TF_R8_UINT;
-    desc.wrap_mode = TWM_POINT_CLAMP; // todo(josh): should this be linear for pretty text or would that look awful?
+    desc.wrap_mode = TWM_LINEAR_CLAMP;
     desc.color_data = pixels;
     font.texture = create_texture(desc);
     return font;
@@ -106,50 +110,66 @@ void begin_render_pass(Render_Pass_Desc *pass) {
 void end_render_pass() {
     assert(renderer_state.current_render_pass != nullptr);
     renderer_state.current_render_pass = nullptr;
+}
 
-    // todo(josh): delete this
-    dx_end_render_pass();
+void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options options) {
+    PBR_Material_CBuffer material_cbuffer = {};
+    material_cbuffer.ambient   = material.ambient;
+    material_cbuffer.metallic  = material.metallic;
+    material_cbuffer.roughness = material.roughness;
+    material_cbuffer.visualize_normals = options.visualize_normals;
+
+    if (material.albedo_map.handle && options.do_albedo_map) {
+        bind_textures(&material.albedo_map, 1, TS_ALBEDO);
+        material_cbuffer.has_albedo_map = 1;
+    }
+    if (material.normal_map.handle && options.do_normal_map) {
+        bind_textures(&material.normal_map, 1, TS_NORMAL);
+        material_cbuffer.has_normal_map = 1;
+    }
+    if (material.metallic_map.handle && options.do_metallic_map) {
+        bind_textures(&material.metallic_map, 1, TS_METALLIC);
+        material_cbuffer.has_metallic_map = 1;
+    }
+    if (material.roughness_map.handle && options.do_roughness_map) {
+        bind_textures(&material.roughness_map, 1, TS_ROUGHNESS);
+        material_cbuffer.has_roughness_map = 1;
+    }
+    if (material.emission_map.handle && options.do_emission_map) {
+        bind_textures(&material.emission_map, 1, TS_EMISSION);
+        material_cbuffer.has_emission_map = 1;
+    }
+    if (material.ao_map.handle && options.do_ao_map) {
+        bind_textures(&material.ao_map, 1, TS_AO);
+        material_cbuffer.has_ao_map = 1;
+    }
+
+    update_buffer(buffer, &material_cbuffer, sizeof(PBR_Material_CBuffer));
+    bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
+}
+
+void flush_simple_material(Buffer buffer, Simple_Material material) {
+    Simple_Material_CBuffer material_cbuffer = {};
+    if (material.albedo_map.handle) {
+        material_cbuffer.has_albedo_map = 1;
+        bind_textures(&material.albedo_map, 1, TS_ALBEDO);
+    }
+    update_buffer(buffer, &material_cbuffer, sizeof(Simple_Material_CBuffer));
+    bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
 }
 
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency) {
     Foreach (mesh, meshes) {
-        Model_CBuffer model_cbuffer = {};
-        model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
-        model_cbuffer.visualize_normals = options.visualize_normals;
         if (mesh->has_material) {
             if (mesh->material.has_transparency != draw_transparency) {
                 continue;
             }
 
-            model_cbuffer.ambient   = mesh->material.ambient;
-            model_cbuffer.metallic  = mesh->material.metallic;
-            model_cbuffer.roughness = mesh->material.roughness;
-
-            if (mesh->material.albedo_map.handle && options.do_albedo_map) {
-                bind_textures(&mesh->material.albedo_map, 1, TS_ALBEDO);
-                model_cbuffer.has_albedo_map = 1;
-            }
-            if (mesh->material.normal_map.handle && options.do_normal_map) {
-                bind_textures(&mesh->material.normal_map, 1, TS_NORMAL);
-                model_cbuffer.has_normal_map = 1;
-            }
-            if (mesh->material.metallic_map.handle && options.do_metallic_map) {
-                bind_textures(&mesh->material.metallic_map, 1, TS_METALLIC);
-                model_cbuffer.has_metallic_map = 1;
-            }
-            if (mesh->material.roughness_map.handle && options.do_roughness_map) {
-                bind_textures(&mesh->material.roughness_map, 1, TS_ROUGHNESS);
-                model_cbuffer.has_roughness_map = 1;
-            }
-            if (mesh->material.emission_map.handle && options.do_emission_map) {
-                bind_textures(&mesh->material.emission_map, 1, TS_EMISSION);
-                model_cbuffer.has_emission_map = 1;
-            }
-            if (mesh->material.ao_map.handle && options.do_ao_map) {
-                bind_textures(&mesh->material.ao_map, 1, TS_AO);
-                model_cbuffer.has_ao_map = 1;
-            }
+            flush_pbr_material(renderer_state.pbr_material_cbuffer_handle, mesh->material, options);
         }
+
+        Model_CBuffer model_cbuffer = {};
+        model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
 
         update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
         bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
@@ -182,12 +202,12 @@ void ff_end(Fixed_Function *ff) {
 
     Model_CBuffer model_cbuffer = {};
     model_cbuffer.model_matrix = model_matrix(v3(0, 0, 0), v3(1, 1, 1), quaternion_identity());
-    if (ff->texture.handle) {
-        bind_textures(&ff->texture, 1, TS_ALBEDO);
-        model_cbuffer.has_albedo_map = 1;
-    }
     update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
     bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
+
+    Simple_Material material = {};
+    material.albedo_map = ff->texture;
+    flush_simple_material(renderer_state.simple_material_cbuffer_handle, material);
 
     bind_shaders(ff->vertex_shader, ff->pixel_shader);
 
