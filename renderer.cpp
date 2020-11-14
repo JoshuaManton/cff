@@ -120,27 +120,27 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
     material_cbuffer.visualize_normals = options.visualize_normals;
 
     if (material.albedo_map.valid && options.do_albedo_map) {
-        bind_textures(&material.albedo_map, 1, TS_ALBEDO);
+        bind_texture(material.albedo_map, TS_ALBEDO);
         material_cbuffer.has_albedo_map = 1;
     }
     if (material.normal_map.valid && options.do_normal_map) {
-        bind_textures(&material.normal_map, 1, TS_NORMAL);
+        bind_texture(material.normal_map, TS_NORMAL);
         material_cbuffer.has_normal_map = 1;
     }
     if (material.metallic_map.valid && options.do_metallic_map) {
-        bind_textures(&material.metallic_map, 1, TS_METALLIC);
+        bind_texture(material.metallic_map, TS_METALLIC);
         material_cbuffer.has_metallic_map = 1;
     }
     if (material.roughness_map.valid && options.do_roughness_map) {
-        bind_textures(&material.roughness_map, 1, TS_ROUGHNESS);
+        bind_texture(material.roughness_map, TS_ROUGHNESS);
         material_cbuffer.has_roughness_map = 1;
     }
     if (material.emission_map.valid && options.do_emission_map) {
-        bind_textures(&material.emission_map, 1, TS_EMISSION);
+        bind_texture(material.emission_map, TS_EMISSION);
         material_cbuffer.has_emission_map = 1;
     }
     if (material.ao_map.valid && options.do_ao_map) {
-        bind_textures(&material.ao_map, 1, TS_AO);
+        bind_texture(material.ao_map, TS_AO);
         material_cbuffer.has_ao_map = 1;
     }
 
@@ -152,7 +152,7 @@ void flush_simple_material(Buffer buffer, Simple_Material material) {
     Simple_Material_CBuffer material_cbuffer = {};
     if (material.albedo_map.valid) {
         material_cbuffer.has_albedo_map = 1;
-        bind_textures(&material.albedo_map, 1, TS_ALBEDO);
+        bind_texture(material.albedo_map, TS_ALBEDO);
     }
     update_buffer(buffer, &material_cbuffer, sizeof(Simple_Material_CBuffer));
     bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
@@ -213,6 +213,7 @@ void ff_end(Fixed_Function *ff) {
 
     issue_draw_call(ff->num_vertices, 0);
     destroy_buffer(vertex_buffer);
+    unbind_all_textures();
 }
 
 void ff_vertex(Fixed_Function *ff, Vector3 position) {

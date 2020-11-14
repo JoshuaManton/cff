@@ -12,9 +12,9 @@ typedef struct {
     ID3D11Texture2D *handle_2d;
     ID3D11Texture2D *handle_msaa_2d;
     ID3D11Texture3D *handle_3d;
-    // todo(josh): 3d msaa? is that even a thing?
 
     ID3D11ShaderResourceView *shader_resource_view;
+    ID3D11UnorderedAccessView *uav;
 } Texture_Backend_Data;
 
 typedef struct {
@@ -23,6 +23,8 @@ typedef struct {
 } Vertex_Shader;
 
 typedef ID3D11PixelShader *Pixel_Shader;
+
+typedef ID3D11ComputeShader *Compute_Shader;
 
 typedef ID3D11InputLayout *Vertex_Format;
 #endif
@@ -93,6 +95,7 @@ struct Texture_Description {
     int height;
     int depth;
     bool render_target;
+    bool uav;
     int sample_count;
     int mipmap_count;
     Texture_Format format;
@@ -175,15 +178,21 @@ void   bind_vertex_buffers(Buffer *buffers, int num_buffers, u32 start_slot, u32
 void   bind_index_buffer(Buffer buffer, u32 slot);
 void   bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot);
 
-Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename);
-Pixel_Shader  compile_pixel_shader_from_file(wchar_t *filename);
-void          bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
-void          destroy_vertex_shader(Vertex_Shader shader);
-void          destroy_pixel_shader(Pixel_Shader shader);
+Vertex_Shader  compile_vertex_shader_from_file(wchar_t *filename);
+void           destroy_vertex_shader(Vertex_Shader shader);
+Pixel_Shader   compile_pixel_shader_from_file(wchar_t *filename);
+void           destroy_pixel_shader(Pixel_Shader shader);
+void           bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
+Compute_Shader compile_compute_shader_from_file(wchar_t *filename);
+void           bind_compute_shader(Compute_Shader shader);
+void           destroy_compute_shader(Compute_Shader shader);
+
+void bind_compute_uav(Texture texture, int slot);
+void dispatch_compute(int x, int y, int z);
 
 Texture create_texture(Texture_Description desc);
 void    destroy_texture(Texture texture);
-void    bind_textures(Texture *textures, int num_textures, int slot);
+void    bind_texture(Texture texture, int slot);
 void    unbind_all_textures();
 void    copy_texture(Texture *dst, Texture *src);
 

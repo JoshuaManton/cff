@@ -17,7 +17,6 @@
 
 /*
 TODO:
--3D textures
 -compute shaders
 
 -draw commands
@@ -71,25 +70,16 @@ void main() {
     init_render_backend(&main_window);
     init_renderer(&main_window);
 
-    #define NUM_BYTES_IN_3D_TEXTURE (4 * 256 * 256 * 256)
-
-    byte *texture_3d_color = (byte *)alloc(default_allocator(), NUM_BYTES_IN_3D_TEXTURE);
-    for (int i = 0; i < NUM_BYTES_IN_3D_TEXTURE; i += 4) {
-        texture_3d_color[i+0] = (byte)(((float)i / (float)NUM_BYTES_IN_3D_TEXTURE) * 255);
-        texture_3d_color[i+1] = (byte)(((float)i / (float)NUM_BYTES_IN_3D_TEXTURE) * 200);
-        texture_3d_color[i+2] = (byte)(((float)i / (float)NUM_BYTES_IN_3D_TEXTURE) * 64);
-        texture_3d_color[i+3] = 255;
-    }
+    Compute_Shader test_compute_shader = compile_compute_shader_from_file(L"test_compute.hlsl");
 
     Texture_Description test_3d_texture_description = {};
     test_3d_texture_description.width  = 256;
     test_3d_texture_description.height = 256;
     test_3d_texture_description.depth  = 256;
-    test_3d_texture_description.color_data = texture_3d_color;
+    test_3d_texture_description.uav = true;
     test_3d_texture_description.type = TT_3D;
-    test_3d_texture_description.format = TF_R8G8B8A8_UINT;
+    test_3d_texture_description.format = TF_R32G32B32A32_FLOAT;
     Texture test_3d_texture = create_texture(test_3d_texture_description);
-    free(default_allocator(), texture_3d_color);
 
     Vertex_Shader vertex_shader          = compile_vertex_shader_from_file(L"vertex.hlsl");
     Pixel_Shader  pixel_shader           = compile_pixel_shader_from_file(L"pixel.hlsl");
@@ -319,6 +309,7 @@ void main() {
             bind_shaders(vertex_shader, shadow_pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
             end_render_pass();
+            unset_render_targets();
         }
 
         Lighting_CBuffer lighting = {};
@@ -346,7 +337,7 @@ void main() {
             set_render_targets(color_buffers, ARRAYSIZE(color_buffers), &hdr_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 0));
 
-            bind_textures(&shadow_map_color_buffer, 1, TS_SHADOW_MAP);
+            bind_texture(shadow_map_color_buffer, TS_SHADOW_MAP);
 
             Render_Pass_Desc scene_pass = {};
             scene_pass.camera_position = camera_position;
@@ -357,6 +348,7 @@ void main() {
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
             end_render_pass();
             unset_render_targets();
+            bind_texture({}, TS_SHADOW_MAP);
         }
 
         Texture *last_bloom_blur_render_target = {};
@@ -381,7 +373,6 @@ void main() {
                 last_bloom_blur_render_target = &bloom_ping_pong_color_buffers[i % 2];
 
                 Texture source_texture = bloom_ping_pong_color_buffers[(i+1) % 2];
-                bind_textures(&source_texture, 1, TS_ALBEDO);
 
                 Blur_CBuffer blur_cbuffer = {};
                 blur_cbuffer.horizontal = i % 2;
@@ -399,6 +390,11 @@ void main() {
             end_render_pass();
         }
 
+        bind_compute_shader(test_compute_shader);
+        bind_compute_uav(test_3d_texture, 0);
+        dispatch_compute(test_3d_texture.description.width, test_3d_texture.description.height, test_3d_texture.description.depth);
+        bind_compute_uav({}, 0);
+
         set_render_targets(nullptr, 0, nullptr);
         clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
 
@@ -408,8 +404,9 @@ void main() {
         screen_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
         begin_render_pass(&screen_pass);
 
-        bind_textures(last_bloom_blur_render_target, 1, TS_FINAL_BLOOM_MAP);
+        bind_texture(*last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
         draw_texture(hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
+        bind_texture({}, TS_FINAL_BLOOM_MAP);
         draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(128, 128, 0), vertex_shader, simple_pixel_shader);
         draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0), vertex_shader, simple_pixel_shader);
         draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0), vertex_shader, simple_pixel_shader);

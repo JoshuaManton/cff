@@ -23,6 +23,7 @@ struct DirectX {
     Texture current_render_targets[RB_MAX_COLOR_BUFFERS]; // note(josh): for resolving MSAA
     ID3D11DepthStencilView   *cur_dsv;
     ID3D11ShaderResourceView *cur_srvs[RB_MAX_BOUND_TEXTURES];
+    ID3D11UnorderedAccessView *cur_uavs[8]; // todo(josh): figure out a good constant
 };
 
 static DirectX directx;
@@ -362,6 +363,7 @@ void destroy_buffer(Buffer buffer) {
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *vertex_shader_blob = {};
+    // D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS
     auto result = D3DCompileFromFile(filename, 0, 0, "main", "vs_5_0", 0, 0, &vertex_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
@@ -382,6 +384,7 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh)
 Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *pixel_shader_blob = {};
+    // D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS
     auto result = D3DCompileFromFile(filename, 0, 0, "main", "ps_5_0", 0, 0, &pixel_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
@@ -390,7 +393,7 @@ Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): 
     }
     assert(result == S_OK);
     ID3D11PixelShader *pixel_shader = {};
-    directx.device->CreatePixelShader(pixel_shader_blob->GetBufferPointer(), pixel_shader_blob->GetBufferSize(), nullptr, &pixel_shader);
+    result = directx.device->CreatePixelShader(pixel_shader_blob->GetBufferPointer(), pixel_shader_blob->GetBufferSize(), nullptr, &pixel_shader);
     assert(result == S_OK);
     if (errors) errors->Release();
     pixel_shader_blob->Release();
@@ -402,12 +405,82 @@ void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
     directx.device_context->PSSetShader(pixel, 0, 0);
 }
 
+Compute_Shader compile_compute_shader_from_file(wchar_t *filename) {
+    ID3D10Blob *errors = {};
+    ID3D10Blob *compute_blob = {};
+    // D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS
+    auto result = D3DCompileFromFile(filename, 0, 0, "main", "cs_5_0", 0, 0, &compute_blob, &errors);
+    if (errors) {
+        auto str = (char *)errors->GetBufferPointer();
+        printf(str);
+        assert(false);
+    }
+    assert(result == S_OK);
+    ID3D11ComputeShader *compute_shader = {};
+    result = directx.device->CreateComputeShader(compute_blob->GetBufferPointer(), compute_blob->GetBufferSize(), nullptr, &compute_shader);
+    assert(result == S_OK);
+    if (errors) errors->Release();
+    compute_blob->Release();
+    return compute_shader;
+}
+
+void bind_compute_shader(Compute_Shader shader) {
+    directx.device_context->CSSetShader(shader, nullptr, 0);
+}
+
+ID3D11UnorderedAccessView *dx_create_unordered_access_view(Texture texture) {
+    assert(texture.description.uav);
+    ID3D11UnorderedAccessView * uav = {};
+    if (texture.description.type == TT_2D) {
+        D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+        uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+        uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+        auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_2d, &uav_desc, &uav);
+        assert(result == S_OK);
+    }
+    else if (texture.description.type == TT_3D) {
+        D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+        uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+        uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+        uav_desc.Texture3D.WSize = (u32)texture.description.depth;
+        auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_3d, &uav_desc, &uav);
+        assert(result == S_OK);
+    }
+    else {
+        assert(false);
+    }
+    assert(uav != nullptr);
+    return uav;
+}
+
+void bind_compute_uav(Texture texture, int slot) {
+    assert(slot < ARRAYSIZE(directx.cur_uavs));
+    if (directx.cur_uavs[slot]) {
+        directx.cur_uavs[slot]->Release();
+        directx.cur_uavs[slot] = {};
+    }
+
+    if (texture.valid) {
+        directx.cur_uavs[slot] = dx_create_unordered_access_view(texture);
+    }
+
+    directx.device_context->CSSetUnorderedAccessViews(slot, 1, &directx.cur_uavs[slot], nullptr);
+}
+
+void dispatch_compute(int x, int y, int z) {
+    directx.device_context->Dispatch(x, y, z);
+}
+
 void destroy_vertex_shader(Vertex_Shader shader) {
     shader.handle->Release();
     shader.blob->Release();
 }
 
 void destroy_pixel_shader(Pixel_Shader shader) {
+    shader->Release();
+}
+
+void destroy_compute_shader(Compute_Shader shader) {
     shader->Release();
 }
 
@@ -428,7 +501,6 @@ void issue_draw_call(int vertex_count, int index_count, int instance_count) {
             directx.device_context->DrawInstanced((u32)vertex_count, (u32)instance_count, 0, 0);
         }
     }
-
 }
 
 Texture create_texture(Texture_Description desc) {
@@ -464,6 +536,7 @@ Texture create_texture(Texture_Description desc) {
     ID3D11Texture3D *texture_handle_3d = {};
     ID3D11Texture2D *msaa_handle_2d = {};
     ID3D11ShaderResourceView *shader_resource_view = {};
+    ID3D11UnorderedAccessView *uav = {};
     switch (desc.type) {
         case TT_2D: {
             // Create texture
@@ -476,13 +549,14 @@ Texture create_texture(Texture_Description desc) {
             texture_desc.Usage            = D3D11_USAGE_DEFAULT;
             texture_desc.ArraySize        = 1;
 
-            bool do_create_shader_resource = true;
             if (texture_format_infos[desc.format].is_depth_format) {
-                do_create_shader_resource = false;
                 texture_desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
             }
             else {
                 texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                if (desc.uav) {
+                    texture_desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+                }
                 if (desc.render_target) {
                     texture_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
                 }
@@ -503,20 +577,11 @@ Texture create_texture(Texture_Description desc) {
 
             if (desc.sample_count > 1) {
                 assert(desc.render_target);
+                assert(!desc.uav);
                 D3D11_TEXTURE2D_DESC msaa_texture_desc = texture_desc;
                 msaa_texture_desc.SampleDesc.Count = desc.sample_count;
                 msaa_texture_desc.SampleDesc.Quality = D3D11_STANDARD_MULTISAMPLE_PATTERN;
                 result = directx.device->CreateTexture2D(&msaa_texture_desc, nullptr, &msaa_handle_2d);
-                assert(result == S_OK);
-            }
-
-            // Create shader resource view
-            if (do_create_shader_resource) {
-                D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
-                texture_shader_resource_desc.Format = texture_format;
-                texture_shader_resource_desc.Texture2D.MipLevels = desc.mipmap_count;
-                texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture_handle_2d, &texture_shader_resource_desc, &shader_resource_view);
                 assert(result == S_OK);
             }
 
@@ -532,13 +597,14 @@ Texture create_texture(Texture_Description desc) {
             texture_desc.Format    = texture_format;
             texture_desc.Usage     = D3D11_USAGE_DEFAULT;
 
-            bool do_create_shader_resource = true;
             if (texture_format_infos[desc.format].is_depth_format) {
-                do_create_shader_resource = false;
                 texture_desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
             }
             else {
                 texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                if (desc.uav) {
+                    texture_desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+                }
                 if (desc.render_target) {
                     texture_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
                 }
@@ -557,16 +623,6 @@ Texture create_texture(Texture_Description desc) {
             auto result = directx.device->CreateTexture3D(&texture_desc, desc.color_data == nullptr ? nullptr : &subresource_data[0], &texture_handle_3d);
             assert(result == S_OK);
 
-            // Create shader resource view
-            if (do_create_shader_resource) {
-                D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
-                texture_shader_resource_desc.Format = texture_format;
-                texture_shader_resource_desc.Texture3D.MipLevels = desc.mipmap_count;
-                texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
-                result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture_handle_3d, &texture_shader_resource_desc, &shader_resource_view);
-                assert(result == S_OK);
-            }
-
             break;
         }
     }
@@ -578,6 +634,7 @@ Texture create_texture(Texture_Description desc) {
     texture.backend.handle_msaa_2d = msaa_handle_2d;
     texture.backend.handle_3d = texture_handle_3d;
     texture.backend.shader_resource_view = shader_resource_view;
+    texture.backend.uav = uav;
     return texture;
 }
 
@@ -594,37 +651,65 @@ void destroy_texture(Texture texture) {
     if (texture.backend.shader_resource_view) {
         texture.backend.shader_resource_view->Release();
     }
+    if (texture.backend.uav) {
+        texture.backend.uav->Release();
+    }
 }
 
-void bind_textures(Texture *textures, int num_textures, int start_slot) {
-    assert((start_slot + num_textures) < RB_MAX_BOUND_TEXTURES);
-    for (int i = 0; i < num_textures; i++) {
-        int slot = start_slot + i;
-        if (directx.cur_srvs[slot]) {
-            directx.cur_srvs[slot] = {};
-        }
+ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
+    assert(!texture_format_infos[texture.description.format].is_depth_format);
+    ID3D11ShaderResourceView *shader_resource_view = {};
+    if (texture.description.type == TT_2D) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
+        texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
+        texture_shader_resource_desc.Texture2D.MipLevels = texture.description.mipmap_count;
+        texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_2d, &texture_shader_resource_desc, &shader_resource_view);
+        assert(result == S_OK);
+    }
+    else if (texture.description.type == TT_3D) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
+        texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
+        texture_shader_resource_desc.Texture3D.MipLevels = texture.description.mipmap_count;
+        texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+        auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_3d, &texture_shader_resource_desc, &shader_resource_view);
+        assert(result == S_OK);
+    }
+    else {
+        assert(false);
+    }
+    assert(shader_resource_view != nullptr);
+    return shader_resource_view;
+}
 
-        Texture *texture = textures + i;
-        if (texture) {
-            assert(texture->backend.shader_resource_view);
-            directx.cur_srvs[slot] = texture->backend.shader_resource_view;
-            switch (texture->description.wrap_mode) {
-                case TWM_LINEAR_WRAP:  directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);  break;
-                case TWM_LINEAR_CLAMP: directx.device_context->PSSetSamplers(0, 1, &directx.linear_clamp_sampler); break;
-                case TWM_POINT_WRAP:   directx.device_context->PSSetSamplers(0, 1, &directx.point_wrap_sampler);   break;
-                case TWM_POINT_CLAMP:  directx.device_context->PSSetSamplers(0, 1, &directx.point_clamp_sampler);  break;
-                default: {
-                    assert(false && "No wrap mode specified for texture.");
-                }
+void bind_texture(Texture texture, int slot) {
+    assert(slot < RB_MAX_BOUND_TEXTURES);
+    if (directx.cur_srvs[slot]) {
+        directx.cur_srvs[slot]->Release();
+        directx.cur_srvs[slot] = {};
+    }
+
+    if (texture.valid) {
+        directx.cur_srvs[slot] = dx_create_shader_resource_view(texture);
+        switch (texture.description.wrap_mode) {
+            case TWM_LINEAR_WRAP:  directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);  break;
+            case TWM_LINEAR_CLAMP: directx.device_context->PSSetSamplers(0, 1, &directx.linear_clamp_sampler); break;
+            case TWM_POINT_WRAP:   directx.device_context->PSSetSamplers(0, 1, &directx.point_wrap_sampler);   break;
+            case TWM_POINT_CLAMP:  directx.device_context->PSSetSamplers(0, 1, &directx.point_clamp_sampler);  break;
+            default: {
+                assert(false && "No wrap mode specified for texture.");
             }
         }
     }
-    directx.device_context->PSSetShaderResources((u32)start_slot, num_textures, &directx.cur_srvs[start_slot]);
+    directx.device_context->PSSetShaderResources(slot, 1, &directx.cur_srvs[slot]);
 }
 
 void unbind_all_textures() {
     for (int i = 0; i < ARRAYSIZE(directx.cur_srvs); i++) {
-        directx.cur_srvs[i] = {};
+        if (directx.cur_srvs[i]) {
+            directx.cur_srvs[i]->Release();
+            directx.cur_srvs[i] = {};
+        }
     }
     directx.device_context->PSSetShaderResources(0, ARRAYSIZE(directx.cur_srvs), &directx.cur_srvs[0]);
 }
