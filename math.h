@@ -181,15 +181,16 @@ struct Matrix4 {
     }
 };
 
-Matrix4 m4_identity ();
-Matrix4 m4          (Vector4 columns[4]);
-Matrix4 transpose   (Matrix4 a);
-Matrix4 perspective (float fovy_radians, float aspect, float near, float far);
-Matrix4 orthographic(float left, float right, float bottom, float top, float near, float far);
-Matrix4 look_at     (Vector3 eye, Vector3 center, Vector3 up);
-Matrix4 translate   (Vector3 v);
-Matrix4 rotate      (float angle_radians, Vector3 v);
-Matrix4 scale       (Vector3 v);
+Matrix4 m4_identity();
+Matrix4 m4(Vector4 columns[4]);
+
+Matrix4 transpose_matrix(Matrix4 a);
+Matrix4 look_at(Vector3 eye, Vector3 center, Vector3 up);
+Matrix4 construct_perspective_matrix (float fovy_radians, float aspect, float near, float far);
+Matrix4 construct_orthographic_matrix(float left, float right, float bottom, float top, float near, float far);
+Matrix4 construct_translation_matrix (Vector3 v);
+Matrix4 construct_rotation_matrix    (float angle_radians, Vector3 v);
+Matrix4 construct_scale_matrix       (Vector3 v);
 Matrix4 operator *  (Matrix4 a, Matrix4 b);
 Vector4 operator *  (Matrix4 a, Vector4 v);
 Matrix4 operator *  (Matrix4 a, float f);
@@ -198,5 +199,6 @@ Matrix4    quaternion_to_matrix4(Quaternion q);
 Quaternion matrix4_to_quaternion(Matrix4 m);
 Quaternion quaternion_look_at   (Vector3 eye, Vector3 center, Vector3 up);
 
-Matrix4 view_matrix (Vector3 position, Quaternion orientation);
-Matrix4 model_matrix(Vector3 position, Vector3 scale, Quaternion orientation);
+Matrix4 construct_view_matrix (Vector3 position, Quaternion orientation);
+Matrix4 construct_model_matrix(Vector3 position, Vector3 scale, Quaternion orientation);
+Matrix4 construct_trs_matrix(Vector3 t, Quaternion r, Vector3 s);

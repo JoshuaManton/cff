@@ -354,6 +354,7 @@ void bind_index_buffer(Buffer buffer, u32 slot) {
 void bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot) {
     directx.device_context->VSSetConstantBuffers(start_slot, num_buffers, buffers);
     directx.device_context->PSSetConstantBuffers(start_slot, num_buffers, buffers);
+    directx.device_context->CSSetConstantBuffers(start_slot, num_buffers, buffers);
 }
 
 void destroy_buffer(Buffer buffer) {
@@ -363,8 +364,7 @@ void destroy_buffer(Buffer buffer) {
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *vertex_shader_blob = {};
-    // D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS
-    auto result = D3DCompileFromFile(filename, 0, 0, "main", "vs_5_0", 0, 0, &vertex_shader_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, 0, "main", "vs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &vertex_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
@@ -384,8 +384,7 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh)
 Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *pixel_shader_blob = {};
-    // D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS
-    auto result = D3DCompileFromFile(filename, 0, 0, "main", "ps_5_0", 0, 0, &pixel_shader_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, 0, "main", "ps_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &pixel_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
@@ -408,8 +407,7 @@ void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
 Compute_Shader compile_compute_shader_from_file(wchar_t *filename) {
     ID3D10Blob *errors = {};
     ID3D10Blob *compute_blob = {};
-    // D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS
-    auto result = D3DCompileFromFile(filename, 0, 0, "main", "cs_5_0", 0, 0, &compute_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, 0, "main", "cs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &compute_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);

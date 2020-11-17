@@ -100,7 +100,7 @@ void begin_render_pass(Render_Pass_Desc *pass) {
     assert(renderer_state.current_render_pass == nullptr);
     renderer_state.current_render_pass = pass;
     Pass_CBuffer pass_cbuffer = {};
-    pass_cbuffer.view_matrix = view_matrix(pass->camera_position, pass->camera_orientation);
+    pass_cbuffer.view_matrix = construct_view_matrix(pass->camera_position, pass->camera_orientation);
     pass_cbuffer.projection_matrix = pass->projection_matrix;
     pass_cbuffer.camera_position = pass->camera_position;
     update_buffer(renderer_state.pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
@@ -120,41 +120,31 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
     material_cbuffer.visualize_normals = options.visualize_normals;
 
     if (material.albedo_map.valid && options.do_albedo_map) {
-        bind_texture(material.albedo_map, TS_ALBEDO);
+        bind_texture(material.albedo_map, TS_PBR_ALBEDO);
         material_cbuffer.has_albedo_map = 1;
     }
     if (material.normal_map.valid && options.do_normal_map) {
-        bind_texture(material.normal_map, TS_NORMAL);
+        bind_texture(material.normal_map, TS_PBR_NORMAL);
         material_cbuffer.has_normal_map = 1;
     }
     if (material.metallic_map.valid && options.do_metallic_map) {
-        bind_texture(material.metallic_map, TS_METALLIC);
+        bind_texture(material.metallic_map, TS_PBR_METALLIC);
         material_cbuffer.has_metallic_map = 1;
     }
     if (material.roughness_map.valid && options.do_roughness_map) {
-        bind_texture(material.roughness_map, TS_ROUGHNESS);
+        bind_texture(material.roughness_map, TS_PBR_ROUGHNESS);
         material_cbuffer.has_roughness_map = 1;
     }
     if (material.emission_map.valid && options.do_emission_map) {
-        bind_texture(material.emission_map, TS_EMISSION);
+        bind_texture(material.emission_map, TS_PBR_EMISSION);
         material_cbuffer.has_emission_map = 1;
     }
     if (material.ao_map.valid && options.do_ao_map) {
-        bind_texture(material.ao_map, TS_AO);
+        bind_texture(material.ao_map, TS_PBR_AO);
         material_cbuffer.has_ao_map = 1;
     }
 
     update_buffer(buffer, &material_cbuffer, sizeof(PBR_Material_CBuffer));
-    bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
-}
-
-void flush_simple_material(Buffer buffer, Simple_Material material) {
-    Simple_Material_CBuffer material_cbuffer = {};
-    if (material.albedo_map.valid) {
-        material_cbuffer.has_albedo_map = 1;
-        bind_texture(material.albedo_map, TS_ALBEDO);
-    }
-    update_buffer(buffer, &material_cbuffer, sizeof(Simple_Material_CBuffer));
     bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
 }
 
@@ -169,7 +159,7 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
         }
 
         Model_CBuffer model_cbuffer = {};
-        model_cbuffer.model_matrix = model_matrix(position, scale, orientation);
+        model_cbuffer.model_matrix = construct_model_matrix(position, scale, orientation);
 
         update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
         bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
@@ -183,37 +173,36 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
     }
 }
 
-void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices, Texture texture, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader) {
+void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {
     ff->num_vertices = 0;
     ff->vertices = buffer;
     ff->max_vertices = max_vertices;
-    ff->texture = texture;
-    ff->vertex_shader = vertex_shader;
-    ff->pixel_shader = pixel_shader;
+    ff->vertex_buffer = create_buffer(BT_VERTEX, nullptr, sizeof(ff->vertices[0]) * max_vertices);
 }
 
-void ff_end(Fixed_Function *ff) {
+void ff_flush(Fixed_Function *ff) {
     assert(ff->num_vertices <= ff->max_vertices);
-    // todo(josh): should this create() go in ff_begin?
-    Buffer vertex_buffer = create_buffer(BT_VERTEX, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
+    if (ff->num_vertices == 0) {
+        return;
+    }
+
+    update_buffer(ff->vertex_buffer, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
     u32 strides[1] = { sizeof(ff->vertices[0]) };
     u32 offsets[1] = { 0 };
-    bind_vertex_buffers(&vertex_buffer, 1, 0, strides, offsets);
+    bind_vertex_buffers(&ff->vertex_buffer, 1, 0, strides, offsets);
 
     Model_CBuffer model_cbuffer = {};
-    model_cbuffer.model_matrix = model_matrix(v3(0, 0, 0), v3(1, 1, 1), quaternion_identity());
+    model_cbuffer.model_matrix = construct_model_matrix(v3(0, 0, 0), v3(1, 1, 1), quaternion_identity());
     update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
     bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
 
-    Simple_Material material = {};
-    material.albedo_map = ff->texture;
-    flush_simple_material(renderer_state.simple_material_cbuffer_handle, material);
-
-    bind_shaders(ff->vertex_shader, ff->pixel_shader);
-
     issue_draw_call(ff->num_vertices, 0);
-    destroy_buffer(vertex_buffer);
-    unbind_all_textures();
+    ff->num_vertices = 0;
+}
+
+void ff_end(Fixed_Function *ff) {
+    ff_flush(ff);
+    destroy_buffer(ff->vertex_buffer);
 }
 
 void ff_vertex(Fixed_Function *ff, Vector3 position) {
@@ -236,6 +225,14 @@ void ff_next(Fixed_Function *ff) {
 }
 
 void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2]) {
+    Vector3 uvs[2] = {
+        v3(0, 1, 0),
+        v3(1, 0, 0),
+    };
+    if (uv_overrides) {
+        uvs[0] = uv_overrides[0];
+        uvs[1] = uv_overrides[1];
+    }
     // note(josh): only uv_overrides[0].z is used for the z value
     ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
     ff_vertex(ff, v3(min.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
@@ -248,6 +245,12 @@ void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size) {
     Vector3 position = {};
     for (char *c = str; *c != '\0'; c++) {
+        if (*c == '\n') {
+            position.x = 0;
+            position.y += font.pixel_height * size;
+            continue;
+        }
+
         stbtt_aligned_quad quad;
         stbtt_GetBakedQuad(font.chars, font.dim, font.dim, *c, &position.x, &position.y, &quad, 1);//1=opengl & d3d10+,0=d3d9
         float x0 = start_pos.x + quad.x0 * size;

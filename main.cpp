@@ -17,25 +17,24 @@
 
 /*
 TODO:
--compute shaders
-
--draw commands
--depth sorting
--transparency sorting
--spot lights
 -cubemaps
--cascaded shadow maps
 -skybox
--particle systems
--AO?
 -instancing (do we support this already?)
+-spot lights
 -fix alpha blending without ruining bloom
+-cascaded shadow maps
+-draw commands
+-depth sorting to reduce overdraw
+-transparency sorting to alpha blend properly
+-particle systems?
+-AO?
 */
 
-void draw_texture(Texture texture, Vector3 min, Vector3 max, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader, float z_override = 0) {
+void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override = 0) {
     Vertex ffverts[6];
     Fixed_Function ff = {};
-    ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), texture, vertex_shader, pixel_shader);
+    ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+    bind_texture(texture, 0);
     Vector3 uvs[2] = {
         v3(0, 1, z_override),
         v3(1, 0, z_override),
@@ -60,12 +59,17 @@ struct Blur_CBuffer {
 
 #define BLOOM_BUFFER_DOWNSCALE 8.0
 
+struct Compute_VP_CBuffer {
+    Matrix4 view_matrix;
+    Matrix4 projection_matrix;
+};
+
 void main() {
     init_platform();
 
     Allocator global_allocator = default_allocator();
 
-    static Window main_window = create_window(1920, 1080);
+    Window main_window = create_window(1920, 1080);
 
     init_render_backend(&main_window);
     init_renderer(&main_window);
@@ -73,22 +77,23 @@ void main() {
     Compute_Shader test_compute_shader = compile_compute_shader_from_file(L"test_compute.hlsl");
 
     Texture_Description test_3d_texture_description = {};
-    test_3d_texture_description.width  = 256;
-    test_3d_texture_description.height = 256;
-    test_3d_texture_description.depth  = 256;
+    test_3d_texture_description.width  = 128;
+    test_3d_texture_description.height = 128;
+    test_3d_texture_description.depth  = 128;
     test_3d_texture_description.uav = true;
     test_3d_texture_description.type = TT_3D;
     test_3d_texture_description.format = TF_R32G32B32A32_FLOAT;
     Texture test_3d_texture = create_texture(test_3d_texture_description);
 
-    Vertex_Shader vertex_shader          = compile_vertex_shader_from_file(L"vertex.hlsl");
-    Pixel_Shader  pixel_shader           = compile_pixel_shader_from_file(L"pixel.hlsl");
-    Pixel_Shader  simple_pixel_shader    = compile_pixel_shader_from_file(L"simple_pixel.hlsl");
-    Pixel_Shader  simple_pixel_3d_shader = compile_pixel_shader_from_file(L"simple_pixel_3d.hlsl");
-    Pixel_Shader  text_pixel_shader      = compile_pixel_shader_from_file(L"text_pixel.hlsl");
-    Pixel_Shader  shadow_pixel_shader    = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
-    Pixel_Shader  blur_pixel_shader      = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
-    Pixel_Shader  final_pixel_shader     = compile_pixel_shader_from_file(L"final_pixel.hlsl");
+    Vertex_Shader vertex_shader                = compile_vertex_shader_from_file(L"vertex.hlsl");
+    Pixel_Shader  pixel_shader                 = compile_pixel_shader_from_file(L"pixel.hlsl");
+    Pixel_Shader  simple_pixel_shader          = compile_pixel_shader_from_file(L"simple_pixel.hlsl");
+    Pixel_Shader  simple_pixel_textured_shader = compile_pixel_shader_from_file(L"simple_pixel_textured.hlsl");
+    Pixel_Shader  simple_pixel_3d_shader       = compile_pixel_shader_from_file(L"simple_pixel_3d.hlsl");
+    Pixel_Shader  text_pixel_shader            = compile_pixel_shader_from_file(L"text_pixel.hlsl");
+    Pixel_Shader  shadow_pixel_shader          = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
+    Pixel_Shader  blur_pixel_shader            = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
+    Pixel_Shader  final_pixel_shader           = compile_pixel_shader_from_file(L"final_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -131,7 +136,7 @@ void main() {
         {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
         {{ (0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
 
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}},
         {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
         {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
         {{-(0.5f), -(0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
@@ -142,22 +147,8 @@ void main() {
         {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
     };
 
-    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices));
-    Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices));
-
-    Vector3 camera_position = {};
-    Quaternion camera_orientation = quaternion_identity();
-
     Font roboto_mono = load_font_from_file("fonts/roboto_mono.ttf", 32);
     Font roboto      = load_font_from_file("fonts/roboto.ttf", 32);
-
-    Array<Loaded_Mesh> helmet_meshes = {};
-    helmet_meshes.allocator = default_allocator();
-    load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
-
-    Array<Loaded_Mesh> sponza_meshes = {};
-    sponza_meshes.allocator = default_allocator();
-    load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
 
     Render_Options render_options = {};
     render_options.do_albedo_map    = true;
@@ -166,6 +157,17 @@ void main() {
     render_options.do_roughness_map = true;
     render_options.do_emission_map  = true;
     render_options.do_ao_map        = true;
+
+    Vector3 camera_position = {};
+    Quaternion camera_orientation = quaternion_identity();
+
+    Array<Loaded_Mesh> helmet_meshes = {};
+    helmet_meshes.allocator = default_allocator();
+    load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
+
+    Array<Loaded_Mesh> sponza_meshes = {};
+    sponza_meshes.allocator = default_allocator();
+    load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
 
     Texture shadow_map_color_buffer = {};
     Texture shadow_map_depth_buffer = {};
@@ -212,6 +214,7 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
+    Buffer compute_vp_cbuffer      = create_buffer(BT_CONSTANT, nullptr, sizeof(Compute_VP_CBuffer));
 
     const float FIXED_DT = 1.0f / 120;
 
@@ -300,12 +303,12 @@ void main() {
             set_render_targets(&shadow_map_color_buffer, 1, &shadow_map_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 0));
 
-            Render_Pass_Desc scene_pass = {};
-            scene_pass.camera_position = v3(0, 20, 0);
-            scene_pass.camera_orientation = sun_orientation;
-            scene_pass.projection_matrix = orthographic(-20, 20, -20, 20, -100, 100);
-            sun_transform = scene_pass.projection_matrix * view_matrix(scene_pass.camera_position, scene_pass.camera_orientation);
-            begin_render_pass(&scene_pass);
+            Render_Pass_Desc shadow_pass = {};
+            shadow_pass.camera_position = v3(0, 20, 0);
+            shadow_pass.camera_orientation = sun_orientation;
+            shadow_pass.projection_matrix = construct_orthographic_matrix(-20, 20, -20, 20, -100, 100);
+            sun_transform = shadow_pass.projection_matrix * construct_view_matrix(shadow_pass.camera_position, shadow_pass.camera_orientation);
+            begin_render_pass(&shadow_pass);
             bind_shaders(vertex_shader, shadow_pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
             end_render_pass();
@@ -328,6 +331,16 @@ void main() {
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
+        Compute_VP_CBuffer vp_cbuffer = {};
+        vp_cbuffer.view_matrix = construct_trs_matrix(camera_position, camera_orientation, v3(1, 1, 1));
+        vp_cbuffer.projection_matrix = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.001, 1000);
+        update_buffer(compute_vp_cbuffer, &vp_cbuffer, sizeof(Compute_VP_CBuffer));
+        bind_constant_buffers(&compute_vp_cbuffer, 1, 0);
+        bind_compute_shader(test_compute_shader);
+        bind_compute_uav(test_3d_texture, 0);
+        dispatch_compute(test_3d_texture.description.width, test_3d_texture.description.height, test_3d_texture.description.depth);
+        bind_compute_uav({}, 0);
+
         // draw scene to hdr buffer
         {
             Texture color_buffers[2] = {
@@ -337,18 +350,20 @@ void main() {
             set_render_targets(color_buffers, ARRAYSIZE(color_buffers), &hdr_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 0));
 
-            bind_texture(shadow_map_color_buffer, TS_SHADOW_MAP);
+            bind_texture(shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
+            bind_texture(test_3d_texture, TS_PBR_CAMERA_BOX);
 
             Render_Pass_Desc scene_pass = {};
             scene_pass.camera_position = camera_position;
             scene_pass.camera_orientation = camera_orientation;
-            scene_pass.projection_matrix = perspective(to_radians(60), (float)main_window.width / (float)main_window.height, 0.001, 1000);
+            scene_pass.projection_matrix = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.001, 1000);
+
             begin_render_pass(&scene_pass);
             bind_shaders(vertex_shader, pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
             end_render_pass();
             unset_render_targets();
-            bind_texture({}, TS_SHADOW_MAP);
+            bind_texture({}, TS_PBR_SHADOW_MAP);
         }
 
         Texture *last_bloom_blur_render_target = {};
@@ -357,18 +372,18 @@ void main() {
         {
             Render_Pass_Desc bloom_pass = {};
             bloom_pass.camera_orientation = quaternion_identity();
-            bloom_pass.projection_matrix = orthographic(0, bloom_ping_pong_color_buffers[1].description.width, 0, bloom_ping_pong_color_buffers[1].description.height, -1, 1);
+            bloom_pass.projection_matrix = construct_orthographic_matrix(0, bloom_ping_pong_color_buffers[1].description.width, 0, bloom_ping_pong_color_buffers[1].description.height, -1, 1);
             begin_render_pass(&bloom_pass);
 
             set_render_targets(&bloom_ping_pong_color_buffers[1], 1, &bloom_ping_pong_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 1));
+            bind_shaders(vertex_shader, simple_pixel_textured_shader);
             draw_texture(
                 bloom_color_buffer,
                 v3(0, 0, 0),
-                v3(bloom_ping_pong_color_buffers[1].description.width, bloom_ping_pong_color_buffers[1].description.height, 0),
-                vertex_shader,
-                simple_pixel_shader);
+                v3(bloom_ping_pong_color_buffers[1].description.width, bloom_ping_pong_color_buffers[1].description.height, 0));
 
+            bind_shaders(vertex_shader, blur_pixel_shader);
             for (int i = 0; i < 4; i++) {
                 last_bloom_blur_render_target = &bloom_ping_pong_color_buffers[i % 2];
 
@@ -382,7 +397,7 @@ void main() {
 
                 set_render_targets(last_bloom_blur_render_target, 1, &bloom_ping_pong_depth_buffer);
                 clear_bound_render_targets(v4(0, 0, 0, 1));
-                draw_texture(source_texture, v3(0, 0, 0), v3(last_bloom_blur_render_target->description.width, last_bloom_blur_render_target->description.height, 0), vertex_shader, blur_pixel_shader);
+                draw_texture(source_texture, v3(0, 0, 0), v3(last_bloom_blur_render_target->description.width, last_bloom_blur_render_target->description.height, 0));
                 unset_render_targets();
             }
 
@@ -390,31 +405,39 @@ void main() {
             end_render_pass();
         }
 
-        bind_compute_shader(test_compute_shader);
-        bind_compute_uav(test_3d_texture, 0);
-        dispatch_compute(test_3d_texture.description.width, test_3d_texture.description.height, test_3d_texture.description.depth);
-        bind_compute_uav({}, 0);
-
         set_render_targets(nullptr, 0, nullptr);
         clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
 
         Render_Pass_Desc screen_pass = {};
         screen_pass.camera_position = v3(0, 0, 0);
         screen_pass.camera_orientation = quaternion_identity();
-        screen_pass.projection_matrix = orthographic(0, main_window.width, 0, main_window.height, -1, 1);
+        screen_pass.projection_matrix = construct_orthographic_matrix(0, main_window.width, 0, main_window.height, -1, 1);
         begin_render_pass(&screen_pass);
 
         bind_texture(*last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
-        draw_texture(hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0), vertex_shader, final_pixel_shader);
+        bind_shaders(vertex_shader, final_pixel_shader);
+        draw_texture(hdr_color_buffer,                 v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
         bind_texture({}, TS_FINAL_BLOOM_MAP);
-        draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(128, 128, 0), vertex_shader, simple_pixel_shader);
-        draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0), vertex_shader, simple_pixel_shader);
-        draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0), vertex_shader, simple_pixel_shader);
-        draw_texture(test_3d_texture,                  v3(384, 0, 0), v3(512, 128, 0), vertex_shader, simple_pixel_3d_shader, sin(time_since_startup));
+
+        bind_shaders(vertex_shader, simple_pixel_textured_shader);
+        draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(128, 128, 0));
+        draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0));
+        draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0));
+
+        // float z_3d = sin(time_since_startup) * sin(time_since_startup);
+        float z_3d = 1;
+        bind_shaders(vertex_shader, simple_pixel_3d_shader);
+        draw_texture(test_3d_texture, v3(384, 0, 0), v3(512, 128, 0), z_3d);
+
+        // printf("%f\n", z_3d);
+
+        // printf("%f %f %f\n", camera_position.x, camera_position.y, camera_position.z);
 
         Vertex ffverts[1024];
         Fixed_Function ff = {};
-        ff_begin(&ff, ffverts, ARRAYSIZE(ffverts), roboto_mono.texture, vertex_shader, text_pixel_shader);
+        ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+        bind_texture(roboto_mono.texture, 0);
+        bind_shaders(vertex_shader, text_pixel_shader);
 
         Vector3 text_pos = v3(10, main_window.height-roboto_mono.pixel_height, 0);
         const float text_size = 1;

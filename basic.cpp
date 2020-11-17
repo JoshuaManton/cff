@@ -73,7 +73,7 @@ Allocator default_allocator() {
 
 
 
-char *buffer_allocate(char *buffer, int buffer_len, int *offset, int size, int alignment, bool panic_on_oom) {
+byte *buffer_allocate(byte *buffer, int buffer_len, int *offset, int size, int alignment, bool panic_on_oom) {
     // Don't allow allocations of zero size. This would likely return a
     // pointer to a different allocation, causing many problems.
     if (size == 0) {
@@ -94,14 +94,14 @@ char *buffer_allocate(char *buffer, int buffer_len, int *offset, int size, int a
     }
 
     *offset = start + size;
-    char *ptr = &buffer[start];
+    byte *ptr = &buffer[start];
     zero_memory(ptr, size);
     return ptr;
 }
 
 
 
-void init_arena(Arena *arena, char *backing, int backing_size) {
+void init_arena(Arena *arena, byte *backing, int backing_size) {
     arena->memory = backing;
     arena->memory_size = backing_size;
     arena->cur_offset = 0;
@@ -116,11 +116,84 @@ void arena_free(void *allocator, void *ptr) {
     // note(josh): freeing from arenas does nothing.
 }
 
-Allocator arena_allocator() {
+void arena_clear(Arena *arena) {
+    arena->cur_offset = 0;
+}
+
+Allocator arena_allocator(Arena *arena) {
     Allocator a = {};
+    a.data = arena;
     a.alloc_proc = arena_alloc;
     a.free_proc = arena_free;
     return a;
+}
+
+
+
+void init_pool_allocator(Pool_Allocator *pool, Allocator backing_allocator, int slot_size, int num_slots) {
+    assert(slot_size > 0);
+    assert(num_slots > 0);
+    pool->backing_allocator = backing_allocator;
+    pool->memory_size = slot_size * num_slots;
+    pool->slot_size = slot_size;
+    pool->num_slots = num_slots;
+    pool->memory = (byte *)alloc(pool->backing_allocator, pool->memory_size);
+    pool->slots_freelist = (int *)alloc(pool->backing_allocator, sizeof(int) * num_slots);
+    pool->freelist_count = num_slots;
+    int slot_idx = 0;
+    for (int idx = num_slots-1; idx >= 0; idx -= 1) {
+        pool->slots_freelist[idx] = slot_idx;
+        slot_idx += 1;
+    }
+}
+
+void *pool_get(Pool_Allocator *pool) {
+    assert(pool->freelist_count > 0);
+    int slot = pool->slots_freelist[pool->freelist_count-1];
+    pool->freelist_count -= 1;
+    return memset(&pool->memory[pool->slot_size * slot], 0, pool->slot_size);
+}
+
+int pool_get_slot_index(Pool_Allocator *pool, void *ptr) {
+    int slot = ((uintptr_t)ptr - (uintptr_t)pool->memory) / pool->slot_size;
+    return slot;
+}
+
+void *pool_get_slot_by_index(Pool_Allocator *pool, int slot) {
+    void *ptr = pool->memory + (pool->slot_size * slot);
+    return ptr;
+}
+
+void pool_return(Pool_Allocator *pool, void *ptr) {
+    assert((pool->freelist_count+1) <= pool->num_slots);
+    int slot = pool_get_slot_index(pool, ptr);
+    pool->slots_freelist[pool->freelist_count] = slot;
+    pool->freelist_count += 1;
+}
+
+void *pool_alloc(void *allocator, int size, int align) {
+    Pool_Allocator *pool = (Pool_Allocator *)allocator;
+    assert(pool != nullptr);
+    return pool_get(pool);
+}
+
+void pool_free(void *allocator, void *ptr) {
+    Pool_Allocator *pool = (Pool_Allocator *)allocator;
+    assert(pool != nullptr);
+    pool_return(pool, ptr);
+}
+
+Allocator pool_allocator(Pool_Allocator *pool) {
+    Allocator a = {};
+    a.data = pool;
+    a.alloc_proc = pool_alloc;
+    a.free_proc = pool_free;
+    return a;
+}
+
+void destroy_pool(Pool_Allocator pool) {
+    free(pool.backing_allocator, pool.memory);
+    free(pool.backing_allocator, pool.slots_freelist);
 }
 
 

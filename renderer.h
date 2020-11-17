@@ -27,9 +27,7 @@ struct PBR_Material {
     bool has_transparency;
 };
 
-struct Simple_Material {
-    Texture albedo_map;
-};
+void flush_pbr_material(Buffer buffer, PBR_Material material);
 
 struct Loaded_Mesh {
     Buffer vertex_buffer;
@@ -38,14 +36,6 @@ struct Loaded_Mesh {
     int num_indices;
     PBR_Material material;
     bool has_material;
-};
-
-enum CBuffer_Slot {
-    CBS_PASS     = 0, // :PassCBufferSlot
-    CBS_MODEL    = 1, // :ModelCBufferSlot
-    CBS_MATERIAL = 2, // :MaterialCBufferSlot
-    CBS_LIGHTING = 3, // :LightingCBufferSlot
-    CBS_BLUR     = 3, // :BlurCBufferSlot
 };
 
 struct Pass_CBuffer {
@@ -94,16 +84,34 @@ struct Lighting_CBuffer {
     Vector3 fog_base_color;
 };
 
-enum Texture_Slot {
-    TS_ALBEDO = 0,
-    TS_NORMAL = 1,
-    TS_FINAL_BLOOM_MAP = 1,
-    TS_METALLIC = 2,
-    TS_ROUGHNESS = 3,
-    TS_EMISSION = 4,
-    TS_AO = 5,
-    TS_SHADOW_MAP = 6,
-};
+
+
+#define CBS_PASS     0
+#define CBS_MODEL    1
+
+#define CBS_MATERIAL 2
+#define CBS_LIGHTING 3
+
+#define CBS_BLUR     2
+
+
+
+#define TS_PBR_ALBEDO     0
+
+#define TS_PBR_NORMAL     1
+#define TS_PBR_METALLIC   2
+#define TS_PBR_ROUGHNESS  3
+#define TS_PBR_EMISSION   4
+#define TS_PBR_AO         5
+#define TS_PBR_SHADOW_MAP 6
+#define TS_PBR_CAMERA_BOX 7
+
+#define TS_FINAL_MAIN_VIEW 0
+#define TS_FINAL_BLOOM_MAP 1
+
+#define TS_SIMPLE_ALBEDO 0
+
+
 
 Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
 
@@ -135,24 +143,22 @@ struct Render_Pass_Desc {
 
 void begin_render_pass(Render_Pass_Desc *pass);
 void end_render_pass();
-void flush_pbr_material(Buffer buffer, PBR_Material material);
-void flush_simple_material(Buffer buffer, Simple_Material material);
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency);
 
 struct Fixed_Function {
     Vertex *vertices;
     int max_vertices;
     int num_vertices;
-    Texture texture;
-    Vertex_Shader vertex_shader;
-    Pixel_Shader pixel_shader;
+    Buffer vertex_buffer;
 };
 
-void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices, Texture texture, Vertex_Shader vertex_shader, Pixel_Shader pixel_shader);
+void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices);
+void ff_flush(Fixed_Function *ff);
 void ff_end(Fixed_Function *ff);
+
 void ff_vertex(Fixed_Function *ff, Vector3 position);
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord);
 void ff_color(Fixed_Function *ff, Vector4 color);
 void ff_next(Fixed_Function *ff);
-void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2]);
+void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2] = nullptr);
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size);

@@ -427,7 +427,7 @@ Matrix4 operator *(Matrix4 a, float f) {
     return result;
 }
 
-Matrix4 translate(Vector3 v) {
+Matrix4 construct_translation_matrix(Vector3 v) {
     Matrix4 result = m4_identity();
     result[3][0] = v[0];
     result[3][1] = v[1];
@@ -435,7 +435,7 @@ Matrix4 translate(Vector3 v) {
     return result;
 }
 
-Matrix4 rotate(float angle_radians, Vector3 v) {
+Matrix4 construct_rotation_matrix(float angle_radians, Vector3 v) {
     float c = cos(angle_radians);
     float s = sin(angle_radians);
 
@@ -462,7 +462,7 @@ Matrix4 rotate(float angle_radians, Vector3 v) {
     return result;
 }
 
-Matrix4 mat4_scale(Vector3 v) {
+Matrix4 construct_scale_matrix(Vector3 v) {
     Matrix4 result = {};
     result[0][0] = v[0];
     result[1][1] = v[1];
@@ -471,7 +471,7 @@ Matrix4 mat4_scale(Vector3 v) {
     return result;
 }
 
-Matrix4 transpose(Matrix4 a) {
+Matrix4 transpose_matrix(Matrix4 a) {
     Matrix4 result;
     for (int j = 0; j < 4; j++) {
         for (int i = 0; i < 4; i++) {
@@ -482,7 +482,7 @@ Matrix4 transpose(Matrix4 a) {
 }
 
 // note(josh): left-handed
-Matrix4 perspective(float fovy_radians, float aspect, float near, float far) {
+Matrix4 construct_perspective_matrix(float fovy_radians, float aspect, float near, float far) {
     float tan_half_fovy = tan(0.5f * fovy_radians);
     Matrix4 result = {};
     result[0][0] = 1.0f / (aspect*tan_half_fovy);
@@ -499,7 +499,7 @@ Matrix4 perspective(float fovy_radians, float aspect, float near, float far) {
     return result;
 }
 
-Matrix4 orthographic(float left, float right, float bottom, float top, float near, float far) {
+Matrix4 construct_orthographic_matrix(float left, float right, float bottom, float top, float near, float far) {
     Matrix4 result = {};
     result[0][0] = 2.0f / (right - left);
     result[1][1] = 2.0f / (top - bottom);
@@ -633,17 +633,24 @@ Quaternion quaternion_look_at(Vector3 eye, Vector3 center, Vector3 up) {
     return inverse(matrix4_to_quaternion(m));
 }
 
-Matrix4 view_matrix(Vector3 position, Quaternion orientation) {
-    Matrix4 t = translate(-position);
+Matrix4 construct_view_matrix(Vector3 position, Quaternion orientation) {
+    Matrix4 t = construct_translation_matrix(-position);
     Matrix4 r = quaternion_to_matrix4(inverse(orientation));
     Matrix4 result = r * t;
     return result;
 }
 
-Matrix4 model_matrix(Vector3 position, Vector3 scale, Quaternion orientation) {
-    Matrix4 t = translate(position);
-    Matrix4 s = mat4_scale(scale);
+Matrix4 construct_model_matrix(Vector3 position, Vector3 scale, Quaternion orientation) {
+    Matrix4 t = construct_translation_matrix(position);
+    Matrix4 s = construct_scale_matrix(scale);
     Matrix4 r = quaternion_to_matrix4(orientation);
     Matrix4 model_matrix = (t * r) * s;
     return model_matrix;
+}
+
+Matrix4 construct_trs_matrix(Vector3 t, Quaternion r, Vector3 s) {
+    Matrix4 translation = construct_translation_matrix(t);
+    Matrix4 rotation = quaternion_to_matrix4(r);
+    Matrix4 scale = construct_scale_matrix(s);
+    return translation * (rotation * scale);
 }

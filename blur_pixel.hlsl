@@ -23,7 +23,7 @@ cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
 };
 
-cbuffer CBUFFER_BLUR : register(b3) { // :BlurCBufferSlot
+cbuffer CBUFFER_BLUR : register(b2) { // :BlurCBufferSlot
     int horizontal;
     float2 buffer_dimensions;
 }

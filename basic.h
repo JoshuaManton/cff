@@ -42,6 +42,10 @@ static void bounds__check(int index, int min, int max_plus_one, char *file, int 
 
 #define BOUNDS_CHECK(index, min, max_plus_one) bounds__check(index, min, max_plus_one, __FILE__, __LINE__)
 
+
+
+byte *buffer_allocate(byte *buffer, int buffer_len, int *offset, int size, int alignment, bool panic_on_oom = true);
+
 #ifndef DEFAULT_ALIGNMENT
 #define DEFAULT_ALIGNMENT sizeof(void *) * 2
 #endif
@@ -50,12 +54,6 @@ struct Allocator {
     void *data;
     void *(*alloc_proc)(void *allocator, int size, int alignment);
     void (*free_proc)(void *allocator, void *ptr);
-};
-
-struct Arena {
-    char *memory;
-    int memory_size;
-    int cur_offset;
 };
 
 void *alloc(Allocator allocator, int size, int alignment = DEFAULT_ALIGNMENT);
@@ -67,12 +65,43 @@ void *default_allocator_alloc(void *allocator, int size, int alignment);
 void default_allocator_free(void *allocator, void *ptr);
 Allocator default_allocator();
 
-char *buffer_allocate(char *buffer, int buffer_len, int *offset, int size, int alignment, bool panic_on_oom = true);
 
-void init_arena(Arena *arena, char *backing, int backing_size);
+
+struct Arena {
+    byte *memory;
+    int memory_size;
+    int cur_offset;
+};
+
+void init_arena(Arena *arena, byte *backing, int backing_size);
 void *arena_alloc(void *allocator, int size, int align = DEFAULT_ALIGNMENT);
 void arena_free(void *allocator, void *ptr);
-Allocator arena_allocator();
+void arena_clear(Arena *arena);
+Allocator arena_allocator(Arena *arena);
+
+
+
+struct Pool_Allocator {
+    byte *memory;
+    int memory_size;
+    int slot_size;
+    int num_slots;
+    int *slots_freelist;
+    int freelist_count;
+    Allocator backing_allocator;
+};
+
+void  init_pool_allocator(Pool_Allocator *pool, Allocator backing_allocator, int slot_size, int num_slots);
+void *pool_get(Pool_Allocator *pool);
+void  pool_return(Pool_Allocator *pool, void *ptr);
+int   pool_get_slot_index(Pool_Allocator *pool, void *ptr);
+void *pool_get_slot_by_index(Pool_Allocator *pool, int slot);
+void *pool_alloc(void *allocator, int size, int align = DEFAULT_ALIGNMENT);
+void  pool_free(void *allocator, void *ptr);
+Allocator pool_allocator(Pool_Allocator *pool);
+void destroy_pool(Pool_Allocator pool);
+
+
 
 // todo(josh): read_entire_file should be in a different file I think
 char *read_entire_file(char *filename, int *len);
@@ -128,6 +157,14 @@ struct Array {
         return data[index];
     }
 };
+
+template<typename T>
+Array<T> make_array(Allocator allocator, int capacity = 16) {
+    Array<T> array = {};
+    array.allocator = allocator;
+    array.reserve(capacity);
+    return array;
+}
 
 template<typename T>
 T *Array<T>::append(T element) {
@@ -216,15 +253,8 @@ T Array<T>::unordered_remove(int index) {
     return t;
 }
 
-template<typename T>
-Array<T> make_array(Allocator allocator, int capacity = 16) {
-    Array<T> array = {};
-    array.allocator = allocator;
-    array.reserve(capacity);
-    return array;
-}
-
-#define Foreach(var, array) for (auto *var = array.data; (uintptr_t)var < (uintptr_t)(&array.data[array.count]); var++)
+#define Foreach(var, array) for (auto *var = (array).data; (uintptr_t)var < (uintptr_t)(&(array).data[(array).count]); var++)
+#define For(idx, array) for (int idx = 0; idx < (array).count; idx++)
 
 
 
@@ -288,3 +318,323 @@ struct String_Builder {
 
 String_Builder make_string_builder(Allocator allocator);
 void destroy_string_builder(String_Builder sb);
+
+
+
+
+template<typename Key>
+struct Key_Header {
+    bool filled;
+    Key  key;
+};
+
+template<typename Key, typename Value>
+struct Key_Value {
+    bool  filled;
+    u64   hash;
+    Value value;
+};
+
+#define INITIAL_HASHTABLE_SIZE 31
+template<typename Key, typename Value>
+struct Hashtable {
+    Key_Header<Key> *key_headers;
+    Key_Value<Key, Value> *values;
+    i64 count;
+    i64 capacity;
+    Allocator allocator;
+
+    void insert(Key key, Value value);
+    void remove(Key key);
+    bool contains(Key key);
+    Value *get(Key key);
+    void clear();
+    void destroy();
+
+    void get_key_header(Key key, Key_Header<Key> **out_header, int *out_index);
+};
+
+template<typename Key, typename Value>
+Hashtable<Key, Value> make_hashtable(Allocator allocator, int capacity = INITIAL_HASHTABLE_SIZE) {
+    Hashtable<Key, Value> hashtable = {};
+    hashtable.allocator = allocator;
+    hashtable.key_headers = (Key_Header<Key> *)alloc(hashtable.allocator, sizeof(Key_Header<Key>) * capacity);
+    hashtable.values = (Key_Value<Key, Value> *)alloc(hashtable.allocator, sizeof(Key_Value<Key, Value>) * capacity);
+    hashtable.capacity = capacity;
+    return hashtable;
+}
+
+static i64 next_power_of_2(i64 n) {
+    if (n <= 0) {
+        return 0;
+    }
+    n -= 1;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n |= n >> 32;
+    n += 1;
+    return n;
+}
+
+template<typename Key, typename Value>
+void Hashtable<Key, Value>::insert(Key key, Value value) {
+    if ((f64)count >= ((f64)capacity*0.75)) {
+        Key_Header<Key> *old_key_headers = key_headers;
+        Key_Value<Key, Value> *old_values = values;
+        i64 old_length = capacity;
+        i64 old_count = count;
+
+        i64 new_capacity = next_power_of_2(INITIAL_HASHTABLE_SIZE + old_length);
+        key_headers = (Key_Header<Key> *)alloc(allocator, sizeof(Key_Header<Key>) * new_capacity);
+        values = (Key_Value<Key, Value> *)alloc(allocator, sizeof(Key_Value<Key, Value>) * new_capacity);
+        count = 0;
+        capacity = new_capacity;
+
+        for (i64 header_idx = 0; header_idx < old_length; header_idx++) {
+            Key_Header<Key> *old_key_header = &old_key_headers[header_idx];
+            if (old_key_header->filled) {
+                insert(old_key_header->key, old_values[header_idx].value);
+            }
+        }
+
+        free(allocator, old_key_headers);
+        free(allocator, old_values);
+    }
+
+    i64 key_value_index = -1;
+    u64 h = hash_key(key);
+    u64 hash_idx = h % capacity;
+    for (i64 idx = hash_idx; idx < capacity; idx++) {
+        Key_Value<Key, Value> *value_ptr = &values[idx];
+        if (!value_ptr->filled) {
+            key_value_index = idx;
+            goto end_search;
+        }
+    }
+    for (i64 idx = 0; idx < hash_idx; idx += 1) {
+        Key_Value<Key, Value> *value_ptr = &values[idx];
+        if (!value_ptr->filled) {
+            key_value_index = idx;
+            goto end_search;
+        }
+    }
+    end_search:;
+    assert(key_value_index >= 0);
+
+    values[key_value_index] = {true, h, value};
+    key_headers[key_value_index] = {true, key};
+    count += 1;
+}
+
+template<typename Key>
+u64 hash_key(Key key) {
+    // note(josh): fnv64
+    u64 h = 0xcbf29ce484222325;
+    byte *key_byte_ptr = (byte *)&key;
+    for (int i = 0; i < sizeof(Key); i++) {
+        h = (h * 0x100000001b3) ^ u64(key_byte_ptr[i]);
+    }
+    return h;
+}
+
+template<typename Key, typename Value>
+bool Hashtable<Key, Value>::contains(Key key) {
+    Key_Header<Key> *header = {};
+    int index = {};
+    get_key_header(key, &header, &index);
+    return header != nullptr;
+}
+
+template<typename Key, typename Value>
+Value *Hashtable<Key, Value>::get(Key key) {
+    Key_Header<Key> *header = {};
+    int index = {};
+    get_key_header(key, &header, &index);
+    if (header == nullptr) {
+        return nullptr;
+    }
+    return &values[index].value;
+}
+
+template<typename Key, typename Value>
+void Hashtable<Key, Value>::remove(Key key) {
+    Key_Header<Key> *key_header = {};
+    int key_value_idx = {};
+    get_key_header(key, &key_header, &key_value_idx);
+    if (key_header == nullptr) {
+        return;
+    }
+    Key_Value<Key, Value> *key_value = &values[key_value_idx];
+    u64 hash_idx = key_value->hash % capacity;
+    Key_Value<Key, Value> *last_thing_that_hashed_to_the_same_idx = {};
+    u64 last_thing_index = 0;
+    for (int idx = key_value_idx+1; idx < capacity; idx++) {
+        Key_Value<Key, Value> *value = &values[idx];
+        if (!value->filled) {
+            goto end_search;
+        }
+        if ((value->hash % capacity) == hash_idx) {
+            last_thing_that_hashed_to_the_same_idx = value;
+            last_thing_index = idx;
+        }
+    }
+    for (int idx = 0; idx < hash_idx; idx++) {
+        Key_Value<Key, Value> *value = &values[idx];
+        if (!value->filled) {
+            goto end_search;
+        }
+        if ((value->hash % capacity) == hash_idx) {
+            last_thing_that_hashed_to_the_same_idx = value;
+            last_thing_index = idx;
+        }
+    }
+    end_search:;
+
+    if (last_thing_that_hashed_to_the_same_idx != nullptr) {
+        *key_header = key_headers[last_thing_index];
+        *key_value  = *last_thing_that_hashed_to_the_same_idx;
+        key_headers[last_thing_index].filled = false;
+        last_thing_that_hashed_to_the_same_idx->filled = false;
+    }
+    else {
+        key_header->filled = false;
+        key_value->filled = false;
+    }
+
+    count -= 1;
+}
+
+template<typename Key, typename Value>
+void Hashtable<Key, Value>::clear() {
+    for (int idx = 0; idx < capacity; idx++) {
+        key_headers[idx].filled = false;
+        values[idx].filled = false;
+    }
+    count = 0;
+}
+
+template<typename Key, typename Value>
+void Hashtable<Key, Value>::destroy() {
+    if (key_headers != nullptr) {
+        assert(values != nullptr);
+        free(allocator, key_headers);
+        free(allocator, values);
+    }
+}
+
+template<typename Key, typename Value>
+void Hashtable<Key, Value>::get_key_header(Key key, Key_Header<Key> **out_header, int *out_index) {
+    u64 h = hash_key(key);
+    u64 hash_idx = h % capacity;
+    for (int idx = hash_idx; idx < capacity; idx++) {
+        Key_Header<Key> *header = &key_headers[idx];
+        if (!header->filled) {
+            return;
+        }
+        if (header->key == key) {
+            *out_header = header;
+            *out_index = idx;
+            return;
+        }
+    }
+    for (int idx = 0; idx < hash_idx; idx += 1) {
+        Key_Header<Key> *header = &key_headers[idx];
+        if (!header->filled) {
+            return;
+        }
+        if (header->key == key) {
+            *out_header = header;
+            *out_index = idx;
+            return;
+        }
+    }
+}
+
+// main :: proc() {
+//  freq := get_freq();
+
+//  // NUM_ELEMS :: 10;
+//  NUM_ELEMS :: 1024 * 10000;
+
+//  my_table: Hashtable(int, int);
+//  {
+//      insert_start := get_time();
+//      for i in 0..NUM_ELEMS {
+//          insert(&my_table, i, i * 3);
+//      }
+//      insert_end := get_time();
+//      logging.ln("My map inserting ", NUM_ELEMS, " elements:   ", (insert_end-insert_start)/freq, "s");
+//  }
+
+//  odin_table: map[int]int;
+//  {
+//      insert_start := get_time();
+//      for i in 0..NUM_ELEMS {
+//          odin_table[i] = i * 3;
+//      }
+//      insert_end := get_time();
+//      logging.ln("Odin map inserting ", NUM_ELEMS, " elements: ", (insert_end-insert_start)/freq, "s");
+//  }
+
+//  {
+//      lookup_start := get_time();
+//      for i in 0..NUM_ELEMS {
+//          val, ok := get(&my_table, i);
+//          assert(ok); assert(val == i * 3);
+//      }
+//      lookup_end := get_time();
+//      logging.ln("My map retrieving ", NUM_ELEMS, " elements:   ", (lookup_end-lookup_start)/freq, "s");
+//  }
+
+//  {
+//      lookup_start := get_time();
+//      for i in 0..NUM_ELEMS {
+//          val, ok := odin_table[i];
+//          assert(ok); assert(val == i * 3);
+//      }
+//      lookup_end := get_time();
+//      logging.ln("Odin map retrieving ", NUM_ELEMS, " elements: ", (lookup_end-lookup_start)/freq, "s");
+//  }
+
+//  {
+//      iterate_start := get_time();
+//      for header, idx in my_table.key_headers {
+//          if !header.filled do continue;
+//          key := header.key;
+//          value := my_table.values[idx].value;
+//          assert(value == key * 3);
+//      }
+//      iterate_end := get_time();
+//      logging.ln("My map iterating ", NUM_ELEMS, " elements:   ", (iterate_end-iterate_start)/freq, "s");
+//  }
+
+//  {
+//      iterate_start := get_time();
+//      for key, value in odin_table {
+//          assert(value == key * 3);
+//      }
+//      iterate_end := get_time();
+//      logging.ln("Odin map iterating ", NUM_ELEMS, " elements: ", (iterate_end-iterate_start)/freq, "s");
+//  }
+
+//  {
+//      removal_start := get_time();
+//      for i in 0..NUM_ELEMS {
+//          remove(&my_table, i);
+//      }
+//      removal_end := get_time();
+//      logging.ln("My map removing ", NUM_ELEMS, " elements:   ", (removal_end-removal_start)/freq, "s");
+//  }
+
+//  {
+//      removal_start := get_time();
+//      for i in 0..NUM_ELEMS {
+//          delete_key(&odin_table, i);
+//      }
+//      removal_end := get_time();
+//      logging.ln("Odin map removing ", NUM_ELEMS, " elements: ", (removal_end-removal_start)/freq, "s");
+//  }
+// }

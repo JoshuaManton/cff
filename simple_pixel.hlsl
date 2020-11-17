@@ -1,7 +1,5 @@
 SamplerState main_sampler;
 
-Texture2D albedo_map    : register(t0);
-
 struct PS_INPUT {
     float4 position         : SV_POSITION;
     float3 texcoord         : TEXCOORD;
@@ -23,18 +21,8 @@ cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
 };
 
-cbuffer CBUFFER_MATERIAL : register(b2) { // :MaterialCBufferSlot
-    int has_albedo_map;
-};
-
 float4 main(PS_INPUT input) : SV_Target {
     float4 output_color = float4(1, 1, 1, 1);
-    if (has_albedo_map) {
-        output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
-    }
     output_color *= input.color;
-    if (output_color.a > 1.1) {
-        output_color = float4(1, 0, 1, 1);
-    }
     return output_color;
 }

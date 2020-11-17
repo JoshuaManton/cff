@@ -8,6 +8,8 @@ Texture2D emission_map  : register(t4);
 Texture2D ao_map        : register(t5);
 Texture2D shadow_map    : register(t6);
 
+Texture3D camera_box    : register(t7);
+
 struct PS_INPUT {
     float4 position         : SV_POSITION;
     float3 texcoord         : TEXCOORD;
@@ -202,7 +204,7 @@ PS_OUTPUT main(PS_INPUT input) {
     }
 
     float distance_to_pixel_position = length(camera_position - input.world_position);
-    float3 V = (camera_position - input.world_position) / distance_to_pixel_position;
+    float3 direction_to_camera = (camera_position - input.world_position) / distance_to_pixel_position;
 
     float4 output_color = float4(1, 1, 1, 1);
     if (has_albedo_map) {
@@ -224,20 +226,20 @@ PS_OUTPUT main(PS_INPUT input) {
         float3 offset_to_light = light_position - input.world_position;
         float distance_to_light = length(offset_to_light);
         float attenuation = 1.0 / (distance_to_light * distance_to_light);
-        float3 L = normalize(offset_to_light);
-        output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, L, light_color * attenuation, 1);
+        float3 direction_to_light = normalize(offset_to_light);
+        output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, direction_to_light, light_color * attenuation, 1);
     }
 
     if (length(sun_direction) > 0) {
         float shadow = calculate_shadow(shadow_map, sun_transform, input.world_position, N);
-        output_color.rgb += calculate_light(albedo, metallic, roughness, N, V, -sun_direction, sun_color, 1) * (1.0f - shadow);
+        output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, -sun_direction, sun_color, 1) * (1.0f - shadow);
     }
 
     float total_density = 0;
     const float STEP_SIZE = 0.1;
     const int MAX_STEPS = 200;
     for (int step = 0; step < MAX_STEPS; step++) {
-        float3 ray_position = camera_position - V * STEP_SIZE * step;
+        float3 ray_position = camera_position - direction_to_camera * STEP_SIZE * step;
         float ray_distance = length(camera_position - ray_position);
         if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transform, shadow_map)) {
             float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
