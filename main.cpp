@@ -9,7 +9,6 @@
 #include "math.h"
 #include "render_backend.h"
 #include "renderer.h"
-#include "array.h"
 
 #ifdef DEVELOPER
 #include "assimp_loader.cpp"
