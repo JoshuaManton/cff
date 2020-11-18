@@ -47,6 +47,7 @@ struct Pass_CBuffer {
 
 struct Model_CBuffer {
     Matrix4 model_matrix;
+    Vector4 model_color;
 };
 
 struct PBR_Material_CBuffer {
@@ -64,11 +65,6 @@ struct PBR_Material_CBuffer {
     float pad1;
 };
 
-struct Simple_Material_CBuffer {
-    int has_albedo_map;
-    float pad[3];
-};
-
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
 struct Lighting_CBuffer {
     Vector4 point_light_positions[MAX_POINT_LIGHTS];
@@ -82,6 +78,9 @@ struct Lighting_CBuffer {
     float fog_y_level;
     float fog_density;
     Vector3 fog_base_color;
+    int has_skybox_map;
+    float pad3[3];
+    Vector4 skybox_color;
 };
 
 
@@ -97,7 +96,6 @@ struct Lighting_CBuffer {
 
 
 #define TS_PBR_ALBEDO     0
-
 #define TS_PBR_NORMAL     1
 #define TS_PBR_METALLIC   2
 #define TS_PBR_ROUGHNESS  3
@@ -105,6 +103,7 @@ struct Lighting_CBuffer {
 #define TS_PBR_AO         5
 #define TS_PBR_SHADOW_MAP 6
 #define TS_PBR_CAMERA_BOX 7
+#define TS_PBR_SKYBOX     8
 
 #define TS_FINAL_MAIN_VIEW 0
 #define TS_FINAL_BLOOM_MAP 1
@@ -113,7 +112,9 @@ struct Lighting_CBuffer {
 
 
 
-Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
+Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
+byte *load_texture_data_from_file(char *filename, int *width, int *height);
+void delete_texture_data(byte *data);
 
 struct Font {
     Texture texture;
@@ -143,7 +144,8 @@ struct Render_Pass_Desc {
 
 void begin_render_pass(Render_Pass_Desc *pass);
 void end_render_pass();
-void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency);
+void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int num_indices, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color);
+void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color, Render_Options options, bool draw_transparency);
 
 struct Fixed_Function {
     Vertex *vertices;

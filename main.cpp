@@ -16,10 +16,11 @@
 
 /*
 TODO:
--cubemaps
--skybox
+-proper IBL
+-point light shadows
 -instancing (do we support this already?)
 -spot lights
+-set_depth_test(), set_backface_cull(), etc
 -fix alpha blending without ruining bloom
 -cascaded shadow maps
 -draw commands
@@ -44,10 +45,10 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override = 
 
 void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
     Quaternion helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
-    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options, false);
-    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options, false);
-    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), render_options, true);
-    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation, render_options, true);
+    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, false);
+    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation,    v4(1, 1, 1, 1), render_options, false);
+    draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, true);
+    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation,    v4(1, 1, 1, 1), render_options, true);
 }
 
 struct Blur_CBuffer {
@@ -62,6 +63,44 @@ struct Compute_VP_CBuffer {
     Matrix4 view_matrix;
     Matrix4 projection_matrix;
 };
+
+Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture ping_pong_depth_buffer, Vertex_Shader vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_pixel_textured_shader, Buffer blur_cbuffer_handle) {
+    Render_Pass_Desc blur_pass = {};
+    blur_pass.camera_orientation = quaternion_identity();
+    blur_pass.projection_matrix = construct_orthographic_matrix(0, ping_pong_buffers[1].description.width, 0, ping_pong_buffers[1].description.height, -1, 1);
+    begin_render_pass(&blur_pass);
+
+    set_render_targets(&ping_pong_buffers[1], 1, &ping_pong_depth_buffer);
+    clear_bound_render_targets(v4(0, 0, 0, 1));
+    bind_shaders(vertex_shader, simple_pixel_textured_shader);
+    draw_texture(
+        thing_to_blur,
+        v3(0, 0, 0),
+        v3(ping_pong_buffers[1].description.width, ping_pong_buffers[1].description.height, 0));
+
+    Texture *last_render_target = {};
+    bind_shaders(vertex_shader, blur_pixel_shader);
+    for (int i = 0; i < 4; i++) {
+        last_render_target = &ping_pong_buffers[i % 2];
+
+        Texture source_texture = ping_pong_buffers[(i+1) % 2];
+
+        Blur_CBuffer blur_cbuffer = {};
+        blur_cbuffer.horizontal = i % 2;
+        blur_cbuffer.buffer_dimensions = v2(source_texture.description.width, source_texture.description.height);
+        update_buffer(blur_cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
+        bind_constant_buffers(&blur_cbuffer_handle, 1, CBS_BLUR);
+
+        set_render_targets(last_render_target, 1, &ping_pong_depth_buffer);
+        clear_bound_render_targets(v4(0, 0, 0, 1));
+        draw_texture(source_texture, v3(0, 0, 0), v3(last_render_target->description.width, last_render_target->description.height, 0));
+        unset_render_targets();
+    }
+
+    unset_render_targets();
+    end_render_pass();
+    return last_render_target;
+}
 
 void main() {
     init_platform();
@@ -85,6 +124,7 @@ void main() {
     Texture test_3d_texture = create_texture(test_3d_texture_description);
 
     Vertex_Shader vertex_shader                = compile_vertex_shader_from_file(L"vertex.hlsl");
+    Vertex_Shader skybox_vertex_shader         = compile_vertex_shader_from_file(L"skybox_vertex.hlsl");
     Pixel_Shader  pixel_shader                 = compile_pixel_shader_from_file(L"pixel.hlsl");
     Pixel_Shader  simple_pixel_shader          = compile_pixel_shader_from_file(L"simple_pixel.hlsl");
     Pixel_Shader  simple_pixel_textured_shader = compile_pixel_shader_from_file(L"simple_pixel_textured.hlsl");
@@ -93,6 +133,7 @@ void main() {
     Pixel_Shader  shadow_pixel_shader          = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
     Pixel_Shader  blur_pixel_shader            = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
     Pixel_Shader  final_pixel_shader           = compile_pixel_shader_from_file(L"final_pixel.hlsl");
+    Pixel_Shader  skybox_pixel_shader          = compile_pixel_shader_from_file(L"skybox_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -105,7 +146,7 @@ void main() {
     };
     Vertex_Format default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields), vertex_shader);
 
-    u32 cube_indices[] = {
+    u32 cube_indices[36] = {
          0,  2,  1,  0,  3,  2,
          4,  5,  6,  4,  6,  7,
          8, 10,  9,  8, 11, 10,
@@ -114,7 +155,7 @@ void main() {
         20, 22, 21, 20, 23, 22,
     };
 
-    Vertex cube_vertices[] = {
+    Vertex cube_vertices[24] = {
         {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
         {{ (0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
         {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
@@ -145,6 +186,33 @@ void main() {
         {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
         {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
     };
+
+    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices[0]) * 24);
+    Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices[0])  * 36);
+
+    int skybox_width;
+    int skybox_height;
+    byte *skybox_faces[6] = {
+        load_texture_data_from_file("skybox_clouds_+x.png", &skybox_width, &skybox_height),
+        load_texture_data_from_file("skybox_clouds_-x.png", &skybox_width, &skybox_height),
+        load_texture_data_from_file("skybox_clouds_+y.png", &skybox_width, &skybox_height),
+        load_texture_data_from_file("skybox_clouds_-y.png", &skybox_width, &skybox_height),
+        load_texture_data_from_file("skybox_clouds_+z.png", &skybox_width, &skybox_height),
+        load_texture_data_from_file("skybox_clouds_-z.png", &skybox_width, &skybox_height),
+    };
+
+    Texture_Description skybox_desc = {};
+    skybox_desc.width  = skybox_width;
+    skybox_desc.height = skybox_height;
+    skybox_desc.uav = true;
+    skybox_desc.type = TT_CUBEMAP;
+    skybox_desc.format = TF_R8G8B8A8_UINT;
+    Texture skybox_texture = create_texture(skybox_desc);
+    set_cubemap_textures(skybox_texture, skybox_faces);
+
+    for (int idx = 0; idx < ARRAYSIZE(skybox_faces); idx++) {
+        delete_texture_data(skybox_faces[idx]);
+    }
 
     Font roboto_mono = load_font_from_file("fonts/roboto_mono.ttf", 32);
     Font roboto      = load_font_from_file("fonts/roboto.ttf", 32);
@@ -196,6 +264,16 @@ void main() {
     bloom_desc.render_target = true;
     bloom_desc.sample_count = 8;
     Texture bloom_color_buffer = create_texture(bloom_desc);
+
+    Texture_Description shadow_screen_desc = {};
+    shadow_screen_desc.width  = main_window.width;
+    shadow_screen_desc.height = main_window.height;
+    shadow_screen_desc.type = TT_2D;
+    shadow_screen_desc.format = TF_R16G16B16A16_FLOAT;
+    shadow_screen_desc.wrap_mode = TWM_LINEAR_CLAMP;
+    shadow_screen_desc.render_target = true;
+    shadow_screen_desc.sample_count = 8;
+    Texture shadow_screen_buffer = create_texture(shadow_screen_desc);
 
     Texture_Description bloom_ping_pong_desc = {};
     bloom_ping_pong_desc.width  = main_window.width  / BLOOM_BUFFER_DOWNSCALE;
@@ -286,6 +364,7 @@ void main() {
         ensure_texture_size(&hdr_color_buffer, main_window.width, main_window.height);
         ensure_texture_size(&hdr_depth_buffer, main_window.width, main_window.height);
         ensure_texture_size(&bloom_color_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&shadow_screen_buffer, main_window.width, main_window.height);
         for (int i = 0; i < ARRAYSIZE(bloom_ping_pong_color_buffers); i++) {
             ensure_texture_size(&bloom_ping_pong_color_buffers[i], main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
         }
@@ -327,6 +406,9 @@ void main() {
         lighting.fog_base_color = v3(1, 1, 1);
         lighting.fog_density    = 0.05;
         lighting.fog_y_level    = -1;
+        lighting.has_skybox_map = 1;
+        lighting.skybox_color   = v4(10, 10, 10, 1);
+        bind_texture(skybox_texture, TS_PBR_SKYBOX);
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
@@ -342,9 +424,10 @@ void main() {
 
         // draw scene to hdr buffer
         {
-            Texture color_buffers[2] = {
+            Texture color_buffers[3] = {
                 hdr_color_buffer,
                 bloom_color_buffer,
+                shadow_screen_buffer,
             };
             set_render_targets(color_buffers, ARRAYSIZE(color_buffers), &hdr_depth_buffer);
             clear_bound_render_targets(v4(0, 0, 0, 0));
@@ -360,49 +443,19 @@ void main() {
             begin_render_pass(&scene_pass);
             bind_shaders(vertex_shader, pixel_shader);
             draw_scene(render_options, time_since_startup, sponza_meshes, helmet_meshes);
+
+            // skybox
+            bind_shaders(skybox_vertex_shader, skybox_pixel_shader);
+            bind_texture(skybox_texture, TS_PBR_ALBEDO);
+
+            draw_mesh(cube_vertex_buffer, cube_index_buffer, 24, 36, camera_position, v3(1, 1, 1), quaternion_identity(), v4(3, 3, 3, 1));
+
             end_render_pass();
             unset_render_targets();
             bind_texture({}, TS_PBR_SHADOW_MAP);
         }
 
-        Texture *last_bloom_blur_render_target = {};
-
-        // blur bloom
-        {
-            Render_Pass_Desc bloom_pass = {};
-            bloom_pass.camera_orientation = quaternion_identity();
-            bloom_pass.projection_matrix = construct_orthographic_matrix(0, bloom_ping_pong_color_buffers[1].description.width, 0, bloom_ping_pong_color_buffers[1].description.height, -1, 1);
-            begin_render_pass(&bloom_pass);
-
-            set_render_targets(&bloom_ping_pong_color_buffers[1], 1, &bloom_ping_pong_depth_buffer);
-            clear_bound_render_targets(v4(0, 0, 0, 1));
-            bind_shaders(vertex_shader, simple_pixel_textured_shader);
-            draw_texture(
-                bloom_color_buffer,
-                v3(0, 0, 0),
-                v3(bloom_ping_pong_color_buffers[1].description.width, bloom_ping_pong_color_buffers[1].description.height, 0));
-
-            bind_shaders(vertex_shader, blur_pixel_shader);
-            for (int i = 0; i < 4; i++) {
-                last_bloom_blur_render_target = &bloom_ping_pong_color_buffers[i % 2];
-
-                Texture source_texture = bloom_ping_pong_color_buffers[(i+1) % 2];
-
-                Blur_CBuffer blur_cbuffer = {};
-                blur_cbuffer.horizontal = i % 2;
-                blur_cbuffer.buffer_dimensions = v2(source_texture.description.width, source_texture.description.height);
-                update_buffer(blur_cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
-                bind_constant_buffers(&blur_cbuffer_handle, 1, CBS_BLUR);
-
-                set_render_targets(last_bloom_blur_render_target, 1, &bloom_ping_pong_depth_buffer);
-                clear_bound_render_targets(v4(0, 0, 0, 1));
-                draw_texture(source_texture, v3(0, 0, 0), v3(last_bloom_blur_render_target->description.width, last_bloom_blur_render_target->description.height, 0));
-                unset_render_targets();
-            }
-
-            unset_render_targets();
-            end_render_pass();
-        }
+        Texture *last_bloom_blur_render_target = do_blur(bloom_color_buffer, bloom_ping_pong_color_buffers, bloom_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
 
         set_render_targets(nullptr, 0, nullptr);
         clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));

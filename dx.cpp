@@ -429,23 +429,37 @@ void bind_compute_shader(Compute_Shader shader) {
 ID3D11UnorderedAccessView *dx_create_unordered_access_view(Texture texture) {
     assert(texture.description.uav);
     ID3D11UnorderedAccessView * uav = {};
-    if (texture.description.type == TT_2D) {
-        D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-        uav_desc.Format = DXGI_FORMAT_UNKNOWN;
-        uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-        auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_2d, &uav_desc, &uav);
-        assert(result == S_OK);
-    }
-    else if (texture.description.type == TT_3D) {
-        D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
-        uav_desc.Format = DXGI_FORMAT_UNKNOWN;
-        uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
-        uav_desc.Texture3D.WSize = (u32)texture.description.depth;
-        auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_3d, &uav_desc, &uav);
-        assert(result == S_OK);
-    }
-    else {
-        assert(false);
+    switch (texture.description.type) {
+        case TT_2D: {
+            D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+            uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+            uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+            auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_2d, &uav_desc, &uav);
+            assert(result == S_OK);
+            break;
+        }
+        case TT_3D: {
+            D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+            uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+            uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+            uav_desc.Texture3D.WSize = (u32)texture.description.depth;
+            auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_3d, &uav_desc, &uav);
+            assert(result == S_OK);
+            break;
+        }
+        case TT_CUBEMAP: {
+            assert(false && "unimplemented");
+            // D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+            // uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+            // uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURECUBE;
+            // uav_desc.Texture3D.WSize = (u32)texture.description.depth;
+            // auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_3d, &uav_desc, &uav);
+            // assert(result == S_OK);
+            break;
+        }
+        default: {
+            assert(false);
+        }
     }
     assert(uav != nullptr);
     return uav;
@@ -623,6 +637,56 @@ Texture create_texture(Texture_Description desc) {
 
             break;
         }
+        case TT_CUBEMAP: {
+            // Create texture
+            D3D11_TEXTURE2D_DESC texture_desc = {};
+            texture_desc.Width            = (u32)desc.width;
+            texture_desc.Height           = (u32)desc.height;
+            texture_desc.MipLevels        = desc.mipmap_count;
+            texture_desc.Format           = texture_format;
+            texture_desc.SampleDesc.Count = 1;
+            texture_desc.Usage            = D3D11_USAGE_DEFAULT;
+            texture_desc.ArraySize        = 6;
+            texture_desc.MiscFlags        |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+            if (texture_format_infos[desc.format].is_depth_format) {
+                texture_desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
+            }
+            else {
+                texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                if (desc.uav) {
+                    texture_desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+                }
+                if (desc.render_target) {
+                    texture_desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+                }
+            }
+
+            u32 pixel_size = (u32)texture_format_infos[desc.format].pixel_size_in_bytes;
+            D3D11_SUBRESOURCE_DATA subresource_data[6] = {
+                {desc.color_data, pixel_size * (u32)desc.width,    0},
+                {desc.color_data, pixel_size * (u32)desc.width/2,  0},
+                {desc.color_data, pixel_size * (u32)desc.width/4,  0},
+                {desc.color_data, pixel_size * (u32)desc.width/8,  0},
+                {desc.color_data, pixel_size * (u32)desc.width/16, 0},
+                {desc.color_data, pixel_size * (u32)desc.width/32, 0},
+            };
+
+            auto result = directx.device->CreateTexture2D(&texture_desc, desc.color_data == nullptr ? nullptr : &subresource_data[0], &texture_handle_2d);
+            assert(result == S_OK);
+
+            if (desc.sample_count > 1) {
+                assert(desc.render_target);
+                assert(!desc.uav);
+                D3D11_TEXTURE2D_DESC msaa_texture_desc = texture_desc;
+                msaa_texture_desc.SampleDesc.Count = desc.sample_count;
+                msaa_texture_desc.SampleDesc.Quality = D3D11_STANDARD_MULTISAMPLE_PATTERN;
+                result = directx.device->CreateTexture2D(&msaa_texture_desc, nullptr, &msaa_handle_2d);
+                assert(result == S_OK);
+            }
+
+            break;
+        }
     }
 
     Texture texture = {};
@@ -654,27 +718,52 @@ void destroy_texture(Texture texture) {
     }
 }
 
+void set_cubemap_textures(Texture texture, byte *face_pixel_data[6]) {
+    assert(texture.description.type == TT_CUBEMAP);
+
+    u32 num_channels = (u32)texture_format_infos[texture.description.format].num_channels;
+    for (int idx = 0; idx < 6; idx++) {
+        byte *face_data = face_pixel_data[idx];
+        if (face_data != nullptr) {
+            directx.device_context->UpdateSubresource((ID3D11Resource *)texture.backend.handle_2d, (u32)idx, nullptr, face_data, num_channels * (u32)texture.description.width, 0);
+        }
+    }
+}
+
 ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
     assert(!texture_format_infos[texture.description.format].is_depth_format);
     ID3D11ShaderResourceView *shader_resource_view = {};
-    if (texture.description.type == TT_2D) {
-        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
-        texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
-        texture_shader_resource_desc.Texture2D.MipLevels = texture.description.mipmap_count;
-        texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-        auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_2d, &texture_shader_resource_desc, &shader_resource_view);
-        assert(result == S_OK);
-    }
-    else if (texture.description.type == TT_3D) {
-        D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
-        texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
-        texture_shader_resource_desc.Texture3D.MipLevels = texture.description.mipmap_count;
-        texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
-        auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_3d, &texture_shader_resource_desc, &shader_resource_view);
-        assert(result == S_OK);
-    }
-    else {
-        assert(false);
+    switch (texture.description.type) {
+        case TT_2D: {
+            D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
+            texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
+            texture_shader_resource_desc.Texture2D.MipLevels = texture.description.mipmap_count;
+            texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_2d, &texture_shader_resource_desc, &shader_resource_view);
+            assert(result == S_OK);
+            break;
+        }
+        case TT_3D: {
+            D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
+            texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
+            texture_shader_resource_desc.Texture3D.MipLevels = texture.description.mipmap_count;
+            texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
+            auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_3d, &texture_shader_resource_desc, &shader_resource_view);
+            assert(result == S_OK);
+            break;
+        }
+        case TT_CUBEMAP: {
+            D3D11_SHADER_RESOURCE_VIEW_DESC texture_shader_resource_desc = {};
+            texture_shader_resource_desc.Format = dx_texture_format_mapping[texture.description.format];
+            texture_shader_resource_desc.TextureCube.MipLevels = texture.description.mipmap_count;
+            texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+            auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_2d, &texture_shader_resource_desc, &shader_resource_view);
+            assert(result == S_OK);
+            break;
+        }
+        default: {
+            assert(false);
+        }
     }
     assert(shader_resource_view != nullptr);
     return shader_resource_view;
@@ -829,7 +918,7 @@ void set_viewport(int x, int y, int width, int height) {
 void prerender() {
     directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
-    directx.device_context->RSSetState(directx.backface_cull_rasterizer);
+    directx.device_context->RSSetState(directx.no_cull_rasterizer);
     directx.device_context->OMSetDepthStencilState(directx.depth_test_state, 0);
 
     float blend_factor[4] = {0, 0, 0, 0};

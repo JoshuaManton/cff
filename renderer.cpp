@@ -11,7 +11,6 @@ struct Renderer_State {
     Buffer pass_cbuffer_handle;
     Buffer model_cbuffer_handle;
     Buffer pbr_material_cbuffer_handle;
-    Buffer simple_material_cbuffer_handle;
 };
 
 Renderer_State renderer_state;
@@ -26,28 +25,38 @@ void init_renderer(Window *window) {
     renderer_state.pass_cbuffer_handle            = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
     renderer_state.model_cbuffer_handle           = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
     renderer_state.pbr_material_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
-    renderer_state.simple_material_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Simple_Material_CBuffer));
 }
 
-Texture load_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
-    int filedata_len;
-    char *filedata = read_entire_file(filename, &filedata_len);
-    defer(free(filedata));
-    // stbi_set_flip_vertically_on_load(1);
-    int x, y, n;
-    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, &x, &y, &n, 4);
-    assert(color_data);
-    defer(stbi_image_free(color_data));
+Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
+    int width;
+    int height;
+    byte *color_data = load_texture_data_from_file(filename, &width, &height);
+    defer(delete_texture_data(color_data));
 
     Texture_Description texture_description = {};
-    texture_description.width = x;
-    texture_description.height = y;
+    texture_description.width = width;
+    texture_description.height = height;
     texture_description.color_data = color_data;
     texture_description.format = format;
     texture_description.wrap_mode = wrap_mode;
     texture_description.type = TT_2D;
     Texture texture = create_texture(texture_description);
     return texture;
+}
+
+byte *load_texture_data_from_file(char *filename, int *width, int *height) {
+    int filedata_len;
+    char *filedata = read_entire_file(filename, &filedata_len);
+    defer(free(filedata));
+    // stbi_set_flip_vertically_on_load(1);
+    int n;
+    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, width, height, &n, 4);
+    assert(color_data);
+    return color_data;
+}
+
+void delete_texture_data(byte *data) {
+    stbi_image_free(data);
 }
 
 Font load_font_from_file(char *filename, float size) {
@@ -148,7 +157,23 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
     bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
 }
 
-void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Render_Options options, bool draw_transparency) {
+void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int num_indices, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color) {
+    Model_CBuffer model_cbuffer = {};
+    model_cbuffer.model_matrix = construct_model_matrix(position, scale, orientation);
+    model_cbuffer.model_color = color;
+
+    update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
+    bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
+
+    u32 strides[1] = {sizeof(Vertex)};
+    u32 offsets[1] = {0};
+    bind_vertex_buffers(&vertex_buffer, 1, 0, strides, offsets);
+    bind_index_buffer(index_buffer, 0);
+
+    issue_draw_call(num_vertices, num_indices);
+}
+
+void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color, Render_Options options, bool draw_transparency) {
     Foreach (mesh, meshes) {
         if (mesh->has_material) {
             if (mesh->material.has_transparency != draw_transparency) {
@@ -158,18 +183,7 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
             flush_pbr_material(renderer_state.pbr_material_cbuffer_handle, mesh->material, options);
         }
 
-        Model_CBuffer model_cbuffer = {};
-        model_cbuffer.model_matrix = construct_model_matrix(position, scale, orientation);
-
-        update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
-        bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
-
-        u32 strides[1] = {sizeof(Vertex)};
-        u32 offsets[1] = {0};
-        bind_vertex_buffers(&mesh->vertex_buffer, 1, 0, strides, offsets);
-        bind_index_buffer(mesh->index_buffer, 0);
-
-        issue_draw_call(mesh->num_vertices, mesh->num_indices);
+        draw_mesh(mesh->vertex_buffer, mesh->index_buffer, mesh->num_vertices, mesh->num_indices, position, scale, orientation, color);
     }
 }
 
@@ -187,16 +201,7 @@ void ff_flush(Fixed_Function *ff) {
     }
 
     update_buffer(ff->vertex_buffer, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
-    u32 strides[1] = { sizeof(ff->vertices[0]) };
-    u32 offsets[1] = { 0 };
-    bind_vertex_buffers(&ff->vertex_buffer, 1, 0, strides, offsets);
-
-    Model_CBuffer model_cbuffer = {};
-    model_cbuffer.model_matrix = construct_model_matrix(v3(0, 0, 0), v3(1, 1, 1), quaternion_identity());
-    update_buffer(renderer_state.model_cbuffer_handle, &model_cbuffer, sizeof(Model_CBuffer));
-    bind_constant_buffers(&renderer_state.model_cbuffer_handle, 1, CBS_MODEL);
-
-    issue_draw_call(ff->num_vertices, 0);
+    draw_mesh(ff->vertex_buffer, nullptr, ff->num_vertices, 0, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1));
     ff->num_vertices = 0;
 }
 

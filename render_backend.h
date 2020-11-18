@@ -194,7 +194,8 @@ Texture create_texture(Texture_Description desc);
 void    destroy_texture(Texture texture);
 void    bind_texture(Texture texture, int slot);
 void    unbind_all_textures();
-void    copy_texture(Texture *dst, Texture *src);
+void    copy_texture(Texture dst, Texture src);
+void    set_cubemap_textures(Texture texture, byte *face_pixel_data[6]);
 
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer);
 void unset_render_targets();

@@ -32,8 +32,8 @@ cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
 PS_INPUT main(VS_INPUT input) {
     matrix mvp = mul(projection_matrix, mul(view_matrix, model_matrix));
     PS_INPUT v;
-    v.position = mul(mvp, float4(input.position, 1.0));
-    v.texcoord = input.texcoord;
+    v.position = mul(mvp, float4(input.position, 1.0)).xyww;
+    v.texcoord = normalize(input.position);
     v.color = input.color;
     v.world_position = mul(model_matrix, float4(input.position, 1.0)).xyz;
 

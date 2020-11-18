@@ -1,14 +1,14 @@
 SamplerState main_sampler;
 
-Texture2D albedo_map    : register(t0);
-Texture2D normal_map    : register(t1);
-Texture2D metallic_map  : register(t2);
-Texture2D roughness_map : register(t3);
-Texture2D emission_map  : register(t4);
-Texture2D ao_map        : register(t5);
-Texture2D shadow_map    : register(t6);
-
-Texture3D camera_box    : register(t7);
+Texture2D   albedo_map    : register(t0);
+Texture2D   normal_map    : register(t1);
+Texture2D   metallic_map  : register(t2);
+Texture2D   roughness_map : register(t3);
+Texture2D   emission_map  : register(t4);
+Texture2D   ao_map        : register(t5);
+Texture2D   shadow_map    : register(t6);
+Texture3D   camera_box    : register(t7);
+TextureCube skybox_map    : register(t8);
 
 struct PS_INPUT {
     float4 position         : SV_POSITION;
@@ -34,6 +34,7 @@ cbuffer CBUFFER_PASS : register(b0) { // :PassCBufferSlot
 
 cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
+    float4 model_color;
 };
 
 cbuffer CBUFFER_MATERIAL : register(b2) { // :MaterialCBufferSlot
@@ -62,6 +63,8 @@ cbuffer CBUFFER_LIGHTING : register(b3) { // :LightingCBufferSlot
     float fog_y_level;
     float fog_density;
     float3 fog_base_color;
+    int has_skybox_map;
+    float4 skybox_color;
 };
 
 #define PI 3.14159265359
@@ -210,6 +213,8 @@ PS_OUTPUT main(PS_INPUT input) {
     if (has_albedo_map) {
         output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
     }
+    output_color.rgb *= model_color.rgb;
+
 
     float3 albedo = output_color.rgb;
 
@@ -233,6 +238,17 @@ PS_OUTPUT main(PS_INPUT input) {
     if (length(sun_direction) > 0) {
         float shadow = calculate_shadow(shadow_map, sun_transform, input.world_position, N);
         output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, -sun_direction, sun_color, 1) * (1.0f - shadow);
+    }
+
+    if (has_skybox_map) {
+        float3 reflected_direction = normalize(reflect(-direction_to_camera, N));
+        float4 skybox_sample_color = skybox_map.Sample(main_sampler, reflected_direction) * skybox_color;
+        output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, reflected_direction, skybox_sample_color.rgb, 0);
+    }
+
+    if (has_emission_map) {
+        float4 emission_sample = emission_map.Sample(main_sampler, input.texcoord.xy);
+        output_color.rgb += emission_sample.rgb;
     }
 
     float total_density = 0;

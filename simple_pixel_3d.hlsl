@@ -21,6 +21,7 @@ cbuffer CBUFFER_PASS : register(b0) { // :PassCBufferSlot
 
 cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
+    float4 model_color;
 };
 
 cbuffer CBUFFER_MATERIAL : register(b2) { // :MaterialCBufferSlot
@@ -32,9 +33,5 @@ float4 main(PS_INPUT input) : SV_Target {
     if (has_albedo_map) {
         output_color = albedo_map.Sample(main_sampler, input.texcoord);
     }
-    output_color *= input.color;
-    if (output_color.a > 1.1) {
-        output_color = float4(1, 0, 1, 1);
-    }
-    return output_color;
+    return output_color * input.color * model_color;
 }

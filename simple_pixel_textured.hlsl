@@ -21,17 +21,10 @@ cbuffer CBUFFER_PASS : register(b0) { // :PassCBufferSlot
 
 cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
-};
-
-cbuffer CBUFFER_MATERIAL : register(b2) { // :MaterialCBufferSlot
-    int has_albedo_map;
+    float4 model_color;
 };
 
 float4 main(PS_INPUT input) : SV_Target {
-    float4 output_color = float4(1, 1, 1, 1);
-    if (has_albedo_map) {
-        output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
-    }
-    output_color *= input.color;
-    return output_color;
+    float4 output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
+    return output_color * input.color * model_color;
 }

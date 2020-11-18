@@ -19,6 +19,7 @@ cbuffer CBUFFER_PASS : register(b0) { // :PassCBufferSlot
 
 cbuffer CBUFFER_MODEL : register(b1) { // :ModelCBufferSlot
     matrix model_matrix;
+    float4 model_color;
 };
 
 float4 main(PS_INPUT input) : SV_Target {
