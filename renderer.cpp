@@ -16,21 +16,19 @@ struct Renderer_State {
 Renderer_State renderer_state;
 
 void init_renderer(Window *window) {
-    // Make vertex format
-    Vertex_Field fields[] = {
-        {"SV_POSITION", "position",  offsetof(Vertex, position),  VFT_FLOAT3, VFST_PER_VERTEX},
-        {"TEXCOORD",    "tex_coord", offsetof(Vertex, tex_coord), VFT_FLOAT3, VFST_PER_VERTEX},
-        {"COLOR",       "color",     offsetof(Vertex, color),     VFT_FLOAT4, VFST_PER_VERTEX},
-    };
-    renderer_state.pass_cbuffer_handle            = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
-    renderer_state.model_cbuffer_handle           = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
-    renderer_state.pbr_material_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
+    renderer_state.pass_cbuffer_handle         = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
+    renderer_state.model_cbuffer_handle        = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
+    renderer_state.pbr_material_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
 }
 
 Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
     int width;
     int height;
     byte *color_data = load_texture_data_from_file(filename, &width, &height);
+    if (!color_data) {
+        printf("create_texture_from_file() couldn't find file: %s\n", filename);
+        return {};
+    }
     defer(delete_texture_data(color_data));
 
     Texture_Description texture_description = {};
@@ -47,6 +45,11 @@ Texture create_texture_from_file(char *filename, Texture_Format format, Texture_
 byte *load_texture_data_from_file(char *filename, int *width, int *height) {
     int filedata_len;
     char *filedata = read_entire_file(filename, &filedata_len);
+    if (!filedata) {
+        printf("load_texture_data_from_file() couldn't find file: %s\n", filename);
+        return {};
+    }
+    assert(filedata != nullptr);
     defer(free(filedata));
     // stbi_set_flip_vertically_on_load(1);
     int n;
@@ -62,6 +65,10 @@ void delete_texture_data(byte *data) {
 Font load_font_from_file(char *filename, float size) {
     int ttf_data_len;
     unsigned char *ttf_data = (unsigned char *)read_entire_file(filename, &ttf_data_len);
+    if (!ttf_data) {
+        printf("load_font_from_file() couldn't find file: %s\n", filename);
+        return {};
+    }
     defer(free(ttf_data));
 
     Font font = {};
@@ -179,12 +186,23 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
             if (mesh->material.has_transparency != draw_transparency) {
                 continue;
             }
-
             flush_pbr_material(renderer_state.pbr_material_cbuffer_handle, mesh->material, options);
         }
-
         draw_mesh(mesh->vertex_buffer, mesh->index_buffer, mesh->num_vertices, mesh->num_indices, position, scale, orientation, color);
     }
+}
+
+void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override) {
+    Vertex ffverts[6];
+    Fixed_Function ff = {};
+    ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+    bind_texture(texture, 0);
+    Vector3 uvs[2] = {
+        v3(0, 1, z_override),
+        v3(1, 0, z_override),
+    };
+    ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
+    ff_end(&ff);
 }
 
 void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {
@@ -238,13 +256,12 @@ void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector
         uvs[0] = uv_overrides[0];
         uvs[1] = uv_overrides[1];
     }
-    // note(josh): only uv_overrides[0].z is used for the z value
-    ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(min.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, max.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[1].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[1].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(min.x, min.y, 0)); if (uv_overrides) { ff_tex_coord(ff, v3(uv_overrides[0].x, uv_overrides[0].y, uv_overrides[0].z)); } ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(min.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[0].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(min.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[1].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(max.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[1].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(max.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[1].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(max.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[0].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(min.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[0].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
 }
 
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size) {

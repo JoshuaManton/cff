@@ -50,14 +50,27 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
             vertex.position.y = mesh->mVertices[i].y;
             vertex.position.z = mesh->mVertices[i].z;
 
+            if (mesh->HasVertexColors(0)) {
+                vertex.color.x = (float)mesh->mColors[0][i].r;
+                vertex.color.y = (float)mesh->mColors[0][i].g;
+                vertex.color.z = (float)mesh->mColors[0][i].b;
+                vertex.color.w = (float)mesh->mColors[0][i].a;
+            }
+            else {
+                vertex.color.x = 1;
+                vertex.color.y = 1;
+                vertex.color.z = 1;
+                vertex.color.w = 1;
+            }
+
             // todo(josh): vertex colors
 
-            if (mesh->mTextureCoords[0]) {
+            if (mesh->HasTextureCoords(0)) {
                 vertex.tex_coord.x = (float)mesh->mTextureCoords[0][i].x;
                 vertex.tex_coord.y = (float)mesh->mTextureCoords[0][i].y;
             }
 
-            if (mesh->mNormals) {
+            if (mesh->HasNormals()) {
                 vertex.normal.x = (float)mesh->mNormals[i].x;
                 vertex.normal.y = (float)mesh->mNormals[i].y;
                 vertex.normal.z = (float)mesh->mNormals[i].z;
@@ -119,7 +132,7 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
                     char *cstr = ((aiString *)property->mData)->data;
                     String_Builder path_sb = make_string_builder(default_allocator());
                     defer(destroy_string_builder(path_sb));
-                    path_sb.print("sponza/");
+                    // path_sb.print("sponza/");
                     path_sb.print(cstr);
                     switch (property->mSemantic) {
                         // todo(josh): there is probably a material parameter for the wrap mode ???

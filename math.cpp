@@ -8,10 +8,24 @@ f32 to_degrees    (f32 radians) { return radians * DEG_PER_RAD; }
 f64 to_degrees_f64(f64 radians) { return radians * DEG_PER_RAD; }
 
 Vector2 v2(float x, float y) {
-    Vector2 v;
-    v.x = x;
-    v.y = y;
-    return v;
+    Vector2 result;
+    result.x = x;
+    result.y = y;
+    return result;
+}
+
+Vector2 v2(Vector3 v) {
+    Vector2 result;
+    result.x = v.x;
+    result.y = v.y;
+    return result;
+}
+
+Vector2 v2(Vector4 v) {
+    Vector2 result;
+    result.x = v.x;
+    result.y = v.y;
+    return result;
 }
 
 float dot(Vector2 a, Vector2 b) {
@@ -78,11 +92,27 @@ Vector2 operator /=(Vector2 &a, Vector2 b) {
 
 
 Vector3 v3(float x, float y, float z) {
-    Vector3 v;
-    v.x = x;
-    v.y = y;
-    v.z = z;
-    return v;
+    Vector3 result;
+    result.x = x;
+    result.y = y;
+    result.z = z;
+    return result;
+}
+
+Vector3 v3(Vector2 v) {
+    Vector3 result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = 0;
+    return result;
+}
+
+Vector3 v3(Vector4 v) {
+    Vector3 result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = v.z;
+    return result;
 }
 
 float dot(Vector3 a, Vector3 b) {
@@ -153,12 +183,30 @@ Vector3 operator /=(Vector3 &a, Vector3 b) {
 
 
 Vector4 v4(float x, float y, float z, float w) {
-    Vector4 v;
-    v.x = x;
-    v.y = y;
-    v.z = z;
-    v.w = w;
-    return v;
+    Vector4 result;
+    result.x = x;
+    result.y = y;
+    result.z = z;
+    result.w = w;
+    return result;
+}
+
+Vector4 v4(Vector2 v) {
+    Vector4 result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = 0;
+    result.w = 0;
+    return result;
+}
+
+Vector4 v4(Vector3 v) {
+    Vector4 result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = v.z;
+    result.w = 0;
+    return result;
 }
 
 float dot(Vector4 a, Vector4 b) {
@@ -249,6 +297,15 @@ Quaternion operator +(Quaternion a, Quaternion b) {
 }
 Quaternion operator +=(Quaternion &a, Quaternion b) {
     return (a = a + b);
+}
+
+Quaternion operator -(Quaternion a) {
+    Quaternion result;
+    result.x = -a.x;
+    result.y = -a.y;
+    result.z = -a.z;
+    result.w = -a.w;
+    return result;
 }
 
 Quaternion operator -(Quaternion a, Quaternion b) {
@@ -364,12 +421,82 @@ Quaternion slerp(Quaternion a, Quaternion b, float t) {
     return result;
 }
 
+Quaternion quaternion_difference(Quaternion a, Quaternion b) {
+    if (dot(a, b) < 0) {
+        return inverse(a) * -b;
+    }
+    else {
+        return inverse(a) * b;
+    }
+}
+
 Vector3 quaternion_right  (Quaternion q) { return q * v3(1, 0, 0); }
 Vector3 quaternion_up     (Quaternion q) { return q * v3(0, 1, 0); }
 Vector3 quaternion_forward(Quaternion q) { return q * v3(0, 0, 1); }
 Vector3 quaternion_left   (Quaternion q) { return -quaternion_right(q);   }
 Vector3 quaternion_down   (Quaternion q) { return -quaternion_up(q);      }
 Vector3 quaternion_back   (Quaternion q) { return -quaternion_forward(q); }
+
+
+
+Matrix3 m3_identity() {
+    Matrix3 m = {};
+    m.elements[0][0] = 1.0f;
+    m.elements[1][1] = 1.0f;
+    m.elements[2][2] = 1.0f;
+    return m;
+}
+
+Matrix3 m3(Vector3 columns[3]) {
+    Matrix3 m;
+    m[0] = columns[0];
+    m[1] = columns[1];
+    m[2] = columns[2];
+    return m;
+}
+
+Matrix3 operator *(Matrix3 a, Matrix3 b) {
+    Matrix3 result;
+    for(int column = 0; column < 3; column++) {
+        for(int row = 0; row < 3; row++) {
+            float sum = 0;
+            for(int vector = 0; vector < 3; vector++) {
+                sum += a[vector][row] * b[column][vector];
+            }
+            result[column][row] = sum;
+        }
+    }
+    return result;
+}
+
+Vector3 operator *(Matrix3 a, Vector3 v) {
+    Vector3 result;
+    for(int row = 0; row < 3; row++) {
+        float sum = 0;
+        for(int column = 0; column < 3; column++) {
+            sum += a[column][row] * v[column];
+        }
+        result[row] = sum;
+    }
+    return result;
+}
+
+Matrix3 operator *(Matrix3 a, float f) {
+    Matrix3 result;
+    for(int column = 0; column < 3; column++) {
+        for(int row = 0; row < 3; row++) {
+            result[column][row] = a[column][row] * f;
+        }
+    }
+    return result;
+}
+
+float matrix3_determinant(Matrix3 m) {
+    float a = +m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]);
+    float b = -m[1][0] * (m[0][1] * m[2][2] - m[2][1] * m[0][2]);
+    float c = +m[2][0] * (m[0][1] * m[1][2] - m[1][1] * m[0][2]);
+    return a + b + c;
+}
 
 
 
@@ -471,7 +598,7 @@ Matrix4 construct_scale_matrix(Vector3 v) {
     return result;
 }
 
-Matrix4 transpose_matrix(Matrix4 a) {
+Matrix4 transpose(Matrix4 a) {
     Matrix4 result;
     for (int j = 0; j < 4; j++) {
         for (int i = 0; i < 4; i++) {
@@ -538,6 +665,79 @@ Matrix4 look_at(Vector3 eye, Vector3 center, Vector3 up) {
 
     Matrix4 result = m4(columns);
     return result;
+}
+
+Matrix4 inverse(Matrix4 m) {
+    return transpose(matrix4_inverse_transpose(m));
+}
+
+float matrix4_minor(Matrix4 m, int c, int r) {
+    Matrix3 cut_down = {};
+    for (int i = 0; i < 3; i++) {
+        int col;
+        if (i < c) {
+            col = i;
+        }
+        else {
+            col = i+1;
+        }
+        for (int j = 0; j < 3; j++) {
+            int row;
+            if (j < r) {
+                row = j;
+            }
+            else {
+                row = j+1;
+            }
+            cut_down[i][j] = m[col][row];
+        }
+    }
+    return matrix3_determinant(cut_down);
+}
+
+float matrix4_cofactor(Matrix4 m, int c, int r) {
+    float minor = matrix4_minor(m, c, r);
+    if (((c + r) % 2) == 0) {
+        return minor;
+    }
+    else {
+        return -minor;
+    }
+}
+
+Matrix4 matrix4_adjoint(Matrix4 m) {
+    Matrix4 adjoint = {};
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            adjoint[i][j] = matrix4_cofactor(m, i, j);
+        }
+    }
+    return adjoint;
+}
+
+float matrix4_determinant(Matrix4 m) {
+    Matrix4 adjoint = matrix4_adjoint(m);
+    float determinant = 0;
+    for (int i = 0; i < 4; i++) {
+        determinant += m[i][0] * adjoint[i][0];
+    }
+    return determinant;
+}
+
+Matrix4 matrix4_inverse_transpose(Matrix4 m) {
+    Matrix4 adjoint = matrix4_adjoint(m);
+    float determinant = 0;
+    for (int i = 0; i < 4; i++) {
+        determinant += m[i][0] * adjoint[i][0];
+    }
+    float inv_determinant = 1.0 / determinant;
+    Matrix4 inverse_transpose = {};
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            inverse_transpose[i][j] = adjoint[i][j] * inv_determinant;
+        }
+    }
+    return inverse_transpose;
 }
 
 
@@ -654,3 +854,4 @@ Matrix4 construct_trs_matrix(Vector3 t, Quaternion r, Vector3 s) {
     Matrix4 scale = construct_scale_matrix(s);
     return translation * (rotation * scale);
 }
+

@@ -31,7 +31,7 @@ static DirectX directx;
 static DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
 
 ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format, bool msaa) {
-    assert(format != TF_INVALID);
+    ASSERT(format != TF_INVALID);
     D3D11_RENDER_TARGET_VIEW_DESC render_target_view_desc = {};
     render_target_view_desc.Format        = dx_texture_format_mapping[format];
     if (msaa) {
@@ -42,13 +42,13 @@ ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_te
     }
     ID3D11RenderTargetView *render_target_view = {};
     auto result = directx.device->CreateRenderTargetView(backing_texture, &render_target_view_desc, &render_target_view);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     return render_target_view;
 }
 
 ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_texture, Texture_Format format, bool msaa) {
-    assert(format != TF_INVALID);
-    assert(texture_format_infos[format].is_depth_format);
+    ASSERT(format != TF_INVALID);
+    ASSERT(texture_format_infos[format].is_depth_format);
     D3D11_DEPTH_STENCIL_VIEW_DESC depth_stencil_view_desc = {};
     depth_stencil_view_desc.Format = dx_texture_format_mapping[format];
     if (msaa) {
@@ -59,7 +59,7 @@ ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_te
     }
     ID3D11DepthStencilView *depth_stencil_view = {};
     auto result = directx.device->CreateDepthStencilView((ID3D11Resource *)backing_texture, nullptr, &depth_stencil_view);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     return depth_stencil_view;
 }
 
@@ -80,7 +80,7 @@ void init_graphics_driver(Window *window) {
         if (dx_texture_format_mapping[i] == 0) {
             if ((Texture_Format)i != TF_INVALID && (Texture_Format)i != TF_COUNT) {
                 printf("Missing dx texture format mapping for %d\n", i);
-                assert(false);
+                ASSERT(false);
             }
         }
     }
@@ -120,7 +120,7 @@ void init_graphics_driver(Window *window) {
         &directx.device_context);
 
     // todo(josh): if the hardware device fails, try making a WARP device
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     Texture_Description depth_texture_desc = {};
     depth_texture_desc.type = TT_2D;
@@ -138,7 +138,7 @@ void init_graphics_driver(Window *window) {
     no_cull_rasterizer_desc.DepthClipEnable = false;
     no_cull_rasterizer_desc.MultisampleEnable = true; // todo(josh): can I just have multisample enabled on all rasterizers?
     result = directx.device->CreateRasterizerState(&no_cull_rasterizer_desc, &directx.no_cull_rasterizer);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // Make backface cull rasterizer
     D3D11_RASTERIZER_DESC backface_cull_rasterizer_desc = {};
@@ -147,7 +147,7 @@ void init_graphics_driver(Window *window) {
     backface_cull_rasterizer_desc.DepthClipEnable = true;
     backface_cull_rasterizer_desc.MultisampleEnable = true; // todo(josh): can I just have multisample enabled on all rasterizers?
     result = directx.device->CreateRasterizerState(&backface_cull_rasterizer_desc, &directx.backface_cull_rasterizer);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // Depth test state
     D3D11_DEPTH_STENCIL_DESC depth_test_stencil_desc = {};
@@ -166,14 +166,15 @@ void init_graphics_driver(Window *window) {
     depth_test_stencil_desc.BackFace.StencilPassOp       = D3D11_STENCIL_OP_KEEP;
     depth_test_stencil_desc.BackFace.StencilFailOp       = D3D11_STENCIL_OP_KEEP;
     result = directx.device->CreateDepthStencilState(&depth_test_stencil_desc, &directx.depth_test_state);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // No depth test state
+    // todo(josh): should we disable stencil here?
     D3D11_DEPTH_STENCIL_DESC no_depth_test_stencil_desc = depth_test_stencil_desc;
     no_depth_test_stencil_desc.DepthEnable = false;
     no_depth_test_stencil_desc.DepthFunc   = D3D11_COMPARISON_ALWAYS;
     result = directx.device->CreateDepthStencilState(&no_depth_test_stencil_desc, &directx.no_depth_test_state);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // linear wrap sampler
     D3D11_SAMPLER_DESC linear_wrap_sampler_desc = {};
@@ -184,7 +185,7 @@ void init_graphics_driver(Window *window) {
     linear_wrap_sampler_desc.MinLOD = -FLT_MAX;
     linear_wrap_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&linear_wrap_sampler_desc, &directx.linear_wrap_sampler);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // linear clamp sampler
     D3D11_SAMPLER_DESC linear_clamp_sampler_desc = {};
@@ -195,7 +196,7 @@ void init_graphics_driver(Window *window) {
     linear_clamp_sampler_desc.MinLOD = -FLT_MAX;
     linear_clamp_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&linear_clamp_sampler_desc, &directx.linear_clamp_sampler);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // point wrap sampler
     D3D11_SAMPLER_DESC point_wrap_sampler_desc = {};
@@ -206,7 +207,7 @@ void init_graphics_driver(Window *window) {
     point_wrap_sampler_desc.MinLOD = -FLT_MAX;
     point_wrap_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&point_wrap_sampler_desc, &directx.point_wrap_sampler);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // point clamp sampler
     D3D11_SAMPLER_DESC point_clamp_sampler_desc = {};
@@ -217,7 +218,7 @@ void init_graphics_driver(Window *window) {
     point_clamp_sampler_desc.MinLOD = -FLT_MAX;
     point_clamp_sampler_desc.MaxLOD = FLT_MAX;
     result = directx.device->CreateSamplerState(&point_clamp_sampler_desc, &directx.point_clamp_sampler);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // alpha blend state
     D3D11_BLEND_DESC alpha_blend_desc = {};
@@ -231,25 +232,76 @@ void init_graphics_driver(Window *window) {
     alpha_blend_desc.RenderTarget[0].BlendOpAlpha   = D3D11_BLEND_OP_ADD;
     alpha_blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     result = directx.device->CreateBlendState(&alpha_blend_desc, &directx.alpha_blend_state);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
 
     // no alpha blend state
     D3D11_BLEND_DESC no_blend_desc = {};
     no_blend_desc.RenderTarget[0].BlendEnable    = false;
     no_blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     result = directx.device->CreateBlendState(&no_blend_desc, &directx.no_alpha_blend_state);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
+}
+
+void set_viewport(int x, int y, int width, int height) {
+    D3D11_VIEWPORT viewport = {};
+    viewport.TopLeftX = 0;
+    viewport.TopLeftY = 0;
+    viewport.Width = width;
+    viewport.Height = height;
+    viewport.MinDepth = 0;
+    viewport.MaxDepth = 1;
+    directx.device_context->RSSetViewports(1, &viewport);
+}
+
+void set_depth_test(bool enabled) {
+    if (enabled) {
+        directx.device_context->OMSetDepthStencilState(directx.depth_test_state, 0);
+    }
+    else {
+        directx.device_context->OMSetDepthStencilState(directx.no_depth_test_state, 0);
+    }
+}
+
+void set_backface_cull(bool enabled) {
+    if (enabled) {
+        directx.device_context->RSSetState(directx.backface_cull_rasterizer);
+    }
+    else {
+        directx.device_context->RSSetState(directx.no_cull_rasterizer);
+    }
+}
+
+void set_primitive_topology(Primitive_Topology pt) {
+    switch (pt) {
+        case PT_TRIANGLE_LIST:  directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);  break;
+        case PT_TRIANGLE_STRIP: directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP); break;
+        case PT_LINE_LIST:      directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);      break;
+        case PT_LINE_STRIP:     directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);     break;
+        default: {
+            ASSERTF(false, "Unknown Primitive_Topology: %d\n", pt);
+        }
+    }
+}
+
+void set_alpha_blend(bool enabled) {
+    float blend_factor[4] = {1, 1, 1, 1};
+    if (enabled) {
+        directx.device_context->OMSetBlendState(directx.alpha_blend_state, blend_factor, 0xffffffff);
+    }
+    else {
+        directx.device_context->OMSetBlendState(directx.no_alpha_blend_state, blend_factor, 0xffffffff);
+    }
 }
 
 void ensure_swap_chain_size(int width, int height) {
-    assert(width != 0);
-    assert(height != 0);
+    ASSERT(width != 0);
+    ASSERT(height != 0);
 
     if (directx.swap_chain_width != width || directx.swap_chain_height != height) {
         printf("Resizing swap chain %dx%d...\n", width, height);
 
         auto result = directx.swap_chain_handle->ResizeBuffers(SWAP_CHAIN_BUFFER_COUNT, (u32)width, (u32)height, dx_texture_format_mapping[SWAP_CHAIN_FORMAT], 0);
-        assert(result == S_OK);
+        ASSERT(result == S_OK);
         directx.swap_chain_width  = width;
         directx.swap_chain_height = height;
 
@@ -272,14 +324,14 @@ DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
         case VFT_FLOAT3: return DXGI_FORMAT_R32G32B32_FLOAT;
         case VFT_FLOAT4: return DXGI_FORMAT_R32G32B32A32_FLOAT;
         default: {
-            assert(false && "unknown format");
-            return (DXGI_FORMAT)0;
+            ASSERTF(false, "Unknown vertex format type: %d", vft);
+            return DXGI_FORMAT_UNKNOWN;
         }
     }
 }
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader) {
-    assert(num_fields <= RB_MAX_VERTEX_FIELDS && "Too many vertex fields. You can override the max vertex fields by defining RB_MAX_VERTEX_FIELDS before including render_backend.h");
+    ASSERTF(num_fields <= RB_MAX_VERTEX_FIELDS, "Too many vertex fields: %d vs %d. You can override the max vertex fields by defining RB_MAX_VERTEX_FIELDS before including render_backend.h", num_fields, RB_MAX_VERTEX_FIELDS);
     D3D11_INPUT_ELEMENT_DESC input_elements[RB_MAX_VERTEX_FIELDS] = {};
     for (int idx = 0; idx < num_fields; idx++) {
         D3D11_INPUT_ELEMENT_DESC *desc = &input_elements[idx];
@@ -294,8 +346,7 @@ Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_
             case VFST_PER_VERTEX:   buffer_slot = 0; step_rate = 0; step_type = D3D11_INPUT_PER_VERTEX_DATA;   break;
             case VFST_PER_INSTANCE: buffer_slot = 1; step_rate = 1; step_type = D3D11_INPUT_PER_INSTANCE_DATA; break;
             default: {
-                printf("%d\n", field->step_type);
-                assert(false && "unknown step type");
+                ASSERTF(false, "Unknown step type: %d\n", field->step_type);
             }
         }
 
@@ -309,7 +360,7 @@ Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_
 
     Vertex_Format vertex_format = {};
     auto result = directx.device->CreateInputLayout(input_elements, num_fields, shader.blob->GetBufferPointer(), shader.blob->GetBufferSize(), &vertex_format);
-    assert(result == S_OK);
+    ASSERTF(result == S_OK, "Failed to create input layout");
     return vertex_format;
 }
 
@@ -326,7 +377,7 @@ Buffer create_buffer(Buffer_Type type, void *data, int len) {
         case BT_INDEX:    { buffer_desc.BindFlags = D3D11_BIND_INDEX_BUFFER;    break; }
         case BT_CONSTANT: { buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER; break; }
         default: {
-            assert(false && "unknown buffer type");
+            ASSERTF(false, "Unknown buffer type: %d", type);
         }
     }
 
@@ -334,7 +385,7 @@ Buffer create_buffer(Buffer_Type type, void *data, int len) {
     buffer_data.pSysMem = data;
     Buffer buffer = {};
     auto result = directx.device->CreateBuffer(&buffer_desc, data == nullptr ? nullptr : &buffer_data, &buffer);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     return buffer;
 }
 
@@ -364,16 +415,16 @@ void destroy_buffer(Buffer buffer) {
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *vertex_shader_blob = {};
-    auto result = D3DCompileFromFile(filename, 0, 0, "main", "vs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &vertex_shader_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &vertex_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
-        assert(false);
+        ASSERT(false);
     }
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     ID3D11VertexShader *vertex_shader_handle = {};
     result = directx.device->CreateVertexShader(vertex_shader_blob->GetBufferPointer(), vertex_shader_blob->GetBufferSize(), nullptr, &vertex_shader_handle);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     if (errors) errors->Release();
     Vertex_Shader vertex_shader = {};
     vertex_shader.handle = vertex_shader_handle;
@@ -384,16 +435,16 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh)
 Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *pixel_shader_blob = {};
-    auto result = D3DCompileFromFile(filename, 0, 0, "main", "ps_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &pixel_shader_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &pixel_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
-        assert(false);
+        ASSERT(false);
     }
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     ID3D11PixelShader *pixel_shader = {};
     result = directx.device->CreatePixelShader(pixel_shader_blob->GetBufferPointer(), pixel_shader_blob->GetBufferSize(), nullptr, &pixel_shader);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     if (errors) errors->Release();
     pixel_shader_blob->Release();
     return pixel_shader;
@@ -407,16 +458,16 @@ void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
 Compute_Shader compile_compute_shader_from_file(wchar_t *filename) {
     ID3D10Blob *errors = {};
     ID3D10Blob *compute_blob = {};
-    auto result = D3DCompileFromFile(filename, 0, 0, "main", "cs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &compute_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "cs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &compute_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
-        assert(false);
+        ASSERT(false);
     }
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     ID3D11ComputeShader *compute_shader = {};
     result = directx.device->CreateComputeShader(compute_blob->GetBufferPointer(), compute_blob->GetBufferSize(), nullptr, &compute_shader);
-    assert(result == S_OK);
+    ASSERT(result == S_OK);
     if (errors) errors->Release();
     compute_blob->Release();
     return compute_shader;
@@ -427,7 +478,7 @@ void bind_compute_shader(Compute_Shader shader) {
 }
 
 ID3D11UnorderedAccessView *dx_create_unordered_access_view(Texture texture) {
-    assert(texture.description.uav);
+    ASSERT(texture.description.uav);
     ID3D11UnorderedAccessView * uav = {};
     switch (texture.description.type) {
         case TT_2D: {
@@ -435,7 +486,7 @@ ID3D11UnorderedAccessView *dx_create_unordered_access_view(Texture texture) {
             uav_desc.Format = DXGI_FORMAT_UNKNOWN;
             uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
             auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_2d, &uav_desc, &uav);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
             break;
         }
         case TT_3D: {
@@ -444,29 +495,29 @@ ID3D11UnorderedAccessView *dx_create_unordered_access_view(Texture texture) {
             uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
             uav_desc.Texture3D.WSize = (u32)texture.description.depth;
             auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_3d, &uav_desc, &uav);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
             break;
         }
         case TT_CUBEMAP: {
-            assert(false && "unimplemented");
+            ASSERT(false && "unimplemented");
             // D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
             // uav_desc.Format = DXGI_FORMAT_UNKNOWN;
             // uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURECUBE;
             // uav_desc.Texture3D.WSize = (u32)texture.description.depth;
             // auto result = directx.device->CreateUnorderedAccessView(texture.backend.handle_3d, &uav_desc, &uav);
-            // assert(result == S_OK);
+            // ASSERT(result == S_OK);
             break;
         }
         default: {
-            assert(false);
+            ASSERT(false);
         }
     }
-    assert(uav != nullptr);
+    ASSERT(uav != nullptr);
     return uav;
 }
 
 void bind_compute_uav(Texture texture, int slot) {
-    assert(slot < ARRAYSIZE(directx.cur_uavs));
+    ASSERT(slot < ARRAYSIZE(directx.cur_uavs));
     if (directx.cur_uavs[slot]) {
         directx.cur_uavs[slot]->Release();
         directx.cur_uavs[slot] = {};
@@ -517,8 +568,8 @@ void issue_draw_call(int vertex_count, int index_count, int instance_count) {
 
 Texture create_texture(Texture_Description desc) {
     // todo(josh): check for max texture size?
-    assert(desc.width > 0);
-    assert(desc.height > 0);
+    ASSERT(desc.width > 0);
+    ASSERT(desc.height > 0);
 
     if (desc.type == TT_INVALID) {
         desc.type = TT_2D;
@@ -540,7 +591,7 @@ Texture create_texture(Texture_Description desc) {
         desc.mipmap_count = 1;
     }
 
-    assert(desc.mipmap_count <= 1 && "mipmaps are not supported yet");
+    ASSERT(desc.mipmap_count <= 1 && "mipmaps are not supported yet");
 
     DXGI_FORMAT texture_format = dx_texture_format_mapping[desc.format];
 
@@ -585,16 +636,16 @@ Texture create_texture(Texture_Description desc) {
             };
 
             auto result = directx.device->CreateTexture2D(&texture_desc, desc.color_data == nullptr ? nullptr : &subresource_data[0], &texture_handle_2d);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
 
             if (desc.sample_count > 1) {
-                assert(desc.render_target);
-                assert(!desc.uav);
+                ASSERT(desc.render_target);
+                ASSERT(!desc.uav);
                 D3D11_TEXTURE2D_DESC msaa_texture_desc = texture_desc;
                 msaa_texture_desc.SampleDesc.Count = desc.sample_count;
                 msaa_texture_desc.SampleDesc.Quality = D3D11_STANDARD_MULTISAMPLE_PATTERN;
                 result = directx.device->CreateTexture2D(&msaa_texture_desc, nullptr, &msaa_handle_2d);
-                assert(result == S_OK);
+                ASSERT(result == S_OK);
             }
 
             break;
@@ -633,7 +684,7 @@ Texture create_texture(Texture_Description desc) {
             };
 
             auto result = directx.device->CreateTexture3D(&texture_desc, desc.color_data == nullptr ? nullptr : &subresource_data[0], &texture_handle_3d);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
 
             break;
         }
@@ -673,16 +724,16 @@ Texture create_texture(Texture_Description desc) {
             };
 
             auto result = directx.device->CreateTexture2D(&texture_desc, desc.color_data == nullptr ? nullptr : &subresource_data[0], &texture_handle_2d);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
 
             if (desc.sample_count > 1) {
-                assert(desc.render_target);
-                assert(!desc.uav);
+                ASSERT(desc.render_target);
+                ASSERT(!desc.uav);
                 D3D11_TEXTURE2D_DESC msaa_texture_desc = texture_desc;
                 msaa_texture_desc.SampleDesc.Count = desc.sample_count;
                 msaa_texture_desc.SampleDesc.Quality = D3D11_STANDARD_MULTISAMPLE_PATTERN;
                 result = directx.device->CreateTexture2D(&msaa_texture_desc, nullptr, &msaa_handle_2d);
-                assert(result == S_OK);
+                ASSERT(result == S_OK);
             }
 
             break;
@@ -719,7 +770,7 @@ void destroy_texture(Texture texture) {
 }
 
 void set_cubemap_textures(Texture texture, byte *face_pixel_data[6]) {
-    assert(texture.description.type == TT_CUBEMAP);
+    ASSERT(texture.description.type == TT_CUBEMAP);
 
     u32 num_channels = (u32)texture_format_infos[texture.description.format].num_channels;
     for (int idx = 0; idx < 6; idx++) {
@@ -731,7 +782,7 @@ void set_cubemap_textures(Texture texture, byte *face_pixel_data[6]) {
 }
 
 ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
-    assert(!texture_format_infos[texture.description.format].is_depth_format);
+    ASSERT(!texture_format_infos[texture.description.format].is_depth_format);
     ID3D11ShaderResourceView *shader_resource_view = {};
     switch (texture.description.type) {
         case TT_2D: {
@@ -740,7 +791,7 @@ ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
             texture_shader_resource_desc.Texture2D.MipLevels = texture.description.mipmap_count;
             texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
             auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_2d, &texture_shader_resource_desc, &shader_resource_view);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
             break;
         }
         case TT_3D: {
@@ -749,7 +800,7 @@ ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
             texture_shader_resource_desc.Texture3D.MipLevels = texture.description.mipmap_count;
             texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
             auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_3d, &texture_shader_resource_desc, &shader_resource_view);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
             break;
         }
         case TT_CUBEMAP: {
@@ -758,19 +809,19 @@ ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
             texture_shader_resource_desc.TextureCube.MipLevels = texture.description.mipmap_count;
             texture_shader_resource_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
             auto result = directx.device->CreateShaderResourceView((ID3D11Resource *)texture.backend.handle_2d, &texture_shader_resource_desc, &shader_resource_view);
-            assert(result == S_OK);
+            ASSERT(result == S_OK);
             break;
         }
         default: {
-            assert(false);
+            ASSERT(false);
         }
     }
-    assert(shader_resource_view != nullptr);
+    ASSERT(shader_resource_view != nullptr);
     return shader_resource_view;
 }
 
 void bind_texture(Texture texture, int slot) {
-    assert(slot < RB_MAX_BOUND_TEXTURES);
+    ASSERT(slot < RB_MAX_BOUND_TEXTURES);
     if (directx.cur_srvs[slot]) {
         directx.cur_srvs[slot]->Release();
         directx.cur_srvs[slot] = {};
@@ -784,7 +835,7 @@ void bind_texture(Texture texture, int slot) {
             case TWM_POINT_WRAP:   directx.device_context->PSSetSamplers(0, 1, &directx.point_wrap_sampler);   break;
             case TWM_POINT_CLAMP:  directx.device_context->PSSetSamplers(0, 1, &directx.point_clamp_sampler);  break;
             default: {
-                assert(false && "No wrap mode specified for texture.");
+                ASSERT(false && "No wrap mode specified for texture.");
             }
         }
     }
@@ -802,9 +853,9 @@ void unbind_all_textures() {
 }
 
 void copy_texture(Texture dst, Texture src) {
-    assert(false && "unimplemented");
+    ASSERT(false && "unimplemented");
     // if (src.description.sample_count > 1) {
-    //     assert(dst.description.format == src.description.format);
+    //     ASSERT(dst.description.format == src.description.format);
     //     directx.device_context->ResolveSubresource((ID3D11Resource *)dst.handle, 0, (ID3D11Resource *)src.handle, 0, dx_texture_format_mapping[dst.description.format]);
     // }
     // else {
@@ -813,7 +864,7 @@ void copy_texture(Texture dst, Texture src) {
 }
 
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
-    assert(num_color_buffers <= RB_MAX_COLOR_BUFFERS);
+    ASSERT(num_color_buffers <= RB_MAX_COLOR_BUFFERS);
 
     unset_render_targets();
 
@@ -822,9 +873,9 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
     if (num_color_buffers > 0) {
         for (int i = 0; i < num_color_buffers; i++) {
             Texture color_buffer = color_buffers[i];
-            assert(directx.cur_rtvs[i] == nullptr);
-            assert(color_buffer.description.type == TT_2D);
-            assert(color_buffer.description.render_target);
+            ASSERT(directx.cur_rtvs[i] == nullptr);
+            ASSERT(color_buffer.description.type == TT_2D);
+            ASSERT(color_buffer.description.render_target);
 
             directx.current_render_targets[i] = color_buffer;
             if (viewport_width == 0) {
@@ -833,7 +884,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
             }
             bool msaa = color_buffer.description.sample_count > 1;
             if (msaa) {
-                assert(color_buffer.backend.handle_msaa_2d != nullptr);
+                ASSERT(color_buffer.backend.handle_msaa_2d != nullptr);
             }
             directx.cur_rtvs[i] = dx_create_render_target_view(msaa ? color_buffer.backend.handle_msaa_2d : color_buffer.backend.handle_2d, color_buffer.description.format, msaa);
         }
@@ -843,8 +894,8 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
         viewport_height = directx.swap_chain_height;
         ID3D11Texture2D *back_buffer_texture = {};
         auto result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
-        assert(result == S_OK);
-        assert(directx.cur_rtvs[0] == nullptr);
+        ASSERT(result == S_OK);
+        ASSERT(directx.cur_rtvs[0] == nullptr);
         directx.cur_rtvs[0] = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT, false); // todo(josh): swap chain msaa
         back_buffer_texture->Release();
     }
@@ -853,17 +904,17 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
     if (depth_buffer_to_use == nullptr) {
         depth_buffer_to_use = &directx.swap_chain_depth_buffer;
     }
-    assert(directx.cur_dsv == nullptr);
-    assert(depth_buffer_to_use != nullptr);
-    assert(depth_buffer_to_use->description.type == TT_2D);
-    assert(depth_buffer_to_use->description.render_target);
+    ASSERT(directx.cur_dsv == nullptr);
+    ASSERT(depth_buffer_to_use != nullptr);
+    ASSERT(depth_buffer_to_use->description.type == TT_2D);
+    ASSERT(depth_buffer_to_use->description.render_target);
     bool depth_msaa = depth_buffer_to_use->description.sample_count > 1;
     directx.cur_dsv = dx_create_depth_stencil_view(depth_msaa ? depth_buffer_to_use->backend.handle_msaa_2d : depth_buffer_to_use->backend.handle_2d, depth_buffer_to_use->description.format, depth_msaa);
 
     directx.device_context->OMSetRenderTargets(RB_MAX_COLOR_BUFFERS, &directx.cur_rtvs[0], directx.cur_dsv);
 
-    assert(viewport_width  != 0);
-    assert(viewport_height != 0);
+    ASSERT(viewport_width  != 0);
+    ASSERT(viewport_height != 0);
     set_viewport(0, 0, viewport_width, viewport_height);
 }
 
@@ -873,8 +924,8 @@ void unset_render_targets() {
         if (directx.cur_rtvs[i] != nullptr) {
             Texture target = directx.current_render_targets[i];
             if (target.valid) {
-                assert(target.description.type == TT_2D);
-                assert(target.description.render_target);
+                ASSERT(target.description.type == TT_2D);
+                ASSERT(target.description.render_target);
                 if (target.backend.handle_msaa_2d != nullptr) {
                     directx.device_context->ResolveSubresource((ID3D11Resource *)target.backend.handle_2d, 0, (ID3D11Resource *)target.backend.handle_msaa_2d, 0, dx_texture_format_mapping[target.description.format]);
                 }
@@ -902,28 +953,6 @@ void clear_bound_render_targets(Vector4 color) {
     if (directx.cur_dsv != nullptr) {
         directx.device_context->ClearDepthStencilView(directx.cur_dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
     }
-}
-
-void set_viewport(int x, int y, int width, int height) {
-    D3D11_VIEWPORT viewport = {};
-    viewport.TopLeftX = 0;
-    viewport.TopLeftY = 0;
-    viewport.Width = width;
-    viewport.Height = height;
-    viewport.MinDepth = 0;
-    viewport.MaxDepth = 1;
-    directx.device_context->RSSetViewports(1, &viewport);
-}
-
-void prerender() {
-    directx.device_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    directx.device_context->PSSetSamplers(0, 1, &directx.linear_wrap_sampler);
-    directx.device_context->RSSetState(directx.no_cull_rasterizer);
-    directx.device_context->OMSetDepthStencilState(directx.depth_test_state, 0);
-
-    float blend_factor[4] = {0, 0, 0, 0};
-    u32 sample_mask = 0xffffffff;
-    directx.device_context->OMSetBlendState(directx.alpha_blend_state, blend_factor, sample_mask);
 }
 
 void present(bool vsync) {

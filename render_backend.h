@@ -152,7 +152,17 @@ enum Buffer_Type {
     BT_VERTEX,
     BT_INDEX,
     BT_CONSTANT,
+
     BT_COUNT,
+};
+
+enum Primitive_Topology {
+    PT_TRIANGLE_LIST,
+    PT_TRIANGLE_STRIP,
+    PT_LINE_LIST,
+    PT_LINE_STRIP,
+
+    PT_COUNT,
 };
 
 
@@ -166,6 +176,12 @@ void ensure_texture_size(Texture *texture, int width, int height);
 // the following are all defined by the specific graphics backend we are compiling with.
 
 void ensure_swap_chain_size(int width, int height);
+
+void set_viewport(int x, int y, int width, int height);
+void set_depth_test(bool enabled);
+void set_backface_cull(bool enabled);
+void set_primitive_topology(Primitive_Topology pt);
+void set_alpha_blend(bool enabled);
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader);
 void          destroy_vertex_format(Vertex_Format format);
@@ -201,8 +217,5 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
 void unset_render_targets();
 void clear_bound_render_targets(Vector4 color);
 
-void set_viewport(int x, int y, int width, int height);
-
-void prerender();
 void issue_draw_call(int vertex_count, int index_count, int instance_count = 0);
 void present(bool vsync);

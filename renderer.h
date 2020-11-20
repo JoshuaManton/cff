@@ -87,11 +87,9 @@ struct Lighting_CBuffer {
 
 #define CBS_PASS     0
 #define CBS_MODEL    1
-
 #define CBS_MATERIAL 2
 #define CBS_LIGHTING 3
-
-#define CBS_BLUR     2
+#define CBS_BLUR     4
 
 
 
@@ -146,6 +144,7 @@ void begin_render_pass(Render_Pass_Desc *pass);
 void end_render_pass();
 void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int num_indices, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color);
 void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color, Render_Options options, bool draw_transparency);
+void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override = 0);
 
 struct Fixed_Function {
     Vertex *vertices;

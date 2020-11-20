@@ -450,9 +450,9 @@ struct aiAnimMesh
      * from language bindings.
      */
     unsigned int mNumVertices;
-    
-    /** 
-     * Weight of the AnimMesh. 
+
+    /**
+     * Weight of the AnimMesh.
      */
     float mWeight;
 
@@ -711,8 +711,8 @@ struct aiMesh
      *  Note! Currently only works with Collada loader.*/
     C_STRUCT aiAnimMesh** mAnimMeshes;
 
-    /** 
-     *  Method of morphing when animeshes are specified. 
+    /**
+     *  Method of morphing when animeshes are specified.
      */
     unsigned int mMethod;
 
@@ -720,7 +720,7 @@ struct aiMesh
      *
      */
     C_STRUCT aiAABB mAABB;
-	
+
 #ifdef __cplusplus
 
     //! Default constructor. Initializes all members to 0

@@ -27,6 +27,14 @@ static_assert(sizeof(float) == 4, "float size was not 4");
 
 static_assert(sizeof(void *) == 8, "void * size was not 8");
 
+#ifndef ASSERT
+#define ASSERT(cond) { if (!(cond)) { printf("<%s:%d> Assertion failed: " #cond "\n", __FILE__, __LINE__); __debugbreak(); } }
+#endif
+
+#ifndef ASSERTF
+#define ASSERTF(cond, ...) { if (!(cond)) { printf("<%s:%d> Assertion failed: " #cond ". ", __FILE__, __LINE__); printf(__VA_ARGS__); __debugbreak(); } }
+#endif
+
 #ifndef ARRAYSIZE
 #define ARRAYSIZE(a) \
     ((sizeof(a) / sizeof(*(a))) / \

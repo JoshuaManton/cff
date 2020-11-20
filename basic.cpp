@@ -192,8 +192,8 @@ Allocator pool_allocator(Pool_Allocator *pool) {
 }
 
 void destroy_pool(Pool_Allocator pool) {
-    free(pool.backing_allocator, pool.memory);
-    free(pool.backing_allocator, pool.slots_freelist);
+    if (pool.memory) free(pool.backing_allocator, pool.memory);
+    if (pool.slots_freelist) free(pool.backing_allocator, pool.slots_freelist);
 }
 
 
@@ -202,8 +202,7 @@ void destroy_pool(Pool_Allocator pool) {
 char *read_entire_file(char *filename, int *len) {
     FILE *file = fopen(filename, "rb");
     if (file == nullptr) {
-        printf("read_entire_file couldn't find file: %s\n", filename);
-        assert(false);
+        return nullptr;
     }
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
