@@ -94,13 +94,14 @@ struct Pool_Allocator {
     int memory_size;
     int slot_size;
     int num_slots;
+    int *generations;
     int *slots_freelist;
     int freelist_count;
     Allocator backing_allocator;
 };
 
 void  init_pool_allocator(Pool_Allocator *pool, Allocator backing_allocator, int slot_size, int num_slots);
-void *pool_get(Pool_Allocator *pool);
+void *pool_get(Pool_Allocator *pool, int *out_generation, int *out_index);
 void  pool_return(Pool_Allocator *pool, void *ptr);
 int   pool_get_slot_index(Pool_Allocator *pool, void *ptr);
 void *pool_get_slot_by_index(Pool_Allocator *pool, int slot);
@@ -225,7 +226,7 @@ void Array<T>::destroy() {
 }
 
 template<typename T>
-void Array<T>:: clear() {
+void Array<T>::clear() {
     count = 0;
 }
 

@@ -10,15 +10,13 @@ struct Renderer_State {
     Render_Pass_Desc *current_render_pass;
     Buffer pass_cbuffer_handle;
     Buffer model_cbuffer_handle;
-    Buffer pbr_material_cbuffer_handle;
 };
 
 Renderer_State renderer_state;
 
 void init_renderer(Window *window) {
-    renderer_state.pass_cbuffer_handle         = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
-    renderer_state.model_cbuffer_handle        = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
-    renderer_state.pbr_material_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
+    renderer_state.pass_cbuffer_handle  = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
+    renderer_state.model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
 }
 
 Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
@@ -164,6 +162,11 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
     bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
 }
 
+Buffer create_pbr_material_cbuffer() {
+    Buffer buffer = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
+    return buffer;
+}
+
 void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int num_indices, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color) {
     Model_CBuffer model_cbuffer = {};
     model_cbuffer.model_matrix = construct_model_matrix(position, scale, orientation);
@@ -186,7 +189,8 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
             if (mesh->material.has_transparency != draw_transparency) {
                 continue;
             }
-            flush_pbr_material(renderer_state.pbr_material_cbuffer_handle, mesh->material, options);
+            ASSERT(mesh->material.cbuffer_handle);
+            flush_pbr_material(mesh->material.cbuffer_handle, mesh->material, options);
         }
         draw_mesh(mesh->vertex_buffer, mesh->index_buffer, mesh->num_vertices, mesh->num_indices, position, scale, orientation, color);
     }
@@ -203,6 +207,7 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override) {
     };
     ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
     ff_end(&ff);
+    bind_texture({}, 0);
 }
 
 void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {

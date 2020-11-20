@@ -123,6 +123,8 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
         bool has_material = false;
         if (scene->mNumMaterials > 0) {
             has_material = true;
+            assert(material.cbuffer_handle == nullptr);
+            material.cbuffer_handle = create_pbr_material_cbuffer();
             aiMaterial *assimp_material = scene->mMaterials[mesh->mMaterialIndex];
             assert(assimp_material != nullptr);
             for (int prop_index = 0; prop_index < assimp_material->mNumProperties; prop_index++) {

@@ -25,9 +25,11 @@ struct PBR_Material {
     float metallic;
     float roughness;
     bool has_transparency;
+    Buffer cbuffer_handle;
 };
 
 void flush_pbr_material(Buffer buffer, PBR_Material material);
+Buffer create_pbr_material_cbuffer();
 
 struct Loaded_Mesh {
     Buffer vertex_buffer;

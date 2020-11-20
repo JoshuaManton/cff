@@ -140,6 +140,7 @@ void init_pool_allocator(Pool_Allocator *pool, Allocator backing_allocator, int 
     pool->memory = (byte *)alloc(pool->backing_allocator, pool->memory_size);
     pool->slots_freelist = (int *)alloc(pool->backing_allocator, sizeof(int) * num_slots);
     pool->freelist_count = num_slots;
+    pool->generations = (int *)alloc(pool->backing_allocator, sizeof(int) * num_slots);
     int slot_idx = 0;
     for (int idx = num_slots-1; idx >= 0; idx -= 1) {
         pool->slots_freelist[idx] = slot_idx;
@@ -147,9 +148,16 @@ void init_pool_allocator(Pool_Allocator *pool, Allocator backing_allocator, int 
     }
 }
 
-void *pool_get(Pool_Allocator *pool) {
+void *pool_get(Pool_Allocator *pool, int *out_generation, int *out_index) {
     assert(pool->freelist_count > 0);
     int slot = pool->slots_freelist[pool->freelist_count-1];
+    pool->generations[slot] += 1;
+    if (out_index) {
+        *out_index = slot;
+    }
+    if (out_generation) {
+        *out_generation = pool->generations[slot];
+    }
     pool->freelist_count -= 1;
     return memset(&pool->memory[pool->slot_size * slot], 0, pool->slot_size);
 }
@@ -160,6 +168,7 @@ int pool_get_slot_index(Pool_Allocator *pool, void *ptr) {
 }
 
 void *pool_get_slot_by_index(Pool_Allocator *pool, int slot) {
+    BOUNDS_CHECK(slot, 0, pool->num_slots);
     void *ptr = pool->memory + (pool->slot_size * slot);
     return ptr;
 }
@@ -174,7 +183,7 @@ void pool_return(Pool_Allocator *pool, void *ptr) {
 void *pool_alloc(void *allocator, int size, int align) {
     Pool_Allocator *pool = (Pool_Allocator *)allocator;
     assert(pool != nullptr);
-    return pool_get(pool);
+    return pool_get(pool, nullptr, nullptr);
 }
 
 void pool_free(void *allocator, void *ptr) {

@@ -9,6 +9,7 @@
 #include "math.h"
 #include "render_backend.h"
 #include "renderer.h"
+#include "game.h"
 
 #ifdef DEVELOPER
 #include "assimp_loader.cpp"
@@ -18,7 +19,7 @@
 TODO:
 -draw commands
 -particle systems?
--set_depth_test(), set_backface_cull(), etc
+-dynamic exposure
 -instancing (do we support this already?)
 -depth sorting to reduce overdraw
 -transparency sorting to alpha blend properly
@@ -54,11 +55,6 @@ struct Blur_CBuffer {
 };
 
 #define BLOOM_BUFFER_DOWNSCALE 8.0
-
-struct Compute_VP_CBuffer {
-    Matrix4 view_matrix;
-    Matrix4 projection_matrix;
-};
 
 Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture ping_pong_depth_buffer, Vertex_Shader vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_pixel_textured_shader, Buffer blur_cbuffer_handle) {
     Render_Pass_Desc blur_pass = {};
@@ -98,66 +94,15 @@ Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture pi
     return last_render_target;
 }
 
-Vector3 unit_to_viewport(Vector3 a) {
-    Vector3 result = (a * 2) - Vector3{1, 1, 0};
-    return result;
-}
 
-Vector3 get_mouse_world_position(Matrix4 view, Matrix4 proj, Vector2 cursor_unit_position) {
-    Vector4 cursor_viewport_position = v4(unit_to_viewport(v3(cursor_unit_position)));
-    cursor_viewport_position.w = 1;
-
-    Matrix4 inv = inverse(proj * view);
-
-    Vector4 cursor_world_position4 = inv * cursor_viewport_position;
-    if (cursor_world_position4.w != 0) {
-        cursor_world_position4 /= cursor_world_position4.w;
-    }
-    return v3(cursor_world_position4);
-}
-
-// todo(josh): there should be a way to use the view matrix instead of having the camera_position parameter
-Vector3 get_mouse_direction_from_camera(Vector3 camera_position, Matrix4 view, Matrix4 proj, Vector2 cursor_unit_position) {
-    Vector3 cursor_world_position = get_mouse_world_position(view, proj, cursor_unit_position);
-    Vector3 cursor_direction = normalize(cursor_world_position - camera_position);
-    return cursor_direction;
-}
-
-struct Ship {
-    Vector3 position;
-    Vector3 target_position;
-    Vector3 velocity;
-    float top_speed;
-    Quaternion orientation;
-    Quaternion target_orientation;
-    float click_collision_radius;
-    bool player_controlled;
-};
-
-bool ray_plane(Vector3 plane_normal, Vector3 plane_offset, Vector3 ray_origin, Vector3 ray_direction, Vector3 *out_hit_position) {
-    float denom = dot(plane_normal, ray_direction);
-    if (denom != 0) {
-        Vector3 offset_to_plane = plane_offset - ray_origin;
-        float t = dot(offset_to_plane, plane_normal) / denom;
-        if (t >= 0) {
-            *out_hit_position = ray_origin + ray_direction * t;
-            return true;
-        }
-    }
-    return false;
-}
 
 void main() {
     init_platform();
-
-    Allocator global_allocator = default_allocator();
 
     Window main_window = create_window(1920, 1080);
 
     init_render_backend(&main_window);
     init_renderer(&main_window);
-
-    Compute_Shader test_compute_shader = compile_compute_shader_from_file(L"test_compute.hlsl");
 
     Texture_Description test_3d_texture_description = {};
     test_3d_texture_description.width  = 128;
@@ -296,7 +241,7 @@ void main() {
 
     Array<Loaded_Mesh> helmet_meshes = {};
     helmet_meshes.allocator = default_allocator();
-    load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
+    // load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
 
     Array<Loaded_Mesh> sponza_meshes = {};
     sponza_meshes.allocator = default_allocator();
@@ -306,6 +251,8 @@ void main() {
     ship_meshes.allocator = default_allocator();
     load_mesh_from_file("SM_Ship_Stealth_02.fbx", &ship_meshes);
     ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_meshes[0].material.metallic  = 1.0;
+    ship_meshes[0].material.roughness = 0.35;
 
     Texture shadow_map_color_buffer = {};
     Texture shadow_map_depth_buffer = {};
@@ -352,42 +299,27 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
-    Buffer compute_vp_cbuffer      = create_buffer(BT_CONSTANT, nullptr, sizeof(Compute_VP_CBuffer));
 
 
     bool freecam = false;
 
+    Loaded_Mesh cube_loaded_mesh = {};
+    cube_loaded_mesh.vertex_buffer = cube_vertex_buffer;
+    cube_loaded_mesh.num_vertices = ARRAYSIZE(cube_vertices);
+    cube_loaded_mesh.index_buffer = cube_index_buffer;
+    cube_loaded_mesh.num_indices = ARRAYSIZE(cube_indices);
+    cube_loaded_mesh.has_material = true;
+    cube_loaded_mesh.material.cbuffer_handle = create_pbr_material_cbuffer();
+    cube_loaded_mesh.material.ambient = 0.5;
+    cube_loaded_mesh.material.roughness = 0.3;
+    cube_loaded_mesh.material.metallic = 1;
+    Array<Loaded_Mesh> cube_model = make_array<Loaded_Mesh>(default_allocator());
+    cube_model.append(cube_loaded_mesh);
 
 
-    Array<Ship> ships = make_array<Ship>(default_allocator());
 
-    Ship ship1 = {};
-    ship1.orientation = quaternion_identity();
-    ship1.target_orientation = quaternion_identity();
-    ship1.top_speed = 1;
-    ship1.click_collision_radius = 1;
-    ship1.player_controlled = true;
-    ships.append(ship1);
-
-    Ship ship2 = {};
-    ship2.orientation = quaternion_identity();
-    ship2.target_orientation = quaternion_identity();
-    ship2.top_speed = 1;
-    ship2.click_collision_radius = 1;
-    ship2.player_controlled = true;
-    ships.append(ship2);
-
-    Ship ship3 = {};
-    ship3.orientation = quaternion_identity();
-    ship3.target_orientation = quaternion_identity();
-    ship3.top_speed = 1;
-    ship3.click_collision_radius = 1;
-    ships.append(ship3);
-
-    Ship *selected_ship = {};
-
-    Vector3 camera_position = {};
-    Quaternion camera_orientation = quaternion_identity();
+    Game_State game_state = {};
+    init_game_state(&game_state);
 
 
 
@@ -419,86 +351,7 @@ void main() {
         if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
         if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
 
-        if (get_input_down(&main_window, INPUT_F1)) {
-            freecam = !freecam;
-        }
-
-        if (freecam) {
-            const float CAMERA_SPEED_BASE = 5;
-            const float CAMERA_SPEED_FAST = 20;
-            const float CAMERA_SPEED_SLOW = 0.5;
-
-            float camera_speed = CAMERA_SPEED_BASE;
-                 if (get_input(&main_window, INPUT_SHIFT)) camera_speed = CAMERA_SPEED_FAST;
-            else if (get_input(&main_window, INPUT_ALT))   camera_speed = CAMERA_SPEED_SLOW;
-
-            if (get_input(&main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * camera_speed * dt;
-            if (get_input(&main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * camera_speed * dt;
-            if (get_input(&main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * camera_speed * dt;
-            if (get_input(&main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * camera_speed * dt;
-            if (get_input(&main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * camera_speed * dt;
-            if (get_input(&main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * camera_speed * dt;
-
-            if (get_input(&main_window, INPUT_MOUSE_RIGHT)) {
-                Vector2 delta = main_window.mouse_position_pixel_delta * 0.25f;
-                Vector3 rotate_vector = v3(-delta.y, delta.x, 0);
-
-                Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
-                Quaternion y = axis_angle(v3(0, 1, 0), to_radians(rotate_vector.y));
-                Quaternion z = axis_angle(v3(0, 0, 1), to_radians(rotate_vector.z));
-                Quaternion result = y * camera_orientation;
-                result = result * x;
-                result = result * z;
-                result = normalize(result);
-                camera_orientation = result;
-            }
-        }
-        else {
-            camera_position.y = 25;
-            const float GAME_CAMERA_SPEED = 10;
-            if (get_input(&main_window, INPUT_W)) camera_position.z += GAME_CAMERA_SPEED * dt;
-            if (get_input(&main_window, INPUT_A)) camera_position.x -= GAME_CAMERA_SPEED * dt;
-            if (get_input(&main_window, INPUT_S)) camera_position.z -= GAME_CAMERA_SPEED * dt;
-            if (get_input(&main_window, INPUT_D)) camera_position.x += GAME_CAMERA_SPEED * dt;
-
-            camera_orientation = quaternion_look_at(camera_position, v3(camera_position.x, 0, camera_position.z + 2), v3(0, 1, 0));
-        }
-
-        Matrix4 main_camera_view_matrix_this_frame = construct_view_matrix(camera_position, camera_orientation);
-        Matrix4 main_camera_proj_matrix_this_frame = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.001, 1000);
-        Vector3 mouse_dir = get_mouse_direction_from_camera(camera_position, main_camera_view_matrix_this_frame, main_camera_proj_matrix_this_frame, main_window.mouse_position_unit);
-
-        if (!freecam) {
-            Vector3 mouse_plane_pos = {};
-            if (ray_plane(v3(0, 1, 0), v3(0, 0, 0), camera_position, mouse_dir, &mouse_plane_pos)) {
-                if (get_input_down(&main_window, INPUT_MOUSE_RIGHT)) {
-                    if (selected_ship) {
-                        if (!get_input(&main_window, INPUT_SHIFT)) {
-                            selected_ship->target_position = mouse_plane_pos;
-                        }
-                        selected_ship->target_orientation = quaternion_look_at(selected_ship->position, mouse_plane_pos, v3(0, 1, 0));
-                    }
-                }
-                else if (get_input_down(&main_window, INPUT_MOUSE_LEFT)) {
-                    Foreach (ship, ships) {
-                        if (!ship->player_controlled) continue;
-
-                        if (length(mouse_plane_pos - ship->position) < ship->click_collision_radius) {
-                            selected_ship = ship;
-                        }
-                    }
-                }
-            }
-        }
-
-        Foreach (ship, ships) {
-            if (length(ship->position - ship->target_position) > 0.1) {
-                Vector3 dir_to_target = normalize(ship->target_position - ship->position);
-                ship->position += dir_to_target * 5 * dt;
-            }
-            Quaternion diff = quaternion_difference(ship->orientation, ship->target_orientation);
-            ship->orientation = slerp(ship->orientation, diff * ship->orientation, 10 * dt);
-        }
+        update_game(&game_state, dt, &main_window);
 
 
 
@@ -515,19 +368,36 @@ void main() {
 
 
         render_queue.clear();
-        Foreach (ship, ships) {
-            Draw_Command command = {};
-            command.meshes = ship_meshes;
-            command.position = ship->position;
-            command.scale = v3(0.0025, 0.0025, 0.0025);
-            command.orientation = ship->orientation;
-            if (ship->player_controlled) {
-                command.color = v4(1, 1, 1, 1);
+
+        For (idx, game_state.active_entities) {
+            Entity *entity = game_state.active_entities[idx];
+            switch (entity->kind) {
+                case ENTITY_SHIP: {
+                    Draw_Command command = {};
+                    command.meshes = ship_meshes;
+                    command.position = entity->position;
+                    command.scale = v3(0.0025, 0.0025, 0.0025);
+                    command.orientation = entity->orientation;
+                    if (entity->ship.player_controlled) {
+                        command.color = v4(1, 1, 1, 1);
+                    }
+                    else {
+                        command.color = v4(1, 0.25, 0.25, 1);
+                    }
+                    render_queue.append(command);
+                    break;
+                }
+                case ENTITY_PROJECTILE: {
+                    Draw_Command command = {};
+                    command.meshes = cube_model;
+                    command.position = entity->position;
+                    command.scale = v3(1, 1, 1);
+                    command.orientation = quaternion_identity();
+                    command.color = v4(1, 1, 1, 1);
+                    render_queue.append(command);
+                    break;
+                }
             }
-            else {
-                command.color = v4(1, 0.25, 0.25, 1);
-            }
-            render_queue.append(command);
         }
 
 
@@ -583,16 +453,6 @@ void main() {
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
-        Compute_VP_CBuffer vp_cbuffer = {};
-        vp_cbuffer.view_matrix = construct_trs_matrix(camera_position, camera_orientation, v3(1, 1, 1));
-        vp_cbuffer.projection_matrix = main_camera_proj_matrix_this_frame;
-        update_buffer(compute_vp_cbuffer, &vp_cbuffer, sizeof(Compute_VP_CBuffer));
-        bind_constant_buffers(&compute_vp_cbuffer, 1, 0);
-        bind_compute_shader(test_compute_shader);
-        bind_compute_uav(test_3d_texture, 0);
-        dispatch_compute(test_3d_texture.description.width, test_3d_texture.description.height, test_3d_texture.description.depth);
-        bind_compute_uav({}, 0);
-
         // draw scene to hdr buffer
         {
             Texture color_buffers[2] = {
@@ -605,9 +465,9 @@ void main() {
             bind_texture(shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
 
             Render_Pass_Desc scene_pass = {};
-            scene_pass.camera_position = camera_position;
-            scene_pass.camera_orientation = camera_orientation;
-            scene_pass.projection_matrix = main_camera_proj_matrix_this_frame;
+            scene_pass.camera_position = game_state.camera.position;
+            scene_pass.camera_orientation = game_state.camera.orientation;
+            scene_pass.projection_matrix = camera_projection_matrix(game_state.camera, &main_window);
 
             begin_render_pass(&scene_pass);
             bind_shaders(vertex_shader, pixel_shader);
@@ -624,7 +484,7 @@ void main() {
             bind_texture(skybox_texture, TS_PBR_ALBEDO);
 
             set_backface_cull(false);
-            draw_mesh(cube_vertex_buffer, cube_index_buffer, 24, 36, camera_position, v3(1, 1, 1), quaternion_identity(), v4(3, 3, 3, 1));
+            draw_mesh(cube_vertex_buffer, cube_index_buffer, 24, 36, game_state.camera.position, v3(1, 1, 1), quaternion_identity(), v4(3, 3, 3, 1));
             set_backface_cull(true);
 
             end_render_pass();
