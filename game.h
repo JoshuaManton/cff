@@ -37,11 +37,17 @@ struct Unit_Command {
 struct Weapon {
     Vector3 offset_from_ship_position;
     Vector3 facing_direction;
+    float range;
     float effective_angle;
     float cur_shot_cooldown;
     float shot_cooldown;
-    Vector4 missile_color;
+    Vector4 projectile_color;
     EntityID current_target_id;
+};
+
+struct Ship_Definition {
+    Weapon weapons[8];
+    int num_weapons;
 };
 
 struct Ship {
@@ -51,8 +57,7 @@ struct Ship {
     Quaternion target_orientation;
     float collision_radius;
     bool player_controlled;
-    Weapon weapons[8];
-    int num_weapons;
+    Ship_Definition definition;
     Unit_Command commands[16];
     int command_cursor;
     int num_commands;
@@ -61,6 +66,8 @@ struct Ship {
 struct Projectile {
     EntityID shooter_id;
     float time_to_live;
+    // todo(josh): model
+    Vector4 color;
 };
 
 enum Entity_Kind {

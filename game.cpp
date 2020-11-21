@@ -1,5 +1,16 @@
 #include "game.h"
 
+/*
+TODO:
+-crew members
+-ship stats
+-ship health
+-weapon stats
+-ship definitions
+-different kinds of weapon slots (lasers, turrets, etc)
+-ship abilities
+*/
+
 bool ray_plane(Vector3 plane_normal, Vector3 plane_offset, Vector3 ray_origin, Vector3 ray_direction, Vector3 *out_hit_position) {
     float denom = dot(plane_normal, ray_direction);
     if (denom != 0) {
@@ -45,21 +56,55 @@ void init_game_state(Game_State *game_state) {
     init_pool_allocator(&game_state->entities_pool, default_allocator(), sizeof(Entity), 1024); // todo(josh): @Leak
     game_state->active_entities = make_array<Entity *>(default_allocator(), 1024); // todo(josh): @Leak
 
+    Ship_Definition small_ship = {};
+    small_ship.weapons[0].facing_direction = v3(0, 0, 1);
+    small_ship.weapons[0].effective_angle = 10;
+    small_ship.weapons[0].shot_cooldown = 0.5;
+    small_ship.weapons[0].projectile_color = v4(100, 20, 20, 1);
+    small_ship.weapons[0].offset_from_ship_position = v3(-1, 0, 0);
+    small_ship.weapons[0].range = 10;
+    small_ship.weapons[1].facing_direction = v3(0, 0, 1);
+    small_ship.weapons[1].effective_angle = 10;
+    small_ship.weapons[1].shot_cooldown = 0.5;
+    small_ship.weapons[1].projectile_color = v4(100, 20, 20, 1);
+    small_ship.weapons[1].offset_from_ship_position = v3(1, 0, 0);
+    small_ship.weapons[1].range = 10;
+    small_ship.num_weapons = 2;
+
+    Ship_Definition big_ship = {};
+    big_ship.weapons[0].facing_direction = v3(1, 0, 0);
+    big_ship.weapons[0].effective_angle = 30;
+    big_ship.weapons[0].shot_cooldown = 1;
+    big_ship.weapons[0].projectile_color = v4(100, 20, 20, 1);
+    big_ship.weapons[0].offset_from_ship_position = v3(1, 0, 1);
+    big_ship.weapons[0].range = 15;
+    big_ship.weapons[1].facing_direction = v3(1, 0, 0);
+    big_ship.weapons[1].effective_angle = 30;
+    big_ship.weapons[1].shot_cooldown = 1;
+    big_ship.weapons[1].projectile_color = v4(100, 20, 20, 1);
+    big_ship.weapons[1].offset_from_ship_position = v3(1, 0, -1);
+    big_ship.weapons[1].range = 15;
+    big_ship.weapons[2].facing_direction = v3(-1, 0, 0);
+    big_ship.weapons[2].effective_angle = 30;
+    big_ship.weapons[2].shot_cooldown = 1;
+    big_ship.weapons[2].projectile_color = v4(100, 20, 20, 1);
+    big_ship.weapons[2].offset_from_ship_position = v3(-1, 0, 1);
+    big_ship.weapons[2].range = 15;
+    big_ship.weapons[3].facing_direction = v3(-1, 0, 0);
+    big_ship.weapons[3].effective_angle = 30;
+    big_ship.weapons[3].shot_cooldown = 1;
+    big_ship.weapons[3].projectile_color = v4(100, 20, 20, 1);
+    big_ship.weapons[3].offset_from_ship_position = v3(-1, 0, -1);
+    big_ship.weapons[3].range = 15;
+    big_ship.num_weapons = 4;
+
     Entity *ship1 = make_entity(game_state, ENTITY_SHIP);
     ship1->orientation = quaternion_identity();
     ship1->ship.target_orientation = quaternion_identity();
     ship1->ship.top_speed = 1;
     ship1->ship.collision_radius = 1;
     ship1->ship.player_controlled = true;
-    ship1->ship.weapons[0].facing_direction = v3(-1, 0, 0);
-    ship1->ship.weapons[0].effective_angle = 30;
-    ship1->ship.weapons[0].shot_cooldown = 2;
-    ship1->ship.weapons[0].missile_color = v4(1, 0, 0, 1);
-    ship1->ship.weapons[1].facing_direction = v3(1, 0, 0);
-    ship1->ship.weapons[1].effective_angle = 30;
-    ship1->ship.weapons[1].shot_cooldown = 2;
-    ship1->ship.weapons[1].missile_color = v4(1, 0, 0, 1);
-    ship1->ship.num_weapons = 2;
+    ship1->ship.definition = small_ship;
 
     Entity *ship2 = make_entity(game_state, ENTITY_SHIP);
     ship2->orientation = quaternion_identity();
@@ -67,6 +112,7 @@ void init_game_state(Game_State *game_state) {
     ship2->ship.top_speed = 1;
     ship2->ship.collision_radius = 1;
     ship2->ship.player_controlled = true;
+    ship2->ship.definition = big_ship;
 
     Entity *ship3 = make_entity(game_state, ENTITY_SHIP);
     ship3->orientation = quaternion_identity();
@@ -78,7 +124,13 @@ void init_game_state(Game_State *game_state) {
 bool target_is_valid(Entity *target, Entity *shooter, Weapon *weapon) {
     if (target->kind != ENTITY_SHIP) return false;
     if (target == shooter) return false;
-    Vector3 dir_to_ship = normalize(target->position - get_weapon_position(weapon, shooter));
+    Vector3 offset_to_ship = target->position - get_weapon_position(weapon, shooter);
+    float distance_to_ship = length(offset_to_ship);
+    if (distance_to_ship > weapon->range) {
+        return false;
+    }
+
+    Vector3 dir_to_ship = offset_to_ship / distance_to_ship;
     Vector3 weapon_direction = get_weapon_direction(weapon, shooter);
     float angle_between = to_degrees(acos(dot(get_weapon_direction(weapon, shooter), dir_to_ship) / (length(weapon_direction) * length(dir_to_ship))));
     if (fabsf(angle_between) <= weapon->effective_angle) {
@@ -167,6 +219,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
 
         Vector3 mouse_plane_pos = {};
         if (ray_plane(v3(0, 1, 0), v3(0, 0, 0), game_state->camera.position, mouse_dir, &mouse_plane_pos)) {
+            mouse_plane_pos.y = 0;
             if (get_input_down(window, INPUT_MOUSE_RIGHT)) {
                 Entity *selected_ship = get_entity(game_state, game_state->selected_ship);
                 if (selected_ship && (selected_ship->ship.num_commands < 16)) {
@@ -227,12 +280,12 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                                     Quaternion required_orientation = quaternion_look_at(entity->position, command->move.to, v3(0, 1, 0));
                                     if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
                                         Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
-                                        entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
+                                        entity->orientation = slerp(entity->orientation, normalize(diff * entity->orientation), 5 * dt);
                                         entity->orientation = normalize(entity->orientation);
                                     }
-                                    else {
-                                        Vector3 dir_to_target = normalize(command->move.to - entity->position);
-                                        entity->position += dir_to_target * 5 * dt;
+
+                                    if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) < 30) {
+                                        entity->position += quaternion_forward(entity->orientation) * 3 * dt;
                                     }
                                 }
                                 else {
@@ -244,7 +297,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                                 Quaternion required_orientation = quaternion_look_at(entity->position, command->rotate.position_to_rotate_towards, v3(0, 1, 0));
                                 if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
                                     Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
-                                    entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
+                                    entity->orientation = slerp(entity->orientation, normalize(diff * entity->orientation), 5 * dt);
                                     entity->orientation = normalize(entity->orientation);
                                 }
                                 else {
@@ -261,8 +314,8 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                     //     entity->orientation = normalize(entity->orientation);
                     // }
 
-                    for (int i = 0; i < entity->ship.num_weapons; i++) {
-                        Weapon *weapon = &entity->ship.weapons[i];
+                    for (int i = 0; i < entity->ship.definition.num_weapons; i++) {
+                        Weapon *weapon = &entity->ship.definition.weapons[i];
                         if (weapon->cur_shot_cooldown >= 0) {
                             weapon->cur_shot_cooldown -= dt;
                         }
@@ -287,10 +340,12 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                                 weapon->cur_shot_cooldown += weapon->shot_cooldown;
                                 ASSERT(target->kind == ENTITY_SHIP);
                                 Entity *projectile = make_entity(game_state, ENTITY_PROJECTILE);
-                                projectile->position = entity->position;
-                                projectile->velocity = normalize(target->position - entity->position) * 50;
+                                Vector3 weapon_position = get_weapon_position(weapon, entity);
+                                projectile->position = weapon_position;
+                                projectile->velocity = normalize(target->position - weapon_position) * 20;
                                 projectile->projectile.time_to_live = 5;
                                 projectile->projectile.shooter_id = entity->id;
+                                projectile->projectile.color = weapon->projectile_color;
                             }
                         }
                         else {

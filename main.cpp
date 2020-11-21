@@ -394,7 +394,7 @@ void main() {
                     command.position = entity->position;
                     command.scale = v3(1, 1, 1);
                     command.orientation = quaternion_identity();
-                    command.color = v4(1, 1, 1, 1);
+                    command.color = entity->projectile.color;
                     render_queue.append(command);
                     break;
                 }
@@ -482,19 +482,36 @@ void main() {
             For (idx, game_state.active_entities) {
                 Entity *entity = game_state.active_entities[idx];
                 if (entity->kind == ENTITY_SHIP) {
-                    for (int j = 0; j < entity->ship.num_weapons; j++) {
-                        Weapon *weapon = &entity->ship.weapons[j];
+                    for (int j = 0; j < entity->ship.definition.num_weapons; j++) {
+                        Weapon *weapon = &entity->ship.definition.weapons[j];
                         Entity *target = get_entity(&game_state, weapon->current_target_id);
 
                         Vector3 weapon_position = get_weapon_position(weapon, entity);
                         Vector3 weapon_direction = get_weapon_direction(weapon, entity);
 
-                        ff_vertex(&ff, weapon_position); ff_color(&ff, v4(0, 1, 0, 1));
-                        ff_vertex(&ff, weapon_position + weapon_direction * 5); ff_color(&ff, v4(0, 1, 0, 1));
+                        Vector3 min_direction = {};
+                        min_direction.x = weapon_direction.x * cos(to_radians(weapon->effective_angle)) - weapon_direction.z * sin(to_radians(weapon->effective_angle));
+                        min_direction.z = weapon_direction.x * sin(to_radians(weapon->effective_angle)) + weapon_direction.z * cos(to_radians(weapon->effective_angle));
+                        Vector3 max_direction = {};
+                        max_direction.x = weapon_direction.x * cos(to_radians(-weapon->effective_angle)) - weapon_direction.z * sin(to_radians(-weapon->effective_angle));
+                        max_direction.z = weapon_direction.x * sin(to_radians(-weapon->effective_angle)) + weapon_direction.z * cos(to_radians(-weapon->effective_angle));
+                        ff_line(&ff, weapon_position, weapon_position + min_direction * weapon->range, v4(0, 1, 0, 1));
+                        ff_line(&ff, weapon_position, weapon_position + max_direction * weapon->range, v4(0, 1, 0, 1));
+
+                        int last_theta = -weapon->effective_angle;
+                        for (int theta = last_theta + 1; theta <= weapon->effective_angle; theta += 1) {
+                            Vector3 last_direction = {};
+                            last_direction.x = weapon_direction.x * cos(to_radians((float)last_theta)) - weapon_direction.z * sin(to_radians((float)last_theta));
+                            last_direction.z = weapon_direction.x * sin(to_radians((float)last_theta)) + weapon_direction.z * cos(to_radians((float)last_theta));
+                            Vector3 direction = {};
+                            direction.x = weapon_direction.x * cos(to_radians((float)theta)) - weapon_direction.z * sin(to_radians((float)theta));
+                            direction.z = weapon_direction.x * sin(to_radians((float)theta)) + weapon_direction.z * cos(to_radians((float)theta));
+                            ff_line(&ff, weapon_position + last_direction * weapon->range, weapon_position + direction * weapon->range, v4(0, 1, 0, 1));
+                            last_theta = theta;
+                        }
 
                         if (target) {
-                            ff_vertex(&ff, entity->position); ff_color(&ff, v4(0, 1, 0, 1));
-                            ff_vertex(&ff, target->position); ff_color(&ff, v4(0, 1, 0, 1));
+                            ff_line(&ff, weapon_position, target->position, v4(0, 1, 0, 1));
                         }
                     }
 
@@ -504,8 +521,7 @@ void main() {
                         Unit_Command command = entity->ship.commands[command_idx];
                         switch (command.kind) {
                             case UNIT_MOVE_COMMAND: {
-                                ff_vertex(&ff, ship_position); ff_color(&ff, v4(0, 1, 0, 1));
-                                ff_vertex(&ff, command.move.to); ff_color(&ff, v4(0, 1, 0, 1));
+                                ff_line(&ff, ship_position, command.move.to, v4(0, 1, 0, 1));
                                 ship_position = command.move.to;
                                 break;
                             }

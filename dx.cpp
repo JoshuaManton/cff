@@ -412,10 +412,12 @@ void destroy_buffer(Buffer buffer) {
     buffer->Release();
 }
 
+#define D3D_SHADER_COMPILE_FLAGS (D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS)
+
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *vertex_shader_blob = {};
-    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &vertex_shader_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "vs_5_0", D3D_SHADER_COMPILE_FLAGS, 0, &vertex_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
@@ -435,7 +437,7 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh)
 Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
     ID3D10Blob *pixel_shader_blob = {};
-    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &pixel_shader_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "ps_5_0", D3D_SHADER_COMPILE_FLAGS, 0, &pixel_shader_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
@@ -458,7 +460,7 @@ void bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel) {
 Compute_Shader compile_compute_shader_from_file(wchar_t *filename) {
     ID3D10Blob *errors = {};
     ID3D10Blob *compute_blob = {};
-    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "cs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &compute_blob, &errors);
+    auto result = D3DCompileFromFile(filename, 0, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", "cs_5_0", D3D_SHADER_COMPILE_FLAGS, 0, &compute_blob, &errors);
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);

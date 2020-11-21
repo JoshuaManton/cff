@@ -423,10 +423,10 @@ Quaternion slerp(Quaternion a, Quaternion b, float t) {
 
 Quaternion quaternion_difference(Quaternion a, Quaternion b) {
     if (dot(a, b) < 0) {
-        return inverse(a) * -b;
+        return normalize(inverse(a) * -b);
     }
     else {
-        return inverse(a) * b;
+        return normalize(inverse(a) * b);
     }
 }
 
@@ -835,7 +835,7 @@ Quaternion matrix4_to_quaternion(Matrix4 m) {
 Quaternion quaternion_look_at(Vector3 eye, Vector3 center, Vector3 up) {
     // todo(josh): figure out why we have to swap center & eye, and why we need the inverse()
     Matrix4 m = look_at(center, eye, up);
-    return inverse(matrix4_to_quaternion(m));
+    return normalize(inverse(matrix4_to_quaternion(m)));
 }
 
 Matrix4 construct_view_matrix(Vector3 position, Quaternion orientation) {
