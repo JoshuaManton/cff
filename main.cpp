@@ -475,7 +475,10 @@ void main() {
 
             Fixed_Function ff = {};
             bind_shaders(vertex_shader, simple_pixel_shader);
-            ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+
+            Array<Vertex> ship_lines_vertices = make_array<Vertex>(default_allocator());
+            defer(ship_lines_vertices.destroy());
+            ff_begin(&ff, &ship_lines_vertices);
             For (idx, game_state.active_entities) {
                 Entity *entity = game_state.active_entities[idx];
                 if (entity->kind == ENTITY_SHIP) {
@@ -486,12 +489,38 @@ void main() {
                         Vector3 weapon_position = get_weapon_position(weapon, entity);
                         Vector3 weapon_direction = get_weapon_direction(weapon, entity);
 
-                        ff_vertex(&ff, weapon_position); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
-                        ff_vertex(&ff, weapon_position + weapon_direction * 5); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
+                        ff_vertex(&ff, weapon_position); ff_color(&ff, v4(0, 1, 0, 1));
+                        ff_vertex(&ff, weapon_position + weapon_direction * 5); ff_color(&ff, v4(0, 1, 0, 1));
 
                         if (target) {
-                            ff_vertex(&ff, entity->position); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
-                            ff_vertex(&ff, target->position); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
+                            ff_vertex(&ff, entity->position); ff_color(&ff, v4(0, 1, 0, 1));
+                            ff_vertex(&ff, target->position); ff_color(&ff, v4(0, 1, 0, 1));
+                        }
+                    }
+
+                    Vector3 ship_position = entity->position;
+                    for (int i = 0; i < entity->ship.num_commands; i++) {
+                        int command_idx = (entity->ship.command_cursor + i) % ARRAYSIZE(entity->ship.commands);
+                        Unit_Command command = entity->ship.commands[command_idx];
+                        switch (command.kind) {
+                            case UNIT_MOVE_COMMAND: {
+                                ff_vertex(&ff, ship_position); ff_color(&ff, v4(0, 1, 0, 1));
+                                ff_vertex(&ff, command.move.to); ff_color(&ff, v4(0, 1, 0, 1));
+                                ship_position = command.move.to;
+                                break;
+                            }
+                            case UNIT_ROTATE_COMMAND: {
+                                Vector3 dir_to_point = normalize(command.rotate.position_to_rotate_towards - ship_position);
+                                Vector3 left = cross(dir_to_point, v3(0, 1, 0));
+                                left *= 0.5; // make it a little smaller
+                                Vector3 arrow_start = ship_position + dir_to_point;
+                                ff_line(&ff, ship_position, arrow_start, v4(0, 1, 0, 1));
+                                ff_line(&ff, arrow_start, arrow_start + left, v4(0, 1, 0, 1));
+                                ff_line(&ff, arrow_start, arrow_start - left, v4(0, 1, 0, 1));
+                                ff_line(&ff, arrow_start + left, arrow_start + dir_to_point, v4(0, 1, 0, 1));
+                                ff_line(&ff, arrow_start - left, arrow_start + dir_to_point, v4(0, 1, 0, 1));
+                                break;
+                            }
                         }
                     }
                 }
@@ -547,7 +576,9 @@ void main() {
         draw_texture(test_3d_texture, v3(384, 0, 0), v3(512, 128, 0), z_3d);
 
         Fixed_Function ff = {};
-        ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+        Array<Vertex> text_vertices = make_array<Vertex>(default_allocator());
+        defer(text_vertices.destroy());
+        ff_begin(&ff, &text_vertices);
         bind_texture(roboto_mono.texture, 0);
         bind_shaders(vertex_shader, text_pixel_shader);
 

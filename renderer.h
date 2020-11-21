@@ -149,19 +149,18 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
 void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override = 0);
 
 struct Fixed_Function {
-    Vertex *vertices;
-    int max_vertices;
-    int num_vertices;
+    Array<Vertex> *array;
     Buffer vertex_buffer;
+    Vertex *current_vertex;
 };
 
-void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices);
+void ff_begin(Fixed_Function *ff, Array<Vertex> *array);
 void ff_flush(Fixed_Function *ff);
 void ff_end(Fixed_Function *ff);
 
 void ff_vertex(Fixed_Function *ff, Vector3 position);
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord);
 void ff_color(Fixed_Function *ff, Vector4 color);
-void ff_next(Fixed_Function *ff);
 void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2] = nullptr);
+void ff_line(Fixed_Function *ff, Vector3 a, Vector3 b, Vector4 color);
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size);

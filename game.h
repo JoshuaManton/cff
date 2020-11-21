@@ -11,6 +11,29 @@ struct Camera {
     float fov;
 };
 
+struct Move_Command {
+    Vector3 to;
+};
+
+struct Rotate_Command {
+    Vector3 position_to_rotate_towards;
+};
+
+enum Unit_Command_Kind {
+    UNIT_MOVE_COMMAND,
+    UNIT_ROTATE_COMMAND,
+
+    UNIT_COMMAND_COUNT,
+};
+
+struct Unit_Command {
+    Unit_Command_Kind kind;
+    union {
+        Move_Command move;
+        Rotate_Command rotate;
+    };
+};
+
 struct Weapon {
     Vector3 offset_from_ship_position;
     Vector3 facing_direction;
@@ -30,6 +53,9 @@ struct Ship {
     bool player_controlled;
     Weapon weapons[8];
     int num_weapons;
+    Unit_Command commands[16];
+    int command_cursor;
+    int num_commands;
 };
 
 struct Projectile {

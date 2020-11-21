@@ -165,12 +165,26 @@ void update_game(Game_State *game_state, float dt, Window *window) {
         if (ray_plane(v3(0, 1, 0), v3(0, 0, 0), game_state->camera.position, mouse_dir, &mouse_plane_pos)) {
             if (get_input_down(window, INPUT_MOUSE_RIGHT)) {
                 Entity *selected_ship = get_entity(game_state, game_state->selected_ship);
-                if (selected_ship) {
+                if (selected_ship && (selected_ship->ship.num_commands < 16)) {
                     ASSERT(selected_ship->kind == ENTITY_SHIP);
+                    Unit_Command *next_unit_command = &selected_ship->ship.commands[(selected_ship->ship.command_cursor + selected_ship->ship.num_commands) % ARRAYSIZE(selected_ship->ship.commands)];
+
                     if (!get_input(window, INPUT_SHIFT)) {
-                        selected_ship->ship.target_position = mouse_plane_pos;
+                        selected_ship->ship.command_cursor = (selected_ship->ship.command_cursor + selected_ship->ship.num_commands) % ARRAYSIZE(selected_ship->ship.commands);
+                        selected_ship->ship.num_commands = 0;
                     }
-                    selected_ship->ship.target_orientation = quaternion_look_at(selected_ship->position, mouse_plane_pos, v3(0, 1, 0));
+
+                    if (get_input(window, INPUT_CONTROL)) {
+                        next_unit_command->kind = UNIT_ROTATE_COMMAND;
+                        next_unit_command->rotate.position_to_rotate_towards = mouse_plane_pos;
+                        selected_ship->ship.num_commands += 1;
+                        // selected_ship->ship.target_orientation = quaternion_look_at(selected_ship->position, mouse_plane_pos, v3(0, 1, 0));
+                    }
+                    else {
+                        next_unit_command->kind = UNIT_MOVE_COMMAND;
+                        next_unit_command->move.to = mouse_plane_pos;
+                        selected_ship->ship.num_commands += 1;
+                    }
                 }
             }
             else if (get_input_down(window, INPUT_MOUSE_LEFT)) {
@@ -199,16 +213,48 @@ void update_game(Game_State *game_state, float dt, Window *window) {
         entity->position += entity->velocity * dt;
         switch (entity->kind) {
             case ENTITY_SHIP: {
-                if (length(entity->position - entity->ship.target_position) > 0.1) {
-                    Vector3 dir_to_target = normalize(entity->ship.target_position - entity->position);
-                    entity->position += dir_to_target * 5 * dt;
+                if (entity->ship.num_commands > 0) {
+                    Unit_Command *command = &entity->ship.commands[entity->ship.command_cursor];
+                    #define COMPLETE_COMMAND { entity->ship.num_commands -= 1; entity->ship.command_cursor = (entity->ship.command_cursor + 1) % ARRAYSIZE(entity->ship.commands); }
+                    switch (command->kind) {
+                        case UNIT_MOVE_COMMAND: {
+                            if (length(entity->position - command->move.to) > 0.1) {
+                                Quaternion required_orientation = quaternion_look_at(entity->position, command->move.to, v3(0, 1, 0));
+                                if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
+                                    Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
+                                    entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
+                                    entity->orientation = normalize(entity->orientation);
+                                }
+                                else {
+                                    Vector3 dir_to_target = normalize(command->move.to - entity->position);
+                                    entity->position += dir_to_target * 5 * dt;
+                                }
+                            }
+                            else {
+                                COMPLETE_COMMAND;
+                            }
+                            break;
+                        }
+                        case UNIT_ROTATE_COMMAND: {
+                            Quaternion required_orientation = quaternion_look_at(entity->position, command->rotate.position_to_rotate_towards, v3(0, 1, 0));
+                            if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
+                                Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
+                                entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
+                                entity->orientation = normalize(entity->orientation);
+                            }
+                            else {
+                                COMPLETE_COMMAND;
+                            }
+                            break;
+                        }
+                    }
                 }
 
-                if (to_degrees(angle_between_quaternions(entity->orientation, entity->ship.target_orientation)) > 0.01) {
-                    Quaternion diff = quaternion_difference(entity->orientation, entity->ship.target_orientation);
-                    entity->orientation = slerp(entity->orientation, diff * entity->orientation, 10 * dt);
-                    entity->orientation = normalize(entity->orientation);
-                }
+                // if (to_degrees(angle_between_quaternions(entity->orientation, entity->ship.target_orientation)) > 0.01) {
+                //     Quaternion diff = quaternion_difference(entity->orientation, entity->ship.target_orientation);
+                //     entity->orientation = slerp(entity->orientation, diff * entity->orientation, 10 * dt);
+                //     entity->orientation = normalize(entity->orientation);
+                // }
 
                 for (int i = 0; i < entity->ship.num_weapons; i++) {
                     Weapon *weapon = &entity->ship.weapons[i];
@@ -249,6 +295,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
             }
             case ENTITY_PROJECTILE: {
                 entity->projectile.time_to_live -= dt;
+
                 if (entity->projectile.time_to_live <= 0) {
                     destroy_entity(entity);
                 }

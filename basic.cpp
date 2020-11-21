@@ -101,6 +101,21 @@ byte *buffer_allocate(byte *buffer, int buffer_len, int *offset, int size, int a
 
 
 
+void *null_allocator_alloc(void *allocator, int size, int align) {
+    ASSERTF(false, "Tried to allocate with the null allocator");
+    return nullptr;
+}
+
+void null_allocator_free(void *allocator, void *ptr) {
+}
+
+Allocator null_allocator() {
+    Allocator a = {};
+    return a;
+}
+
+
+
 void init_arena(Arena *arena, byte *backing, int backing_size) {
     arena->memory = backing;
     arena->memory_size = backing_size;
@@ -227,9 +242,9 @@ char *read_entire_file(char *filename, int *len) {
 
 
 
-String_Builder make_string_builder(Allocator allocator) {
+String_Builder make_string_builder(Allocator allocator, int capacity) {
     String_Builder sb = {};
-    sb.buf = make_array<char>(allocator);
+    sb.buf = make_array<char>(allocator, capacity);
     return sb;
 }
 
@@ -241,6 +256,7 @@ void String_Builder::print(char *str) {
     for (char *s = str; *s != '\0'; s++) {
         buf.append(*s);
     }
+    buf.reserve(buf.count+1);
     BOUNDS_CHECK(buf.count, 0, buf.capacity);
     buf.data[buf.count] = 0;
 }

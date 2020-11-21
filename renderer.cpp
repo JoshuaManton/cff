@@ -198,8 +198,9 @@ void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Qua
 
 void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override) {
     Vertex ffverts[6];
+    Array<Vertex> arr = make_array<Vertex>(ffverts, ARRAYSIZE(ffverts));
     Fixed_Function ff = {};
-    ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+    ff_begin(&ff, &arr);
     bind_texture(texture, 0);
     Vector3 uvs[2] = {
         v3(0, 1, z_override),
@@ -210,46 +211,40 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override) {
     bind_texture({}, 0);
 }
 
-void ff_begin(Fixed_Function *ff, Vertex *buffer, int max_vertices) {
-    ff->num_vertices = 0;
-    ff->vertices = buffer;
-    ff->max_vertices = max_vertices;
-    ff->vertex_buffer = create_buffer(BT_VERTEX, nullptr, sizeof(ff->vertices[0]) * max_vertices);
+void ff_begin(Fixed_Function *ff, Array<Vertex> *array) {
+    ff->array = array;
 }
 
 void ff_flush(Fixed_Function *ff) {
-    assert(ff->num_vertices <= ff->max_vertices);
-    if (ff->num_vertices == 0) {
+    if (ff->array->count == 0) {
         return;
     }
 
-    update_buffer(ff->vertex_buffer, ff->vertices, sizeof(ff->vertices[0]) * ff->num_vertices);
-    draw_mesh(ff->vertex_buffer, nullptr, ff->num_vertices, 0, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1));
-    ff->num_vertices = 0;
+    Buffer vertex_buffer = create_buffer(BT_VERTEX, ff->array->data, sizeof((*ff->array)[0]) * ff->array->count);
+    draw_mesh(vertex_buffer, nullptr, ff->array->count, 0, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1));
+    destroy_buffer(vertex_buffer);
+    ff->array->clear();
+    ff->current_vertex = nullptr;
 }
 
 void ff_end(Fixed_Function *ff) {
     ff_flush(ff);
-    destroy_buffer(ff->vertex_buffer);
 }
 
 void ff_vertex(Fixed_Function *ff, Vector3 position) {
-    assert(ff->num_vertices < ff->max_vertices);
-    ff->vertices[ff->num_vertices].position = v3(position.x, position.y, position.z);
+    Vertex v = {};
+    v.position = position;
+    ff->current_vertex = ff->array->append(v);
 }
 
 void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord) {
-    assert(ff->num_vertices < ff->max_vertices);
-    ff->vertices[ff->num_vertices].tex_coord = tex_coord;
+    ASSERT(ff->current_vertex != nullptr);
+    ff->current_vertex->tex_coord = tex_coord;
 }
 
 void ff_color(Fixed_Function *ff, Vector4 color) {
-    assert(ff->num_vertices < ff->max_vertices);
-    ff->vertices[ff->num_vertices].color = color;
-}
-
-void ff_next(Fixed_Function *ff) {
-    ff->num_vertices += 1;
+    ASSERT(ff->current_vertex != nullptr);
+    ff->current_vertex->color = color;
 }
 
 void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2]) {
@@ -261,12 +256,17 @@ void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector
         uvs[0] = uv_overrides[0];
         uvs[1] = uv_overrides[1];
     }
-    ff_vertex(ff, v3(min.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[0].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(min.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[1].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[1].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[1].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(max.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[0].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
-    ff_vertex(ff, v3(min.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[0].y, uvs[0].z)); ff_color(ff, color); ff_next(ff);
+    ff_vertex(ff, v3(min.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[0].y, uvs[0].z)); ff_color(ff, color);
+    ff_vertex(ff, v3(min.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[1].y, uvs[0].z)); ff_color(ff, color);
+    ff_vertex(ff, v3(max.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[1].y, uvs[0].z)); ff_color(ff, color);
+    ff_vertex(ff, v3(max.x, max.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[1].y, uvs[0].z)); ff_color(ff, color);
+    ff_vertex(ff, v3(max.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[1].x, uvs[0].y, uvs[0].z)); ff_color(ff, color);
+    ff_vertex(ff, v3(min.x, min.y, 0)); ff_tex_coord(ff, v3(uvs[0].x, uvs[0].y, uvs[0].z)); ff_color(ff, color);
+}
+
+void ff_line(Fixed_Function *ff, Vector3 a, Vector3 b, Vector4 color) {
+    ff_vertex(ff, a); ff_color(ff, v4(0, 1, 0, 1));
+    ff_vertex(ff, b); ff_color(ff, v4(0, 1, 0, 1));
 }
 
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size) {

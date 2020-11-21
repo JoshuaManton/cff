@@ -75,6 +75,10 @@ Allocator default_allocator();
 
 
 
+Allocator null_allocator();
+
+
+
 struct Arena {
     byte *memory;
     int memory_size;
@@ -176,9 +180,17 @@ Array<T> make_array(Allocator allocator, int capacity = 16) {
 }
 
 template<typename T>
+Array<T> make_array(T *buffer, int capacity) {
+    Array<T> array = {};
+    array.allocator = null_allocator();
+    array.data = buffer;
+    array.capacity = capacity;
+    return array;
+}
+
+template<typename T>
 T *Array<T>::append(T element) {
-    assert(allocator.alloc_proc != nullptr);
-    if ((count+1) >= capacity) {
+    if (count >= capacity) {
         reserve(8 + (capacity * 2));
     }
     data[count] = element;
@@ -189,8 +201,7 @@ T *Array<T>::append(T element) {
 template<typename T>
 T *Array<T>::insert(int index, T element) {
     BOUNDS_CHECK(index, 0, count);
-    assert(allocator.alloc_proc != nullptr);
-    if ((count+1) >= capacity) {
+    if (count >= capacity) {
         reserve(8 + (capacity * 2));
     }
     for (int i = count; i >= index; i--) {
@@ -203,11 +214,11 @@ T *Array<T>::insert(int index, T element) {
 
 template<typename T>
 void Array<T>::reserve(int capacity) {
-    assert(allocator.alloc_proc != nullptr);
     if (this->capacity >= capacity) {
         return;
     }
 
+    assert(allocator.alloc_proc != nullptr);
     void *new_data = alloc(allocator, sizeof(T) * capacity);
     if (data != nullptr) {
         memcpy(new_data, data, sizeof(T) * count);
@@ -325,7 +336,7 @@ struct String_Builder {
     char *string();
 };
 
-String_Builder make_string_builder(Allocator allocator);
+String_Builder make_string_builder(Allocator allocator, int capacity = 16);
 void destroy_string_builder(String_Builder sb);
 
 
