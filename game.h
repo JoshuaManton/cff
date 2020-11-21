@@ -85,6 +85,7 @@ struct Entity {
 struct Game_State {
     Camera camera;
 
+    bool gameplay_paused;
     EntityID selected_ship;
 
     bool freecam;

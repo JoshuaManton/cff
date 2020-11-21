@@ -161,6 +161,10 @@ void update_game(Game_State *game_state, float dt, Window *window) {
     Vector3 mouse_dir = get_mouse_direction_from_camera(game_state->camera.position, camera_view_matrix(game_state->camera), camera_projection_matrix(game_state->camera, window), window->mouse_position_unit);
 
     if (!game_state->freecam) {
+        if (get_input_down(window, INPUT_SPACE)) {
+            game_state->gameplay_paused = !game_state->gameplay_paused;
+        }
+
         Vector3 mouse_plane_pos = {};
         if (ray_plane(v3(0, 1, 0), v3(0, 0, 0), game_state->camera.position, mouse_dir, &mouse_plane_pos)) {
             if (get_input_down(window, INPUT_MOUSE_RIGHT)) {
@@ -208,98 +212,100 @@ void update_game(Game_State *game_state, float dt, Window *window) {
         }
     }
 
-    For (idx, game_state->active_entities) {
-        Entity *entity = game_state->active_entities[idx];
-        entity->position += entity->velocity * dt;
-        switch (entity->kind) {
-            case ENTITY_SHIP: {
-                if (entity->ship.num_commands > 0) {
-                    Unit_Command *command = &entity->ship.commands[entity->ship.command_cursor];
-                    #define COMPLETE_COMMAND { entity->ship.num_commands -= 1; entity->ship.command_cursor = (entity->ship.command_cursor + 1) % ARRAYSIZE(entity->ship.commands); }
-                    switch (command->kind) {
-                        case UNIT_MOVE_COMMAND: {
-                            if (length(entity->position - command->move.to) > 0.1) {
-                                Quaternion required_orientation = quaternion_look_at(entity->position, command->move.to, v3(0, 1, 0));
+    if (!game_state->gameplay_paused) {
+        For (idx, game_state->active_entities) {
+            Entity *entity = game_state->active_entities[idx];
+            entity->position += entity->velocity * dt;
+            switch (entity->kind) {
+                case ENTITY_SHIP: {
+                    if (entity->ship.num_commands > 0) {
+                        Unit_Command *command = &entity->ship.commands[entity->ship.command_cursor];
+                        #define COMPLETE_COMMAND { entity->ship.num_commands -= 1; entity->ship.command_cursor = (entity->ship.command_cursor + 1) % ARRAYSIZE(entity->ship.commands); }
+                        switch (command->kind) {
+                            case UNIT_MOVE_COMMAND: {
+                                if (length(entity->position - command->move.to) > 0.1) {
+                                    Quaternion required_orientation = quaternion_look_at(entity->position, command->move.to, v3(0, 1, 0));
+                                    if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
+                                        Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
+                                        entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
+                                        entity->orientation = normalize(entity->orientation);
+                                    }
+                                    else {
+                                        Vector3 dir_to_target = normalize(command->move.to - entity->position);
+                                        entity->position += dir_to_target * 5 * dt;
+                                    }
+                                }
+                                else {
+                                    COMPLETE_COMMAND;
+                                }
+                                break;
+                            }
+                            case UNIT_ROTATE_COMMAND: {
+                                Quaternion required_orientation = quaternion_look_at(entity->position, command->rotate.position_to_rotate_towards, v3(0, 1, 0));
                                 if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
                                     Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
                                     entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
                                     entity->orientation = normalize(entity->orientation);
                                 }
                                 else {
-                                    Vector3 dir_to_target = normalize(command->move.to - entity->position);
-                                    entity->position += dir_to_target * 5 * dt;
+                                    COMPLETE_COMMAND;
                                 }
+                                break;
                             }
-                            else {
-                                COMPLETE_COMMAND;
-                            }
-                            break;
-                        }
-                        case UNIT_ROTATE_COMMAND: {
-                            Quaternion required_orientation = quaternion_look_at(entity->position, command->rotate.position_to_rotate_towards, v3(0, 1, 0));
-                            if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) > 1) {
-                                Quaternion diff = quaternion_difference(entity->orientation, required_orientation);
-                                entity->orientation = slerp(entity->orientation, diff * entity->orientation, 5 * dt);
-                                entity->orientation = normalize(entity->orientation);
-                            }
-                            else {
-                                COMPLETE_COMMAND;
-                            }
-                            break;
                         }
                     }
-                }
 
-                // if (to_degrees(angle_between_quaternions(entity->orientation, entity->ship.target_orientation)) > 0.01) {
-                //     Quaternion diff = quaternion_difference(entity->orientation, entity->ship.target_orientation);
-                //     entity->orientation = slerp(entity->orientation, diff * entity->orientation, 10 * dt);
-                //     entity->orientation = normalize(entity->orientation);
-                // }
+                    // if (to_degrees(angle_between_quaternions(entity->orientation, entity->ship.target_orientation)) > 0.01) {
+                    //     Quaternion diff = quaternion_difference(entity->orientation, entity->ship.target_orientation);
+                    //     entity->orientation = slerp(entity->orientation, diff * entity->orientation, 10 * dt);
+                    //     entity->orientation = normalize(entity->orientation);
+                    // }
 
-                for (int i = 0; i < entity->ship.num_weapons; i++) {
-                    Weapon *weapon = &entity->ship.weapons[i];
-                    if (weapon->cur_shot_cooldown >= 0) {
-                        weapon->cur_shot_cooldown -= dt;
-                    }
+                    for (int i = 0; i < entity->ship.num_weapons; i++) {
+                        Weapon *weapon = &entity->ship.weapons[i];
+                        if (weapon->cur_shot_cooldown >= 0) {
+                            weapon->cur_shot_cooldown -= dt;
+                        }
 
-                    Entity *target = get_entity(game_state, weapon->current_target_id);
-                    if (target) {
-                        if (!target_is_valid(target, entity, weapon)) {
+                        Entity *target = get_entity(game_state, weapon->current_target_id);
+                        if (target) {
+                            if (!target_is_valid(target, entity, weapon)) {
+                                weapon->current_target_id = 0;
+                                target = nullptr;
+                            }
+                        }
+
+                        if (!target) {
+                            target = find_weapon_target(game_state, weapon, entity);
+                        }
+
+                        if (target) {
+                            weapon->current_target_id = target->id;
+
+                            // todo(josh): framerate independence
+                            if (weapon->cur_shot_cooldown <= 0) {
+                                weapon->cur_shot_cooldown += weapon->shot_cooldown;
+                                ASSERT(target->kind == ENTITY_SHIP);
+                                Entity *projectile = make_entity(game_state, ENTITY_PROJECTILE);
+                                projectile->position = entity->position;
+                                projectile->velocity = normalize(target->position - entity->position) * 50;
+                                projectile->projectile.time_to_live = 5;
+                            }
+                        }
+                        else {
                             weapon->current_target_id = 0;
-                            target = nullptr;
                         }
                     }
-
-                    if (!target) {
-                        target = find_weapon_target(game_state, weapon, entity);
-                    }
-
-                    if (target) {
-                        weapon->current_target_id = target->id;
-
-                        // todo(josh): framerate independence
-                        if (weapon->cur_shot_cooldown <= 0) {
-                            weapon->cur_shot_cooldown += weapon->shot_cooldown;
-                            ASSERT(target->kind == ENTITY_SHIP);
-                            Entity *projectile = make_entity(game_state, ENTITY_PROJECTILE);
-                            projectile->position = entity->position;
-                            projectile->velocity = normalize(target->position - entity->position) * 50;
-                            projectile->projectile.time_to_live = 5;
-                        }
-                    }
-                    else {
-                        weapon->current_target_id = 0;
-                    }
+                    break;
                 }
-                break;
-            }
-            case ENTITY_PROJECTILE: {
-                entity->projectile.time_to_live -= dt;
+                case ENTITY_PROJECTILE: {
+                    entity->projectile.time_to_live -= dt;
 
-                if (entity->projectile.time_to_live <= 0) {
-                    destroy_entity(entity);
+                    if (entity->projectile.time_to_live <= 0) {
+                        destroy_entity(entity);
+                    }
+                    break;
                 }
-                break;
             }
         }
     }
