@@ -49,7 +49,7 @@ Vector3 get_mouse_direction_from_camera(Vector3 camera_position, Matrix4 view, M
     return cursor_direction;
 }
 
-void init_game_state(Game_State *game_state) {
+void init_game_state(Game_State *game_state, Ship_Models *ship_models) {
     game_state->camera.orientation = quaternion_identity();
     game_state->camera.fov = 60;
 
@@ -57,46 +57,61 @@ void init_game_state(Game_State *game_state) {
     game_state->active_entities = make_array<Entity *>(default_allocator(), 1024); // todo(josh): @Leak
 
     Ship_Definition small_ship = {};
+    small_ship.model = &ship_models->small_ship_meshes;
+    small_ship.move_speed = 5;
     small_ship.weapons[0].facing_direction = v3(0, 0, 1);
     small_ship.weapons[0].effective_angle = 10;
     small_ship.weapons[0].shot_cooldown = 0.5;
     small_ship.weapons[0].projectile_color = v4(100, 20, 20, 1);
     small_ship.weapons[0].offset_from_ship_position = v3(-1, 0, 0);
-    small_ship.weapons[0].range = 10;
+    small_ship.weapons[0].range = 15;
     small_ship.weapons[1].facing_direction = v3(0, 0, 1);
     small_ship.weapons[1].effective_angle = 10;
     small_ship.weapons[1].shot_cooldown = 0.5;
     small_ship.weapons[1].projectile_color = v4(100, 20, 20, 1);
     small_ship.weapons[1].offset_from_ship_position = v3(1, 0, 0);
-    small_ship.weapons[1].range = 10;
+    small_ship.weapons[1].range = 15;
     small_ship.num_weapons = 2;
 
     Ship_Definition big_ship = {};
+    big_ship.model = &ship_models->big_ship_meshes;
+    big_ship.move_speed = 2;
     big_ship.weapons[0].facing_direction = v3(1, 0, 0);
     big_ship.weapons[0].effective_angle = 30;
     big_ship.weapons[0].shot_cooldown = 1;
     big_ship.weapons[0].projectile_color = v4(100, 20, 20, 1);
     big_ship.weapons[0].offset_from_ship_position = v3(1, 0, 1);
-    big_ship.weapons[0].range = 15;
+    big_ship.weapons[0].range = 25;
     big_ship.weapons[1].facing_direction = v3(1, 0, 0);
     big_ship.weapons[1].effective_angle = 30;
     big_ship.weapons[1].shot_cooldown = 1;
     big_ship.weapons[1].projectile_color = v4(100, 20, 20, 1);
     big_ship.weapons[1].offset_from_ship_position = v3(1, 0, -1);
-    big_ship.weapons[1].range = 15;
+    big_ship.weapons[1].range = 25;
     big_ship.weapons[2].facing_direction = v3(-1, 0, 0);
     big_ship.weapons[2].effective_angle = 30;
     big_ship.weapons[2].shot_cooldown = 1;
     big_ship.weapons[2].projectile_color = v4(100, 20, 20, 1);
     big_ship.weapons[2].offset_from_ship_position = v3(-1, 0, 1);
-    big_ship.weapons[2].range = 15;
+    big_ship.weapons[2].range = 25;
     big_ship.weapons[3].facing_direction = v3(-1, 0, 0);
     big_ship.weapons[3].effective_angle = 30;
     big_ship.weapons[3].shot_cooldown = 1;
     big_ship.weapons[3].projectile_color = v4(100, 20, 20, 1);
     big_ship.weapons[3].offset_from_ship_position = v3(-1, 0, -1);
-    big_ship.weapons[3].range = 15;
+    big_ship.weapons[3].range = 25;
     big_ship.num_weapons = 4;
+
+    Ship_Definition sniper_ship = {};
+    sniper_ship.model = &ship_models->sniper_ship_meshes;
+    sniper_ship.move_speed = 3;
+    sniper_ship.weapons[0].facing_direction = v3(0, 0, 1);
+    sniper_ship.weapons[0].effective_angle = 5;
+    sniper_ship.weapons[0].shot_cooldown = 0.5;
+    sniper_ship.weapons[0].projectile_color = v4(100, 20, 20, 1);
+    sniper_ship.weapons[0].offset_from_ship_position = v3(0, 0, 5);
+    sniper_ship.weapons[0].range = 50;
+    sniper_ship.num_weapons = 1;
 
     Entity *ship1 = make_entity(game_state, ENTITY_SHIP);
     ship1->orientation = quaternion_identity();
@@ -119,6 +134,7 @@ void init_game_state(Game_State *game_state) {
     ship3->ship.target_orientation = quaternion_identity();
     ship3->ship.top_speed = 1;
     ship3->ship.collision_radius = 1;
+    ship3->ship.definition = sniper_ship;
 }
 
 bool target_is_valid(Entity *target, Entity *shooter, Weapon *weapon) {
@@ -200,7 +216,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
         }
     }
     else {
-        game_state->camera.position.y = 25;
+        game_state->camera.position.y = 50;
         const float GAME_CAMERA_SPEED = 10;
         if (get_input(window, INPUT_W)) game_state->camera.position.z += GAME_CAMERA_SPEED * dt;
         if (get_input(window, INPUT_A)) game_state->camera.position.x -= GAME_CAMERA_SPEED * dt;
@@ -285,7 +301,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                                     }
 
                                     if (to_degrees(angle_between_quaternions(entity->orientation, required_orientation)) < 30) {
-                                        entity->position += quaternion_forward(entity->orientation) * 3 * dt;
+                                        entity->position += quaternion_forward(entity->orientation) * entity->ship.definition.move_speed * dt;
                                     }
                                 }
                                 else {
@@ -342,7 +358,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                                 Entity *projectile = make_entity(game_state, ENTITY_PROJECTILE);
                                 Vector3 weapon_position = get_weapon_position(weapon, entity);
                                 projectile->position = weapon_position;
-                                projectile->velocity = normalize(target->position - weapon_position) * 20;
+                                projectile->velocity = normalize(target->position - weapon_position) * 50;
                                 projectile->projectile.time_to_live = 5;
                                 projectile->projectile.shooter_id = entity->id;
                                 projectile->projectile.color = weapon->projectile_color;

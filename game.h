@@ -2,8 +2,15 @@
 
 #include "window.h"
 #include "math.h"
+#include "renderer.h"
 
 typedef u64 EntityID;
+
+struct Ship_Models {
+    Array<Loaded_Mesh> small_ship_meshes;
+    Array<Loaded_Mesh> big_ship_meshes;
+    Array<Loaded_Mesh> sniper_ship_meshes;
+};
 
 struct Camera {
     Vector3 position;
@@ -46,6 +53,8 @@ struct Weapon {
 };
 
 struct Ship_Definition {
+    Array<Loaded_Mesh> *model;
+    float move_speed;
     Weapon weapons[8];
     int num_weapons;
 };
@@ -102,7 +111,7 @@ struct Game_State {
     Array<Entity *> active_entities;
 };
 
-void init_game_state(Game_State *game_state);
+void init_game_state(Game_State *game_state, Ship_Models *ship_models);
 void update_game(Game_State *game_state, float dt, Window *window);
 
 Entity *make_entity(Game_State *game_state, Entity_Kind kind = ENTITY_INVALID);

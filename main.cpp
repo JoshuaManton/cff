@@ -248,12 +248,27 @@ void main() {
     sponza_meshes.allocator = default_allocator();
     // load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
 
-    Array<Loaded_Mesh> ship_meshes = {};
-    ship_meshes.allocator = default_allocator();
-    load_mesh_from_file("SM_Ship_Stealth_02.fbx", &ship_meshes);
-    ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_meshes[0].material.metallic  = 1.0;
-    ship_meshes[0].material.roughness = 0.35;
+    Ship_Models ship_models = {};
+
+    ship_models.small_ship_meshes.allocator = default_allocator();
+    load_mesh_from_file("SM_Ship_Stealth_02.fbx", &ship_models.small_ship_meshes);
+    ship_models.small_ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_models.small_ship_meshes[0].material.metallic  = 1.0;
+    ship_models.small_ship_meshes[0].material.roughness = 0.35;
+
+    ship_models.big_ship_meshes.allocator = default_allocator();
+    load_mesh_from_file("SM_Ship_Cruiser_01.fbx", &ship_models.big_ship_meshes);
+    ship_models.big_ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_models.big_ship_meshes[0].material.metallic  = 1.0;
+    ship_models.big_ship_meshes[0].material.roughness = 0.35;
+
+    ship_models.sniper_ship_meshes.allocator = default_allocator();
+    load_mesh_from_file("SM_Ship_Cruiser_02.fbx", &ship_models.sniper_ship_meshes);
+    ship_models.sniper_ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_models.sniper_ship_meshes[0].material.metallic  = 1.0;
+    ship_models.sniper_ship_meshes[0].material.roughness = 0.35;
+
+
 
     Texture shadow_map_color_buffer = {};
     Texture shadow_map_depth_buffer = {};
@@ -320,7 +335,7 @@ void main() {
 
 
     Game_State game_state = {};
-    init_game_state(&game_state);
+    init_game_state(&game_state, &ship_models);
 
 
 
@@ -375,7 +390,7 @@ void main() {
             switch (entity->kind) {
                 case ENTITY_SHIP: {
                     Draw_Command command = {};
-                    command.meshes = ship_meshes;
+                    command.meshes = *entity->ship.definition.model;
                     command.position = entity->position;
                     command.scale = v3(0.0025, 0.0025, 0.0025);
                     command.orientation = entity->orientation;
