@@ -430,6 +430,11 @@ Quaternion quaternion_difference(Quaternion a, Quaternion b) {
     }
 }
 
+float angle_between_quaternions(Quaternion a, Quaternion b) {
+    float rads = 2 * acos(fabsf(dot(a, b)));
+    return rads;
+}
+
 Vector3 quaternion_right  (Quaternion q) { return q * v3(1, 0, 0); }
 Vector3 quaternion_up     (Quaternion q) { return q * v3(0, 1, 0); }
 Vector3 quaternion_forward(Quaternion q) { return q * v3(0, 0, 1); }

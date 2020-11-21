@@ -23,6 +23,7 @@ TODO:
 -instancing (do we support this already?)
 -depth sorting to reduce overdraw
 -transparency sorting to alpha blend properly
+-dear imgui?
 -point light shadows
 -fix alpha blending without ruining bloom
 -spot lights
@@ -407,6 +408,7 @@ void main() {
         set_depth_test(true);
         set_primitive_topology(PT_TRIANGLE_LIST);
         set_alpha_blend(true);
+        Vertex ffverts[1024];
 
         Matrix4 sun_transform = {};
 
@@ -470,9 +472,35 @@ void main() {
             scene_pass.projection_matrix = camera_projection_matrix(game_state.camera, &main_window);
 
             begin_render_pass(&scene_pass);
+
+            Fixed_Function ff = {};
+            bind_shaders(vertex_shader, simple_pixel_shader);
+            ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
+            For (idx, game_state.active_entities) {
+                Entity *entity = game_state.active_entities[idx];
+                if (entity->kind == ENTITY_SHIP) {
+                    for (int j = 0; j < entity->ship.num_weapons; j++) {
+                        Weapon *weapon = &entity->ship.weapons[j];
+                        Entity *target = get_entity(&game_state, weapon->current_target_id);
+
+                        Vector3 weapon_position = get_weapon_position(weapon, entity);
+                        Vector3 weapon_direction = get_weapon_direction(weapon, entity);
+
+                        ff_vertex(&ff, weapon_position); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
+                        ff_vertex(&ff, weapon_position + weapon_direction * 5); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
+
+                        if (target) {
+                            ff_vertex(&ff, entity->position); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
+                            ff_vertex(&ff, target->position); ff_color(&ff, v4(0, 1, 0, 1)); ff_next(&ff);
+                        }
+                    }
+                }
+            }
+            set_primitive_topology(PT_LINE_LIST);
+            ff_end(&ff);
+            set_primitive_topology(PT_TRIANGLE_LIST);
+
             bind_shaders(vertex_shader, pixel_shader);
-
-
             Foreach (command, render_queue) {
                 draw_meshes(command->meshes, command->position, command->scale, command->orientation, command->color, render_options, false);
                 draw_meshes(command->meshes, command->position, command->scale, command->orientation, command->color, render_options, true);
@@ -518,7 +546,6 @@ void main() {
         bind_shaders(vertex_shader, simple_pixel_3d_shader);
         draw_texture(test_3d_texture, v3(384, 0, 0), v3(512, 128, 0), z_3d);
 
-        Vertex ffverts[1024];
         Fixed_Function ff = {};
         ff_begin(&ff, ffverts, ARRAYSIZE(ffverts));
         bind_texture(roboto_mono.texture, 0);

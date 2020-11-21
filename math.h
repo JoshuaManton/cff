@@ -173,6 +173,7 @@ Quaternion inverse            (Quaternion q);
 Quaternion axis_angle         (Vector3 axis, float angle_radians);
 Quaternion slerp              (Quaternion a, Quaternion b, float t);
 Quaternion quaternion_difference(Quaternion a, Quaternion b);
+float      angle_between_quaternions(Quaternion a, Quaternion b);
 Vector3    quaternion_right   (Quaternion q);
 Vector3    quaternion_up      (Quaternion q);
 Vector3    quaternion_forward (Quaternion q);

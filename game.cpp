@@ -51,6 +51,15 @@ void init_game_state(Game_State *game_state) {
     ship1->ship.top_speed = 1;
     ship1->ship.click_collision_radius = 1;
     ship1->ship.player_controlled = true;
+    ship1->ship.weapons[0].facing_direction = v3(-1, 0, 0);
+    ship1->ship.weapons[0].effective_angle = 30;
+    ship1->ship.weapons[0].shot_cooldown = 2;
+    ship1->ship.weapons[0].missile_color = v4(1, 0, 0, 1);
+    ship1->ship.weapons[1].facing_direction = v3(1, 0, 0);
+    ship1->ship.weapons[1].effective_angle = 30;
+    ship1->ship.weapons[1].shot_cooldown = 2;
+    ship1->ship.weapons[1].missile_color = v4(1, 0, 0, 1);
+    ship1->ship.num_weapons = 2;
 
     Entity *ship2 = make_entity(game_state, ENTITY_SHIP);
     ship2->orientation = quaternion_identity();
@@ -66,9 +75,40 @@ void init_game_state(Game_State *game_state) {
     ship3->ship.click_collision_radius = 1;
 }
 
+bool target_is_valid(Entity *target, Entity *shooter, Weapon *weapon) {
+    if (target->kind != ENTITY_SHIP) return false;
+    if (target == shooter) return false;
+    Vector3 dir_to_ship = normalize(target->position - get_weapon_position(weapon, shooter));
+    Vector3 weapon_direction = get_weapon_direction(weapon, shooter);
+    float angle_between = to_degrees(acos(dot(get_weapon_direction(weapon, shooter), dir_to_ship) / (length(weapon_direction) * length(dir_to_ship))));
+    if (fabsf(angle_between) <= weapon->effective_angle) {
+        return true;
+    }
+    return false;
+}
+
+Entity *find_weapon_target(Game_State *game_state, Weapon *weapon, Entity *parent_ship) {
+    For (idx, game_state->active_entities) {
+        Entity *entity = game_state->active_entities[idx];
+        if (target_is_valid(entity, parent_ship, weapon)) {
+            return entity;
+        }
+    }
+    return nullptr;
+}
+
+Vector3 get_weapon_position(Weapon *weapon, Entity *ship) {
+    return ship->position + ship->orientation * weapon->offset_from_ship_position;
+}
+
+Vector3 get_weapon_direction(Weapon *weapon, Entity *ship) {
+    return normalize(ship->orientation * weapon->facing_direction);
+}
+
 void update_game(Game_State *game_state, float dt, Window *window) {
     for (int i = game_state->active_entities.count-1; i >= 0; i--) {
         if (game_state->active_entities[i]->destroyed) {
+            pool_return(&game_state->entities_pool, game_state->active_entities[i]);
             game_state->active_entities.unordered_remove(i);
         }
     }
@@ -156,35 +196,67 @@ void update_game(Game_State *game_state, float dt, Window *window) {
 
     For (idx, game_state->active_entities) {
         Entity *entity = game_state->active_entities[idx];
+        entity->position += entity->velocity * dt;
         switch (entity->kind) {
             case ENTITY_SHIP: {
                 if (length(entity->position - entity->ship.target_position) > 0.1) {
                     Vector3 dir_to_target = normalize(entity->ship.target_position - entity->position);
                     entity->position += dir_to_target * 5 * dt;
                 }
-                Quaternion diff = quaternion_difference(entity->orientation, entity->ship.target_orientation);
-                entity->orientation = slerp(entity->orientation, diff * entity->orientation, 10 * dt);
-                entity->orientation = normalize(entity->orientation);
 
-                entity->ship.cur_shot_cooldown += dt;
-                // todo(josh): framerate independence
-                if (entity->ship.cur_shot_cooldown > 1) {
-                    entity->ship.cur_shot_cooldown -= 1;
-                    Entity *projectile = make_entity(game_state, ENTITY_PROJECTILE);
-                    projectile->position = entity->position;
-                    projectile->projectile.velocity = quaternion_forward(entity->orientation) * 50;
+                if (to_degrees(angle_between_quaternions(entity->orientation, entity->ship.target_orientation)) > 0.01) {
+                    Quaternion diff = quaternion_difference(entity->orientation, entity->ship.target_orientation);
+                    entity->orientation = slerp(entity->orientation, diff * entity->orientation, 10 * dt);
+                    entity->orientation = normalize(entity->orientation);
+                }
+
+                for (int i = 0; i < entity->ship.num_weapons; i++) {
+                    Weapon *weapon = &entity->ship.weapons[i];
+                    if (weapon->cur_shot_cooldown >= 0) {
+                        weapon->cur_shot_cooldown -= dt;
+                    }
+
+                    Entity *target = get_entity(game_state, weapon->current_target_id);
+                    if (target) {
+                        if (!target_is_valid(target, entity, weapon)) {
+                            weapon->current_target_id = 0;
+                            target = nullptr;
+                        }
+                    }
+
+                    if (!target) {
+                        target = find_weapon_target(game_state, weapon, entity);
+                    }
+
+                    if (target) {
+                        weapon->current_target_id = target->id;
+
+                        // todo(josh): framerate independence
+                        if (weapon->cur_shot_cooldown <= 0) {
+                            weapon->cur_shot_cooldown += weapon->shot_cooldown;
+                            ASSERT(target->kind == ENTITY_SHIP);
+                            Entity *projectile = make_entity(game_state, ENTITY_PROJECTILE);
+                            projectile->position = entity->position;
+                            projectile->velocity = normalize(target->position - entity->position) * 50;
+                            projectile->projectile.time_to_live = 5;
+                        }
+                    }
+                    else {
+                        weapon->current_target_id = 0;
+                    }
                 }
                 break;
             }
             case ENTITY_PROJECTILE: {
-                entity->position += entity->projectile.velocity * dt;
+                entity->projectile.time_to_live -= dt;
+                if (entity->projectile.time_to_live <= 0) {
+                    destroy_entity(entity);
+                }
                 break;
             }
         }
     }
 }
-
-
 
 Entity *make_entity(Game_State *game_state, Entity_Kind kind) {
     int generation;
