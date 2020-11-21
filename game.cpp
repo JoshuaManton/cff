@@ -49,7 +49,7 @@ void init_game_state(Game_State *game_state) {
     ship1->orientation = quaternion_identity();
     ship1->ship.target_orientation = quaternion_identity();
     ship1->ship.top_speed = 1;
-    ship1->ship.click_collision_radius = 1;
+    ship1->ship.collision_radius = 1;
     ship1->ship.player_controlled = true;
     ship1->ship.weapons[0].facing_direction = v3(-1, 0, 0);
     ship1->ship.weapons[0].effective_angle = 30;
@@ -65,14 +65,14 @@ void init_game_state(Game_State *game_state) {
     ship2->orientation = quaternion_identity();
     ship2->ship.target_orientation = quaternion_identity();
     ship2->ship.top_speed = 1;
-    ship2->ship.click_collision_radius = 1;
+    ship2->ship.collision_radius = 1;
     ship2->ship.player_controlled = true;
 
     Entity *ship3 = make_entity(game_state, ENTITY_SHIP);
     ship3->orientation = quaternion_identity();
     ship3->ship.target_orientation = quaternion_identity();
     ship3->ship.top_speed = 1;
-    ship3->ship.click_collision_radius = 1;
+    ship3->ship.collision_radius = 1;
 }
 
 bool target_is_valid(Entity *target, Entity *shooter, Weapon *weapon) {
@@ -200,7 +200,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                     if (!entity->ship.player_controlled) continue;
 
                     float distance = length(mouse_plane_pos - entity->position);
-                    if (distance < entity->ship.click_collision_radius && distance < closest_distance) {
+                    if (distance < entity->ship.collision_radius && distance < closest_distance) {
                         closest_distance = distance;
                         closest = entity;
                     }
@@ -290,6 +290,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                                 projectile->position = entity->position;
                                 projectile->velocity = normalize(target->position - entity->position) * 50;
                                 projectile->projectile.time_to_live = 5;
+                                projectile->projectile.shooter_id = entity->id;
                             }
                         }
                         else {
@@ -300,9 +301,21 @@ void update_game(Game_State *game_state, float dt, Window *window) {
                 }
                 case ENTITY_PROJECTILE: {
                     entity->projectile.time_to_live -= dt;
-
                     if (entity->projectile.time_to_live <= 0) {
                         destroy_entity(entity);
+                    }
+                    else {
+                        Entity *shooter = get_entity(game_state, entity->projectile.shooter_id);
+                        For (idx, game_state->active_entities) {
+                            Entity *other = game_state->active_entities[idx];
+                            if (other->kind != ENTITY_SHIP) continue;
+                            if (shooter != nullptr && other == shooter) continue; // todo(josh): proper friendly fire detection
+
+                            float distance = length(entity->position - other->position);
+                            if (distance < other->ship.collision_radius) {
+                                destroy_entity(entity);
+                            }
+                        }
                     }
                     break;
                 }

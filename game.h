@@ -49,7 +49,7 @@ struct Ship {
     Vector3 velocity;
     float top_speed;
     Quaternion target_orientation;
-    float click_collision_radius;
+    float collision_radius;
     bool player_controlled;
     Weapon weapons[8];
     int num_weapons;
@@ -59,6 +59,7 @@ struct Ship {
 };
 
 struct Projectile {
+    EntityID shooter_id;
     float time_to_live;
 };
 
