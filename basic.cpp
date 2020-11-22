@@ -248,10 +248,6 @@ String_Builder make_string_builder(Allocator allocator, int capacity) {
     return sb;
 }
 
-void destroy_string_builder(String_Builder sb) {
-    sb.buf.destroy();
-}
-
 void String_Builder::print(char *str) {
     for (char *s = str; *s != '\0'; s++) {
         buf.append(*s);
@@ -288,22 +284,26 @@ char *String_Builder::string() {
     return buf.data;
 }
 
+void String_Builder::destroy() {
+    buf.destroy();
+}
+
 
 
 // path/to/file.txt -> path/to
 // returns null if it doesn't hit a '/' or '\\'
 char *path_directory(char *filepath, Allocator allocator) {
     int length = strlen(filepath);
-    int end = length;
-    for (; end >= 0; end--) {
-        if (filepath[end] == '/' || filepath[end] == '\\') {
+    int slash_index = length;
+    for (; slash_index >= 0; slash_index--) {
+        if (filepath[slash_index] == '/' || filepath[slash_index] == '\\') {
             break;
         }
     }
-    if (end == 0) {
+    if (slash_index == 0) {
         return nullptr;
     }
-    int length_to_end = length - (length - end);
+    int length_to_end = length - (length - slash_index);
     char *new_str = (char *)alloc(allocator, length_to_end+1);
     memcpy(new_str, filepath, length_to_end);
     new_str[length_to_end] = '\0';

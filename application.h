@@ -1,3 +1,914 @@
+#pragma once
+
+//
+// Platform and graphics backend abstraction.
+// #define CFF_APPLICATION_IMPLEMENTATION before including in once place. Include freely wherever else.
+//
+// Platform:
+// #define CFF_PLATFORM_WINDOWS for Windows
+//
+// Graphics:
+// #define CFF_GRAPHICS_DIRECTX11 for DirectX11
+//
+
+#ifdef CFF_PLATFORM_WINDOWS
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
+#include "basic.h"
+#include "math.h"
+
+#ifdef CFF_GRAPHICS_DIRECTX11
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#endif
+
+#ifdef CFF_APPLICATION_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#endif
+
+// Platform stuff
+
+enum Input {
+    INPUT_NONE,
+
+    INPUT_MOUSE_LEFT,
+    INPUT_MOUSE_RIGHT,
+    INPUT_MOUSE_MIDDLE,
+
+    INPUT_BACKSPACE,
+    INPUT_TAB,
+
+    INPUT_CLEAR, // ?
+    INPUT_ENTER,
+
+    INPUT_SHIFT,
+    INPUT_CONTROL,
+    INPUT_ALT,
+    INPUT_PAUSE,
+    INPUT_CAPS_LOCK,
+
+    INPUT_ESCAPE,
+    INPUT_SPACE,
+    INPUT_PAGE_UP,
+    INPUT_PAGE_DOWN,
+    INPUT_END,
+    INPUT_HOME,
+
+    INPUT_UP,
+    INPUT_DOWN,
+    INPUT_LEFT,
+    INPUT_RIGHT,
+
+    INPUT_SELECT, // ?
+    INPUT_PRINT, // ? it's not Print_Screen, so what is it?
+    INPUT_EXECUTE, // ?
+    INPUT_PRINT_SCREEN,
+    INPUT_INSERT,
+    INPUT_DELETE,
+    INPUT_HELP, // ?
+
+    INPUT_1, INPUT_2, INPUT_3, INPUT_4, INPUT_5, INPUT_6, INPUT_7, INPUT_8, INPUT_9, INPUT_0,
+
+    INPUT_A, INPUT_B, INPUT_C, INPUT_D, INPUT_E, INPUT_F, INPUT_G, INPUT_H, INPUT_I, INPUT_J, INPUT_K, INPUT_L, INPUT_M,
+    INPUT_N, INPUT_O, INPUT_P, INPUT_Q, INPUT_R, INPUT_S, INPUT_T, INPUT_U, INPUT_V, INPUT_W, INPUT_X, INPUT_Y, INPUT_Z,
+
+    INPUT_LEFT_WINDOWS,
+    INPUT_RIGHT_WINDOWS,
+    INPUT_APPS, // ?
+
+    INPUT_SLEEP,
+
+    INPUT_NP_0, INPUT_NP_1, INPUT_NP_2, INPUT_NP_3, INPUT_NP_4, INPUT_NP_5, INPUT_NP_6, INPUT_NP_7, INPUT_NP_8, INPUT_NP_9,
+
+    INPUT_MULTIPLY,
+    INPUT_ADD,
+    INPUT_SEPARATOR, // comma?
+    INPUT_SUBTRACT,
+    INPUT_DECIMAL, // period?
+    INPUT_DIVIDE, // forward_slash?
+
+    INPUT_F1, INPUT_F2, INPUT_F3, INPUT_F4, INPUT_F5, INPUT_F6, INPUT_F7, INPUT_F8, INPUT_F9, INPUT_F10, INPUT_F11, INPUT_F12,
+
+    INPUT_NUM_LOCK,
+    INPUT_SCROLL_LOCK,
+
+    INPUT_SEMICOLON,
+    INPUT_PLUS,
+    INPUT_COMMA,
+    INPUT_MINUS,
+    INPUT_PERIOD,
+    INPUT_FORWARD_SLASH,
+    INPUT_TILDE,
+    INPUT_LEFT_SQUARE,
+    INPUT_BACK_SLASH,
+    INPUT_RIGHT_SQUARE,
+    INPUT_APOSTROPHE,
+
+// todo(josh): check these out
+// #define VK_OEM_1          0xBA
+// #define VK_OEM_PLUS       0xBB
+// #define VK_OEM_COMMA      0xBC
+// #define VK_OEM_MINUS      0xBD
+// #define VK_OEM_PERIOD     0xBE
+// #define VK_OEM_2          0xBF
+// #define VK_OEM_3          0xC0
+// #define VK_OEM_4          0xDB
+// #define VK_OEM_5          0xDC
+// #define VK_OEM_6          0xDD
+// #define VK_OEM_7          0xDE
+// #define VK_OEM_8          0xDF
+
+// todo(josh): gamepad
+// #define VK_GAMEPAD_A                         0xC3
+// #define VK_GAMEPAD_B                         0xC4
+// #define VK_GAMEPAD_X                         0xC5
+// #define VK_GAMEPAD_Y                         0xC6
+// #define VK_GAMEPAD_RIGHT_SHOULDER            0xC7
+// #define VK_GAMEPAD_LEFT_SHOULDER             0xC8
+// #define VK_GAMEPAD_LEFT_TRIGGER              0xC9
+// #define VK_GAMEPAD_RIGHT_TRIGGER             0xCA
+// #define VK_GAMEPAD_DPAD_UP                   0xCB
+// #define VK_GAMEPAD_DPAD_DOWN                 0xCC
+// #define VK_GAMEPAD_DPAD_LEFT                 0xCD
+// #define VK_GAMEPAD_DPAD_RIGHT                0xCE
+// #define VK_GAMEPAD_MENU                      0xCF
+// #define VK_GAMEPAD_VIEW                      0xD0
+// #define VK_GAMEPAD_LEFT_THUMBSTICK_BUTTON    0xD1
+// #define VK_GAMEPAD_RIGHT_THUMBSTICK_BUTTON   0xD2
+// #define VK_GAMEPAD_LEFT_THUMBSTICK_UP        0xD3
+// #define VK_GAMEPAD_LEFT_THUMBSTICK_DOWN      0xD4
+// #define VK_GAMEPAD_LEFT_THUMBSTICK_RIGHT     0xD5
+// #define VK_GAMEPAD_LEFT_THUMBSTICK_LEFT      0xD6
+// #define VK_GAMEPAD_RIGHT_THUMBSTICK_UP       0xD7
+// #define VK_GAMEPAD_RIGHT_THUMBSTICK_DOWN     0xD8
+// #define VK_GAMEPAD_RIGHT_THUMBSTICK_RIGHT    0xD9
+// #define VK_GAMEPAD_RIGHT_THUMBSTICK_LEFT     0xDA
+
+    INPUT_COUNT,
+};
+
+struct Window;
+
+void init_platform();
+
+double time_now();
+Window create_window(int width, int height);
+void update_window(Window *window);
+
+bool get_input(Window *window, Input input);
+bool get_input_down(Window *window, Input input);
+bool get_input_up(Window *window, Input input);
+
+
+
+#ifdef CFF_PLATFORM_WINDOWS
+
+struct Window {
+    HWND handle;
+    HDC windows_device_context;
+    bool should_close;
+    bool is_focused;
+
+    int width;
+    int height;
+    float aspect;
+    Vector2 size;
+
+    Vector2 mouse_position_pixel;
+    Vector2 mouse_position_unit;
+    Vector2 mouse_position_pixel_delta;
+
+    float mouse_scroll;
+
+    int mouse_capture_sum;
+    bool updated_at_least_once;
+
+    bool inputs_held[INPUT_COUNT];
+    bool inputs_down[INPUT_COUNT];
+    bool inputs_up  [INPUT_COUNT];
+};
+
+#endif
+
+
+
+// Graphics stuff
+
+#ifdef CFF_GRAPHICS_DIRECTX11
+
+typedef ID3D11Buffer *Buffer;
+
+typedef struct {
+    ID3D11Texture2D *handle_2d;
+    ID3D11Texture2D *handle_msaa_2d;
+    ID3D11Texture3D *handle_3d;
+
+    ID3D11ShaderResourceView *shader_resource_view;
+    ID3D11UnorderedAccessView *uav;
+} Texture_Backend_Data;
+
+typedef struct {
+    ID3D11VertexShader *handle;
+    ID3D10Blob *blob;
+} Vertex_Shader;
+
+typedef ID3D11PixelShader *Pixel_Shader;
+
+typedef ID3D11ComputeShader *Compute_Shader;
+
+typedef ID3D11InputLayout *Vertex_Format;
+#endif
+
+
+
+enum Texture_Format {
+    TF_INVALID,
+
+    TF_R8_UINT,
+    TF_R32_INT,
+    TF_R32_FLOAT,
+    TF_R16G16B16A16_FLOAT,
+    TF_R32G32B32A32_FLOAT,
+    TF_R8G8B8A8_UINT,
+    TF_R8G8B8A8_UINT_SRGB,
+    TF_DEPTH_STENCIL,
+
+    TF_COUNT,
+};
+
+struct Texture_Format_Info {
+    int pixel_size_in_bytes;
+    int num_channels;
+    bool is_depth_format;
+};
+
+enum Texture_Type {
+    TT_INVALID,
+    TT_2D,
+    TT_3D,
+    TT_CUBEMAP,
+
+    TT_COUNT,
+};
+
+enum Texture_Wrap_Mode {
+    TWM_INVALID,
+
+    TWM_LINEAR_WRAP,
+    TWM_LINEAR_CLAMP,
+    TWM_POINT_WRAP,
+    TWM_POINT_CLAMP,
+
+    TWM_COUNT,
+};
+
+struct Texture_Description {
+    int width;
+    int height;
+    int depth;
+    bool render_target;
+    bool uav;
+    int sample_count;
+    int mipmap_count;
+    Texture_Format format;
+    Texture_Type type;
+    // is_cpu_read_target
+    Texture_Wrap_Mode wrap_mode;
+    byte *color_data;
+};
+
+struct Texture {
+    bool valid; // note(josh): just for checking against zero-value
+    Texture_Description description;
+    Texture_Backend_Data backend;
+};
+
+enum Vertex_Field_Type {
+    VFT_INVALID,
+    VFT_INT,
+    VFT_INT2,
+    VFT_INT3,
+    VFT_INT4,
+    VFT_UINT,
+    VFT_UINT2,
+    VFT_UINT3,
+    VFT_UINT4,
+    VFT_FLOAT,
+    VFT_FLOAT2,
+    VFT_FLOAT3,
+    VFT_FLOAT4,
+
+    VFT_COUNT,
+};
+
+enum Vertex_Field_Step_Type {
+    VFST_INVALID,
+    VFST_PER_VERTEX,
+    VFST_PER_INSTANCE,
+
+    VFST_COUNT,
+};
+
+struct Vertex_Field {
+    char *semantic;
+    char *name;
+    int offset;
+    Vertex_Field_Type type;
+    Vertex_Field_Step_Type step_type;
+};
+
+enum Buffer_Type {
+    BT_INVALID,
+    BT_VERTEX,
+    BT_INDEX,
+    BT_CONSTANT,
+
+    BT_COUNT,
+};
+
+enum Primitive_Topology {
+    PT_TRIANGLE_LIST,
+    PT_TRIANGLE_STRIP,
+    PT_LINE_LIST,
+    PT_LINE_STRIP,
+
+    PT_COUNT,
+};
+
+#ifndef CFF_MAX_BOUND_TEXTURES
+#define CFF_MAX_BOUND_TEXTURES 12
+#endif
+
+#ifndef CFF_MAX_BOUND_RENDER_TARGETS
+#define CFF_MAX_BOUND_RENDER_TARGETS 8
+#endif
+
+#ifndef CFF_MAX_VERTEX_FIELDS
+#define CFF_MAX_VERTEX_FIELDS 32 // note(josh): this is arbitrary.
+#endif
+
+void init_render_backend(Window *window);
+
+void create_color_and_depth_buffers(Texture_Description description, Texture *out_color_buffer, Texture *out_depth_buffer);
+void ensure_texture_size(Texture *texture, int width, int height);
+
+Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
+byte *load_texture_data_from_file(char *filename, int *width, int *height);
+void delete_texture_data(byte *data);
+
+
+
+// the following are all defined by the specific graphics backend we are compiling with.
+
+void init_graphics_driver(Window *window);
+void ensure_swap_chain_size(int width, int height);
+
+void set_viewport(int x, int y, int width, int height);
+void set_depth_test(bool enabled);
+void set_backface_cull(bool enabled);
+void set_primitive_topology(Primitive_Topology pt);
+void set_alpha_blend(bool enabled);
+
+Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader);
+void          destroy_vertex_format(Vertex_Format format);
+void          bind_vertex_format(Vertex_Format format);
+
+Buffer create_buffer(Buffer_Type type, void *data, int len);
+void   update_buffer(Buffer buffer, void *data, int len);
+void   destroy_buffer(Buffer buffer);
+void   bind_vertex_buffers(Buffer *buffers, int num_buffers, u32 start_slot, u32 *strides, u32 *offsets);
+void   bind_index_buffer(Buffer buffer, u32 slot);
+void   bind_constant_buffers(Buffer *buffers, int num_buffers, u32 start_slot);
+
+Vertex_Shader  compile_vertex_shader_from_file(wchar_t *filename);
+void           destroy_vertex_shader(Vertex_Shader shader);
+Pixel_Shader   compile_pixel_shader_from_file(wchar_t *filename);
+void           destroy_pixel_shader(Pixel_Shader shader);
+void           bind_shaders(Vertex_Shader vertex, Pixel_Shader pixel);
+Compute_Shader compile_compute_shader_from_file(wchar_t *filename);
+void           bind_compute_shader(Compute_Shader shader);
+void           destroy_compute_shader(Compute_Shader shader);
+
+void bind_compute_uav(Texture texture, int slot);
+void dispatch_compute(int x, int y, int z);
+
+Texture create_texture(Texture_Description desc);
+void    destroy_texture(Texture texture);
+void    bind_texture(Texture texture, int slot);
+void    unbind_all_textures();
+void    copy_texture(Texture dst, Texture src);
+void    set_cubemap_textures(Texture texture, byte *face_pixel_data[6]);
+
+void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer);
+void unset_render_targets();
+void clear_bound_render_targets(Vector4 color);
+
+void issue_draw_call(int vertex_count, int index_count, int instance_count = 0);
+void present(bool vsync);
+
+
+
+
+
+
+#ifdef CFF_APPLICATION_IMPLEMENTATION
+
+#ifdef CFF_PLATFORM_WINDOWS
+
+static Input windows_key_mapping[256];
+
+void init_platform() {
+    windows_key_mapping[0x01] = INPUT_MOUSE_LEFT;
+    windows_key_mapping[0x02] = INPUT_MOUSE_RIGHT;
+    windows_key_mapping[0x04] = INPUT_MOUSE_MIDDLE;
+
+    windows_key_mapping[0x08] = INPUT_BACKSPACE;
+    windows_key_mapping[0x09] = INPUT_TAB;
+
+    windows_key_mapping[0x0C] = INPUT_CLEAR;
+    windows_key_mapping[0x0D] = INPUT_ENTER;
+
+    windows_key_mapping[0x10] = INPUT_SHIFT;
+    windows_key_mapping[0x11] = INPUT_CONTROL;
+    windows_key_mapping[0x12] = INPUT_ALT;
+    windows_key_mapping[0x13] = INPUT_PAUSE;
+    windows_key_mapping[0x14] = INPUT_CAPS_LOCK;
+
+    windows_key_mapping[0x1B] = INPUT_ESCAPE;
+
+    windows_key_mapping[0x20] = INPUT_SPACE;
+    windows_key_mapping[0x21] = INPUT_PAGE_UP;
+    windows_key_mapping[0x22] = INPUT_PAGE_DOWN;
+    windows_key_mapping[0x23] = INPUT_END;
+    windows_key_mapping[0x24] = INPUT_HOME;
+    windows_key_mapping[0x25] = INPUT_LEFT;
+    windows_key_mapping[0x26] = INPUT_UP;
+    windows_key_mapping[0x27] = INPUT_RIGHT;
+    windows_key_mapping[0x28] = INPUT_DOWN;
+    windows_key_mapping[0x29] = INPUT_SELECT;
+    windows_key_mapping[0x2A] = INPUT_PRINT;
+    windows_key_mapping[0x2B] = INPUT_EXECUTE;
+    windows_key_mapping[0x2C] = INPUT_PRINT_SCREEN;
+    windows_key_mapping[0x2D] = INPUT_INSERT;
+    windows_key_mapping[0x2E] = INPUT_DELETE;
+    windows_key_mapping[0x2F] = INPUT_HELP;
+
+    windows_key_mapping['1'] = INPUT_1;
+    windows_key_mapping['2'] = INPUT_2;
+    windows_key_mapping['3'] = INPUT_3;
+    windows_key_mapping['4'] = INPUT_4;
+    windows_key_mapping['5'] = INPUT_5;
+    windows_key_mapping['6'] = INPUT_6;
+    windows_key_mapping['7'] = INPUT_7;
+    windows_key_mapping['8'] = INPUT_8;
+    windows_key_mapping['9'] = INPUT_9;
+    windows_key_mapping['0'] = INPUT_0;
+
+    windows_key_mapping['A'] = INPUT_A;
+    windows_key_mapping['B'] = INPUT_B;
+    windows_key_mapping['C'] = INPUT_C;
+    windows_key_mapping['D'] = INPUT_D;
+    windows_key_mapping['E'] = INPUT_E;
+    windows_key_mapping['F'] = INPUT_F;
+    windows_key_mapping['G'] = INPUT_G;
+    windows_key_mapping['H'] = INPUT_H;
+    windows_key_mapping['I'] = INPUT_I;
+    windows_key_mapping['J'] = INPUT_J;
+    windows_key_mapping['K'] = INPUT_K;
+    windows_key_mapping['L'] = INPUT_L;
+    windows_key_mapping['M'] = INPUT_M;
+    windows_key_mapping['N'] = INPUT_N;
+    windows_key_mapping['O'] = INPUT_O;
+    windows_key_mapping['P'] = INPUT_P;
+    windows_key_mapping['Q'] = INPUT_Q;
+    windows_key_mapping['R'] = INPUT_R;
+    windows_key_mapping['S'] = INPUT_S;
+    windows_key_mapping['T'] = INPUT_T;
+    windows_key_mapping['U'] = INPUT_U;
+    windows_key_mapping['V'] = INPUT_V;
+    windows_key_mapping['W'] = INPUT_W;
+    windows_key_mapping['X'] = INPUT_X;
+    windows_key_mapping['Y'] = INPUT_Y;
+    windows_key_mapping['Z'] = INPUT_Z;
+
+    windows_key_mapping[0x5B] = INPUT_LEFT_WINDOWS;
+    windows_key_mapping[0x5C] = INPUT_RIGHT_WINDOWS;
+    windows_key_mapping[0x5D] = INPUT_APPS;
+
+    windows_key_mapping[0x5F] = INPUT_SLEEP;
+
+    windows_key_mapping[0x60] = INPUT_NP_0;
+    windows_key_mapping[0x61] = INPUT_NP_1;
+    windows_key_mapping[0x62] = INPUT_NP_2;
+    windows_key_mapping[0x63] = INPUT_NP_3;
+    windows_key_mapping[0x64] = INPUT_NP_4;
+    windows_key_mapping[0x65] = INPUT_NP_5;
+    windows_key_mapping[0x66] = INPUT_NP_6;
+    windows_key_mapping[0x67] = INPUT_NP_7;
+    windows_key_mapping[0x68] = INPUT_NP_8;
+    windows_key_mapping[0x69] = INPUT_NP_9;
+    windows_key_mapping[0x6A] = INPUT_MULTIPLY;
+    windows_key_mapping[0x6B] = INPUT_ADD;
+    windows_key_mapping[0x6C] = INPUT_SEPARATOR;
+    windows_key_mapping[0x6D] = INPUT_SUBTRACT;
+    windows_key_mapping[0x6E] = INPUT_DECIMAL;
+    windows_key_mapping[0x6F] = INPUT_DIVIDE;
+    windows_key_mapping[0x70] = INPUT_F1;
+    windows_key_mapping[0x71] = INPUT_F2;
+    windows_key_mapping[0x72] = INPUT_F3;
+    windows_key_mapping[0x73] = INPUT_F4;
+    windows_key_mapping[0x74] = INPUT_F5;
+    windows_key_mapping[0x75] = INPUT_F6;
+    windows_key_mapping[0x76] = INPUT_F7;
+    windows_key_mapping[0x77] = INPUT_F8;
+    windows_key_mapping[0x78] = INPUT_F9;
+    windows_key_mapping[0x79] = INPUT_F10;
+    windows_key_mapping[0x7A] = INPUT_F11;
+    windows_key_mapping[0x7B] = INPUT_F12;
+
+    windows_key_mapping[0x90] = INPUT_NUM_LOCK;
+    windows_key_mapping[0x91] = INPUT_SCROLL_LOCK;
+
+    windows_key_mapping[0xBA] = INPUT_SEMICOLON;
+    windows_key_mapping[0xBB] = INPUT_PLUS;
+    windows_key_mapping[0xBC] = INPUT_COMMA;
+    windows_key_mapping[0xBD] = INPUT_MINUS;
+    windows_key_mapping[0xBE] = INPUT_PERIOD;
+    windows_key_mapping[0xBF] = INPUT_FORWARD_SLASH;
+    windows_key_mapping[0xC0] = INPUT_TILDE;
+    windows_key_mapping[0xDB] = INPUT_LEFT_SQUARE;
+    windows_key_mapping[0xDC] = INPUT_BACK_SLASH;
+    windows_key_mapping[0xDD] = INPUT_RIGHT_SQUARE;
+    windows_key_mapping[0xDE] = INPUT_APOSTROPHE;
+
+    // todo(josh)
+    // #define VK_GAMEPAD_A                         0xC3
+    // #define VK_GAMEPAD_B                         0xC4
+    // #define VK_GAMEPAD_X                         0xC5
+    // #define VK_GAMEPAD_Y                         0xC6
+    // #define VK_GAMEPAD_RIGHT_SHOULDER            0xC7
+    // #define VK_GAMEPAD_LEFT_SHOULDER             0xC8
+    // #define VK_GAMEPAD_LEFT_TRIGGER              0xC9
+    // #define VK_GAMEPAD_RIGHT_TRIGGER             0xCA
+    // #define VK_GAMEPAD_DPAD_UP                   0xCB
+    // #define VK_GAMEPAD_DPAD_DOWN                 0xCC
+    // #define VK_GAMEPAD_DPAD_LEFT                 0xCD
+    // #define VK_GAMEPAD_DPAD_RIGHT                0xCE
+    // #define VK_GAMEPAD_MENU                      0xCF
+    // #define VK_GAMEPAD_VIEW                      0xD0
+    // #define VK_GAMEPAD_LEFT_THUMBSTICK_BUTTON    0xD1
+    // #define VK_GAMEPAD_RIGHT_THUMBSTICK_BUTTON   0xD2
+    // #define VK_GAMEPAD_LEFT_THUMBSTICK_UP        0xD3
+    // #define VK_GAMEPAD_LEFT_THUMBSTICK_DOWN      0xD4
+    // #define VK_GAMEPAD_LEFT_THUMBSTICK_RIGHT     0xD5
+    // #define VK_GAMEPAD_LEFT_THUMBSTICK_LEFT      0xD6
+    // #define VK_GAMEPAD_RIGHT_THUMBSTICK_UP       0xD7
+    // #define VK_GAMEPAD_RIGHT_THUMBSTICK_DOWN     0xD8
+    // #define VK_GAMEPAD_RIGHT_THUMBSTICK_RIGHT    0xD9
+    // #define VK_GAMEPAD_RIGHT_THUMBSTICK_LEFT     0xDA
+}
+
+double time_now() {
+    FILETIME file_time = {};
+    GetSystemTimeAsFileTime(&file_time);
+    i64 t = (i64)(((u64)file_time.dwLowDateTime) | ((u64)file_time.dwHighDateTime) << 32);
+    return (double)(t - 0x019db1ded53e8000) / 10000000.0;
+}
+
+static Window *currently_processing_window;
+
+LRESULT WindowProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
+    switch (msg) {
+        case WM_SIZE: {
+            assert(currently_processing_window != nullptr);
+
+            // todo(josh): figure out what to do with wparam
+            switch (w) {
+                case 0 /* SIZE_RESTORED  */: break;
+                case 1 /* SIZE_MINIMIZED */: break;
+                case 2 /* SIZE_MAXIMIZED */: break;
+                case 3 /* SIZE_MAXSHOW   */: break;
+                case 4 /* SIZE_MAXHIDE   */: break;
+            }
+
+            u32 width  = LOWORD(l);
+            u32 height = HIWORD(l);
+
+            if (width  <= 0) width  = 1;
+            if (height <= 0) height = 1;
+
+            printf("New window size: %dx%d\n", width, height);
+            currently_processing_window->width  = width;
+            currently_processing_window->height = height;
+            currently_processing_window->aspect = width / height;
+            currently_processing_window->size   = v2(currently_processing_window->width, currently_processing_window->height);
+            return 0;
+        }
+        case WM_MOUSEMOVE: {
+            u32 x = LOWORD(l);
+            u32 y = HIWORD(l);
+            Vector2 old_pos = currently_processing_window->mouse_position_pixel;
+            currently_processing_window->mouse_position_pixel = v2((f32)x, currently_processing_window->size.y - (f32)y);
+            currently_processing_window->mouse_position_unit  = currently_processing_window->mouse_position_pixel / currently_processing_window->size;
+            if (currently_processing_window->updated_at_least_once) {
+                currently_processing_window->mouse_position_pixel_delta = currently_processing_window->mouse_position_pixel - old_pos;
+            }
+            return 0;
+        }
+        case WM_KEYDOWN: {
+            assert(currently_processing_window != nullptr);
+            Input input = windows_key_mapping[w];
+            if (!currently_processing_window->inputs_held[input]) {
+                currently_processing_window->inputs_down[input] = true;
+            }
+            currently_processing_window->inputs_held[input] = true;
+            return 0;
+        }
+        case WM_SYSKEYDOWN: {
+            assert(currently_processing_window != nullptr);
+            Input input = windows_key_mapping[w];
+            if (!currently_processing_window->inputs_held[input]) {
+                currently_processing_window->inputs_down[input] = true;
+            }
+            currently_processing_window->inputs_held[input] = true;
+            return 0;
+        }
+        case WM_KEYUP: {
+            Input input = windows_key_mapping[w];
+            currently_processing_window->inputs_up[input] = true;
+            currently_processing_window->inputs_held[input] = false;
+            return 0;
+        }
+        case WM_SYSKEYUP: {
+            Input input = windows_key_mapping[w];
+            currently_processing_window->inputs_up[input] = true;
+            currently_processing_window->inputs_held[input] = false;
+            return 0;
+        }
+        case WM_CHAR: {
+#ifdef DEVELOPER
+            // imgui.io_add_input_character(imgui.get_io(), u32(w));
+#endif
+            return 0;
+        }
+        case WM_MOUSEWHEEL: {
+            i16 scroll = ((i16)HIWORD(w)) / 120; // note(josh): 120 is WHEEL_DELTA in windows
+            currently_processing_window->mouse_scroll = (f32)scroll;
+            return 0;
+        }
+        case WM_LBUTTONDOWN: {
+            if (currently_processing_window->mouse_capture_sum == 0) SetCapture(currently_processing_window->handle);
+            currently_processing_window->mouse_capture_sum += 1;
+
+            if (!currently_processing_window->inputs_held[INPUT_MOUSE_LEFT]) {
+                currently_processing_window->inputs_down[INPUT_MOUSE_LEFT] = true;
+            }
+            currently_processing_window->inputs_held[INPUT_MOUSE_LEFT] = true;
+            return 0;
+        }
+        case WM_LBUTTONUP: {
+            currently_processing_window->mouse_capture_sum -= 1;
+            if (currently_processing_window->mouse_capture_sum == 0) ReleaseCapture();
+
+            currently_processing_window->inputs_up[INPUT_MOUSE_LEFT]   = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_LEFT] = false;
+            return 0;
+        }
+        case WM_MBUTTONDOWN: {
+            if (currently_processing_window->mouse_capture_sum == 0) SetCapture(currently_processing_window->handle);
+            currently_processing_window->mouse_capture_sum += 1;
+
+            if (!currently_processing_window->inputs_held[INPUT_MOUSE_MIDDLE]) {
+                currently_processing_window->inputs_down[INPUT_MOUSE_MIDDLE] = true;
+            }
+            currently_processing_window->inputs_held[INPUT_MOUSE_MIDDLE] = true;
+            return 0;
+        }
+        case WM_MBUTTONUP: {
+            currently_processing_window->mouse_capture_sum -= 1;
+            if (currently_processing_window->mouse_capture_sum == 0) ReleaseCapture();
+
+            currently_processing_window->inputs_up[INPUT_MOUSE_MIDDLE]   = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_MIDDLE] = false;
+            return 0;
+        }
+        case WM_RBUTTONDOWN: {
+            if (currently_processing_window->mouse_capture_sum == 0) SetCapture(currently_processing_window->handle);
+            currently_processing_window->mouse_capture_sum += 1;
+
+            if (!currently_processing_window->inputs_held[INPUT_MOUSE_RIGHT]) {
+                currently_processing_window->inputs_down[INPUT_MOUSE_RIGHT] = true;
+            }
+            currently_processing_window->inputs_held[INPUT_MOUSE_RIGHT] = true;
+            return 0;
+        }
+        case WM_RBUTTONUP: {
+            currently_processing_window->mouse_capture_sum -= 1;
+            if (currently_processing_window->mouse_capture_sum == 0) ReleaseCapture();
+
+            currently_processing_window->inputs_up[INPUT_MOUSE_RIGHT]   = true;
+            currently_processing_window->inputs_held[INPUT_MOUSE_RIGHT] = false;
+            return 0;
+        }
+        case WM_ACTIVATEAPP: {
+            currently_processing_window->is_focused = (bool)w;
+            return 0;
+        }
+        case WM_CLOSE: {
+            currently_processing_window->should_close = true;
+            return 0;
+        }
+        case WM_DESTROY: {
+            PostQuitMessage(0);
+            return 0;
+        }
+        default: {
+            // printf("Unhandled windows message: %u\n", msg);
+        }
+    }
+
+    return DefWindowProc(hwnd, msg, w, l);
+}
+
+Window create_window(int width, int height) {
+    const char *CLASS_NAME = "my window class";
+    WNDCLASSEXA wc = {};
+    wc.cbSize = sizeof(WNDCLASSEXA);
+    wc.style = CS_OWNDC;
+    wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = WindowProc;
+    wc.hInstance = GetModuleHandle(nullptr);
+    wc.lpszClassName = CLASS_NAME;
+    auto c = RegisterClassExA(&wc);
+    assert(c != 0);
+
+    Window window = {};
+    window.width = width;
+    window.height = height;
+    currently_processing_window = &window;
+    window.handle = CreateWindowEx(
+        0,
+        CLASS_NAME,
+        "Fancy Window",
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        300, 150, width, height,
+        nullptr,
+        nullptr,
+        wc.hInstance,
+        nullptr
+        );
+    currently_processing_window = nullptr;
+
+    assert(window.handle != nullptr && "window.handle was null");
+    window.windows_device_context = GetDC(window.handle);
+    return window;
+}
+
+void update_window(Window *window) {
+    assert(currently_processing_window == nullptr);
+    currently_processing_window = window;
+    currently_processing_window->mouse_position_pixel_delta = {};
+    currently_processing_window->mouse_scroll = {};
+    memset(&currently_processing_window->inputs_down[0], 0, ARRAYSIZE(currently_processing_window->inputs_down));
+    memset(&currently_processing_window->inputs_up[0],   0, ARRAYSIZE(currently_processing_window->inputs_up));
+
+    MSG msg = {};
+    while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+    currently_processing_window->updated_at_least_once = true;
+    currently_processing_window = nullptr;
+}
+
+
+
+bool get_input(Window *window, Input input) {
+    return window->inputs_held[input];
+}
+
+bool get_input_down(Window *window, Input input) {
+    return window->inputs_down[input];
+}
+
+bool get_input_up(Window *window, Input input) {
+    return window->inputs_up[input];
+}
+
+#endif
+
+
+//
+// Common graphics stuff
+//
+
+// todo(josh): add a get_texture_format_info(Texture_Format) API
+Texture_Format_Info texture_format_infos[TF_COUNT];
+
+#define SWAP_CHAIN_FORMAT      TF_R8G8B8A8_UINT
+#define SWAP_CHAIN_FORMAT_SRGB TF_R8G8B8A8_UINT_SRGB
+
+void init_render_backend(Window *window) {
+    texture_format_infos[TF_R8_UINT]            = {1,  1, false};
+    texture_format_infos[TF_R32_INT]            = {4,  1, false};
+    texture_format_infos[TF_R32_FLOAT]          = {4,  1, false};
+    texture_format_infos[TF_R16G16B16A16_FLOAT] = {8,  4, false};
+    texture_format_infos[TF_R32G32B32A32_FLOAT] = {16, 4, false};
+    texture_format_infos[TF_R8G8B8A8_UINT]      = {4,  4, false};
+    texture_format_infos[TF_R8G8B8A8_UINT_SRGB] = {4,  4, false};
+    texture_format_infos[TF_DEPTH_STENCIL]      = {4,  2, true};
+
+    // make sure all texture format infos are supplied
+    for (int i = 0; i < ARRAYSIZE(texture_format_infos); i++) {
+        if (texture_format_infos[i].pixel_size_in_bytes == 0) {
+            if ((Texture_Format)i != TF_INVALID && (Texture_Format)i != TF_COUNT) {
+                printf("Missing texture_format_info for %d\n", i);
+                assert(false);
+            }
+        }
+    }
+
+    init_graphics_driver(window);
+}
+
+void create_color_and_depth_buffers(Texture_Description description, Texture *out_color_buffer, Texture *out_depth_buffer) {
+    assert(out_color_buffer != nullptr);
+    assert(out_depth_buffer != nullptr);
+
+    description.render_target = true;
+    *out_color_buffer = create_texture(description);
+
+    description.wrap_mode = TWM_POINT_CLAMP;
+    description.format = TF_DEPTH_STENCIL;
+    *out_depth_buffer = create_texture(description);
+}
+
+void ensure_texture_size(Texture *texture, int width, int height) {
+    assert(width != 0);
+    assert(height != 0);
+
+    if (texture->description.width != width || texture->description.height != height) {
+        printf("Resizing texture %dx%d...\n", width, height);
+        Texture_Description desc = texture->description;
+        destroy_texture(*texture);
+        desc.width  = width;
+        desc.height = height;
+        *texture = create_texture(desc);
+    }
+}
+
+Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
+    int width;
+    int height;
+    byte *color_data = load_texture_data_from_file(filename, &width, &height);
+    if (!color_data) {
+        printf("create_texture_from_file() couldn't find file: %s\n", filename);
+        return {};
+    }
+    defer(delete_texture_data(color_data));
+
+    Texture_Description texture_description = {};
+    texture_description.width = width;
+    texture_description.height = height;
+    texture_description.color_data = color_data;
+    texture_description.format = format;
+    texture_description.wrap_mode = wrap_mode;
+    texture_description.type = TT_2D;
+    Texture texture = create_texture(texture_description);
+    return texture;
+}
+
+byte *load_texture_data_from_file(char *filename, int *width, int *height) {
+    int filedata_len;
+    char *filedata = read_entire_file(filename, &filedata_len);
+    if (!filedata) {
+        printf("load_texture_data_from_file() couldn't find file: %s\n", filename);
+        return {};
+    }
+    assert(filedata != nullptr);
+    defer(free(filedata));
+    // stbi_set_flip_vertically_on_load(1);
+    int n;
+    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, width, height, &n, 4);
+    assert(color_data);
+    return color_data;
+}
+
+void delete_texture_data(byte *data) {
+    stbi_image_free(data);
+}
+
+
+
+//
+// Specific render backends
+//
+
+#ifdef CFF_GRAPHICS_DIRECTX11
+
 struct DirectX {
     ID3D11Device *device;
     ID3D11DeviceContext *device_context;
@@ -19,10 +930,10 @@ struct DirectX {
     ID3D11BlendState *alpha_blend_state;
     ID3D11BlendState *no_alpha_blend_state;
 
-    ID3D11RenderTargetView   *cur_rtvs[RB_MAX_COLOR_BUFFERS];
-    Texture current_render_targets[RB_MAX_COLOR_BUFFERS]; // note(josh): for resolving MSAA
+    ID3D11RenderTargetView   *cur_rtvs[CFF_MAX_BOUND_RENDER_TARGETS];
+    Texture current_render_targets[CFF_MAX_BOUND_RENDER_TARGETS]; // note(josh): for resolving MSAA
     ID3D11DepthStencilView   *cur_dsv;
-    ID3D11ShaderResourceView *cur_srvs[RB_MAX_BOUND_TEXTURES];
+    ID3D11ShaderResourceView *cur_srvs[CFF_MAX_BOUND_TEXTURES];
     ID3D11UnorderedAccessView *cur_uavs[8]; // todo(josh): figure out a good constant
 };
 
@@ -331,8 +1242,8 @@ DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
 }
 
 Vertex_Format create_vertex_format(Vertex_Field *fields, int num_fields, Vertex_Shader shader) {
-    ASSERTF(num_fields <= RB_MAX_VERTEX_FIELDS, "Too many vertex fields: %d vs %d. You can override the max vertex fields by defining RB_MAX_VERTEX_FIELDS before including render_backend.h", num_fields, RB_MAX_VERTEX_FIELDS);
-    D3D11_INPUT_ELEMENT_DESC input_elements[RB_MAX_VERTEX_FIELDS] = {};
+    ASSERTF(num_fields <= CFF_MAX_VERTEX_FIELDS, "Too many vertex fields: %d vs %d. You can override the max vertex fields by defining CFF_MAX_VERTEX_FIELDS before including render_backend.h", num_fields, CFF_MAX_VERTEX_FIELDS);
+    D3D11_INPUT_ELEMENT_DESC input_elements[CFF_MAX_VERTEX_FIELDS] = {};
     for (int idx = 0; idx < num_fields; idx++) {
         D3D11_INPUT_ELEMENT_DESC *desc = &input_elements[idx];
         Vertex_Field *field = &fields[idx];
@@ -823,7 +1734,7 @@ ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
 }
 
 void bind_texture(Texture texture, int slot) {
-    ASSERT(slot < RB_MAX_BOUND_TEXTURES);
+    ASSERT(slot < CFF_MAX_BOUND_TEXTURES);
     if (directx.cur_srvs[slot]) {
         directx.cur_srvs[slot]->Release();
         directx.cur_srvs[slot] = {};
@@ -866,7 +1777,7 @@ void copy_texture(Texture dst, Texture src) {
 }
 
 void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
-    ASSERT(num_color_buffers <= RB_MAX_COLOR_BUFFERS);
+    ASSERT(num_color_buffers <= CFF_MAX_BOUND_RENDER_TARGETS);
 
     unset_render_targets();
 
@@ -913,7 +1824,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
     bool depth_msaa = depth_buffer_to_use->description.sample_count > 1;
     directx.cur_dsv = dx_create_depth_stencil_view(depth_msaa ? depth_buffer_to_use->backend.handle_msaa_2d : depth_buffer_to_use->backend.handle_2d, depth_buffer_to_use->description.format, depth_msaa);
 
-    directx.device_context->OMSetRenderTargets(RB_MAX_COLOR_BUFFERS, &directx.cur_rtvs[0], directx.cur_dsv);
+    directx.device_context->OMSetRenderTargets(CFF_MAX_BOUND_RENDER_TARGETS, &directx.cur_rtvs[0], directx.cur_dsv);
 
     ASSERT(viewport_width  != 0);
     ASSERT(viewport_height != 0);
@@ -921,7 +1832,7 @@ void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *
 }
 
 void unset_render_targets() {
-    for (int i = 0; i < RB_MAX_COLOR_BUFFERS; i++) {
+    for (int i = 0; i < CFF_MAX_BOUND_RENDER_TARGETS; i++) {
         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
         if (directx.cur_rtvs[i] != nullptr) {
             Texture target = directx.current_render_targets[i];
@@ -945,7 +1856,7 @@ void unset_render_targets() {
 }
 
 void clear_bound_render_targets(Vector4 color) {
-    for (int i = 0; i < RB_MAX_COLOR_BUFFERS; i++) {
+    for (int i = 0; i < CFF_MAX_BOUND_RENDER_TARGETS; i++) {
         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
         if (rtv != nullptr) {
             float color_elements[4] = { color.x, color.y, color.z, color.w };
@@ -961,3 +1872,6 @@ void present(bool vsync) {
     directx.swap_chain_handle->Present(vsync, 0);
 }
 
+#endif
+
+#endif

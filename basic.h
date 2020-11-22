@@ -325,8 +325,6 @@ void run_array_tests() {
 
 
 
-
-
 struct String_Builder {
     Array<char> buf;
 
@@ -334,11 +332,10 @@ struct String_Builder {
     void printf(char *fmt, ...);
     void clear();
     char *string();
+    void destroy();
 };
 
 String_Builder make_string_builder(Allocator allocator, int capacity = 16);
-void destroy_string_builder(String_Builder sb);
-
 
 
 

@@ -1,8 +1,5 @@
 #include "renderer.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
@@ -17,47 +14,6 @@ Renderer_State renderer_state;
 void init_renderer(Window *window) {
     renderer_state.pass_cbuffer_handle  = create_buffer(BT_CONSTANT, nullptr, sizeof(Pass_CBuffer));
     renderer_state.model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
-}
-
-Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode) {
-    int width;
-    int height;
-    byte *color_data = load_texture_data_from_file(filename, &width, &height);
-    if (!color_data) {
-        printf("create_texture_from_file() couldn't find file: %s\n", filename);
-        return {};
-    }
-    defer(delete_texture_data(color_data));
-
-    Texture_Description texture_description = {};
-    texture_description.width = width;
-    texture_description.height = height;
-    texture_description.color_data = color_data;
-    texture_description.format = format;
-    texture_description.wrap_mode = wrap_mode;
-    texture_description.type = TT_2D;
-    Texture texture = create_texture(texture_description);
-    return texture;
-}
-
-byte *load_texture_data_from_file(char *filename, int *width, int *height) {
-    int filedata_len;
-    char *filedata = read_entire_file(filename, &filedata_len);
-    if (!filedata) {
-        printf("load_texture_data_from_file() couldn't find file: %s\n", filename);
-        return {};
-    }
-    assert(filedata != nullptr);
-    defer(free(filedata));
-    // stbi_set_flip_vertically_on_load(1);
-    int n;
-    byte *color_data = stbi_load_from_memory((byte *)filedata, filedata_len, width, height, &n, 4);
-    assert(color_data);
-    return color_data;
-}
-
-void delete_texture_data(byte *data) {
-    stbi_image_free(data);
 }
 
 Font load_font_from_file(char *filename, float size) {

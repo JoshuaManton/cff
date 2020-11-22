@@ -1,9 +1,10 @@
 #pragma once
 
-#include "window.h"
+#include "application.h"
 #include "math.h"
-#include "render_backend.h"
 #include "stb_truetype.h"
+
+void init_renderer(Window *window);
 
 struct Vertex {
     Vector3 position;
@@ -117,10 +118,6 @@ struct Lighting_CBuffer {
 #define TS_SIMPLE_ALBEDO 0
 
 
-
-Texture create_texture_from_file(char *filename, Texture_Format format, Texture_Wrap_Mode wrap_mode);
-byte *load_texture_data_from_file(char *filename, int *width, int *height);
-void delete_texture_data(byte *data);
 
 struct Font {
     Texture texture;

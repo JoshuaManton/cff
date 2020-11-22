@@ -2,9 +2,8 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-#include "basic.h"
+#include "application.h"
 #include "renderer.h"
-#include "render_backend.h"
 
 void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *vert2) {
     Vector3 delta_pos1 = vert1->position - vert0->position;
@@ -20,7 +19,7 @@ void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *ver
     // note(josh): we += here instead of = because in the case of indexing we could hit
     // the same vertex more than once, so we want an "average" of all the tangents/bitangents
     // for that vertex. explained here under the "Indexing" heading
-    // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/#computing-the-tangents-and-bitangents
+    // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/#indexing
 
     vert0->tangent += tangent;
     vert1->tangent += tangent;
@@ -133,10 +132,8 @@ void process_node(const aiScene *scene, aiNode *node, char *directory, Allocator
                     assert(property->mType == aiPTI_String);
                     char *cstr = ((aiString *)property->mData)->data;
                     String_Builder path_sb = make_string_builder(allocator);
-                    defer(destroy_string_builder(path_sb));
-                    path_sb.printf("%s/", directory);
-                    path_sb.print(cstr);
-                    printf("%s\n", path_sb.string());
+                    defer(path_sb.destroy());
+                    path_sb.printf("%s/%s", directory, cstr);
                     switch (property->mSemantic) {
                         // todo(josh): there is probably a material parameter for the wrap mode ???
                         // todo(josh): there is probably a material parameter for the wrap mode ???

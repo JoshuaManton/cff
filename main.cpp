@@ -1,13 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 
 #define DEVELOPER
 
-#include "window.h"
+#define CFF_APPLICATION_IMPLEMENTATION
+#include "application.h"
 #include "basic.h"
 #include "math.h"
-#include "render_backend.h"
 #include "renderer.h"
 
 #ifdef DEVELOPER
@@ -16,14 +15,13 @@
 
 /*
 TODO:
--draw commands
--assimp model scale
--model bounding boxes/spheres
 -particle systems?
 -instancing (do we support this already?)
+-assimp model scale
+-model bounding boxes/spheres
+-dear imgui?
 -depth sorting to reduce overdraw
 -transparency sorting to alpha blend properly
--dear imgui?
 -point light shadows?
 -fix alpha blending without ruining bloom
 -spot lights
@@ -87,8 +85,6 @@ Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture pi
     end_render_pass();
     return last_render_target;
 }
-
-
 
 void main() {
     init_platform();
