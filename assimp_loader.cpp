@@ -133,7 +133,10 @@ void process_node(const aiScene *scene, aiNode *node, char *directory, Allocator
                     char *cstr = ((aiString *)property->mData)->data;
                     String_Builder path_sb = make_string_builder(allocator);
                     defer(path_sb.destroy());
-                    path_sb.printf("%s/%s", directory, cstr);
+                    if (directory) {
+                        path_sb.printf("%s/", directory);
+                    }
+                    path_sb.print(cstr);
                     switch (property->mSemantic) {
                         // todo(josh): there is probably a material parameter for the wrap mode ???
                         // todo(josh): there is probably a material parameter for the wrap mode ???
@@ -239,8 +242,7 @@ Model load_model_from_file(char *filename, Allocator allocator) {
     }
 
     char *directory = path_directory(filename, allocator);
-    assert(directory != nullptr);
-    defer(free(allocator, directory));
+    defer(if (directory) free(allocator, directory));
 
     Model model = create_model(allocator);
     process_node(scene, scene->mRootNode, directory, allocator, &model);

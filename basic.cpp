@@ -300,7 +300,7 @@ char *path_directory(char *filepath, Allocator allocator) {
             break;
         }
     }
-    if (slash_index == 0) {
+    if (slash_index == -1) {
         return nullptr;
     }
     int length_to_end = length - (length - slash_index);
