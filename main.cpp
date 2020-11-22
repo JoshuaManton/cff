@@ -18,15 +18,17 @@
 /*
 TODO:
 -draw commands
+-assimp model scale
+-model bounding boxes/spheres
 -particle systems?
--dynamic exposure
 -instancing (do we support this already?)
 -depth sorting to reduce overdraw
 -transparency sorting to alpha blend properly
 -dear imgui?
--point light shadows
+-point light shadows?
 -fix alpha blending without ruining bloom
 -spot lights
+-dynamic exposure
 -proper IBL
 -cascaded shadow maps
 -skeletal animation?
@@ -34,7 +36,7 @@ TODO:
 */
 
 struct Draw_Command {
-    Array<Loaded_Mesh> meshes;
+    Model model;
     Vector3 position;
     Vector3 scale;
     Quaternion orientation;
@@ -43,10 +45,10 @@ struct Draw_Command {
 
 void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
     // Quaternion helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
-    // draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, false);
-    draw_meshes(helmet_meshes, v3(0, 4, 0), v3(0.01, 0.01, 0.01), quaternion_identity(),    v4(1, 1, 1, 1), render_options, false);
-    // draw_meshes(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, true);
-    // draw_meshes(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation,    v4(1, 1, 1, 1), render_options, true);
+    // draw_model(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, false);
+    // draw_model(helmet_meshes, v3(0, 4, 0), v3(0.01, 0.01, 0.01), quaternion_identity(),    v4(1, 1, 1, 1), render_options, false);
+    // draw_model(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, true);
+    // draw_model(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation,    v4(1, 1, 1, 1), render_options, true);
 }
 
 struct Blur_CBuffer {
@@ -242,31 +244,28 @@ void main() {
 
     Array<Loaded_Mesh> helmet_meshes = {};
     helmet_meshes.allocator = default_allocator();
-    // load_mesh_from_file("sponza/DamagedHelmet.gltf", &helmet_meshes);
+    // load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
 
     Array<Loaded_Mesh> sponza_meshes = {};
     sponza_meshes.allocator = default_allocator();
-    // load_mesh_from_file("sponza/sponza.glb", &sponza_meshes);
+    // load_model_from_file("sponza/sponza.glb", default_allocator());
 
     Ship_Models ship_models = {};
 
-    ship_models.small_ship_meshes.allocator = default_allocator();
-    load_mesh_from_file("SM_Ship_Stealth_02.fbx", &ship_models.small_ship_meshes);
-    ship_models.small_ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_models.small_ship_meshes[0].material.metallic  = 1.0;
-    ship_models.small_ship_meshes[0].material.roughness = 0.35;
+    ship_models.small_ship_model = load_model_from_file("SM_Ship_Stealth_02.fbx", default_allocator());
+    ship_models.small_ship_model.meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_models.small_ship_model.meshes[0].material.metallic  = 1.0;
+    ship_models.small_ship_model.meshes[0].material.roughness = 0.35;
 
-    ship_models.big_ship_meshes.allocator = default_allocator();
-    load_mesh_from_file("SM_Ship_Cruiser_01.fbx", &ship_models.big_ship_meshes);
-    ship_models.big_ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_models.big_ship_meshes[0].material.metallic  = 1.0;
-    ship_models.big_ship_meshes[0].material.roughness = 0.35;
+    ship_models.big_ship_model = load_model_from_file("SM_Ship_Cruiser_01.fbx", default_allocator());
+    ship_models.big_ship_model.meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_models.big_ship_model.meshes[0].material.metallic  = 1.0;
+    ship_models.big_ship_model.meshes[0].material.roughness = 0.35;
 
-    ship_models.sniper_ship_meshes.allocator = default_allocator();
-    load_mesh_from_file("SM_Ship_Cruiser_02.fbx", &ship_models.sniper_ship_meshes);
-    ship_models.sniper_ship_meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_models.sniper_ship_meshes[0].material.metallic  = 1.0;
-    ship_models.sniper_ship_meshes[0].material.roughness = 0.35;
+    ship_models.sniper_ship_model = load_model_from_file("SM_Ship_Cruiser_02.fbx", default_allocator());
+    ship_models.sniper_ship_model.meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
+    ship_models.sniper_ship_model.meshes[0].material.metallic  = 1.0;
+    ship_models.sniper_ship_model.meshes[0].material.roughness = 0.35;
 
 
 
@@ -329,8 +328,8 @@ void main() {
     cube_loaded_mesh.material.ambient = 0.5;
     cube_loaded_mesh.material.roughness = 0.3;
     cube_loaded_mesh.material.metallic = 1;
-    Array<Loaded_Mesh> cube_model = make_array<Loaded_Mesh>(default_allocator());
-    cube_model.append(cube_loaded_mesh);
+    Model cube_model = create_model(default_allocator());
+    cube_model.meshes.append(cube_loaded_mesh);
 
 
 
@@ -390,7 +389,7 @@ void main() {
             switch (entity->kind) {
                 case ENTITY_SHIP: {
                     Draw_Command command = {};
-                    command.meshes = *entity->ship.definition.model;
+                    command.model = *entity->ship.definition.model;
                     command.position = entity->position;
                     command.scale = v3(0.0025, 0.0025, 0.0025);
                     command.orientation = entity->orientation;
@@ -405,7 +404,7 @@ void main() {
                 }
                 case ENTITY_PROJECTILE: {
                     Draw_Command command = {};
-                    command.meshes = cube_model;
+                    command.model = cube_model;
                     command.position = entity->position;
                     command.scale = v3(1, 1, 1);
                     command.orientation = quaternion_identity();
@@ -443,8 +442,8 @@ void main() {
             bind_shaders(vertex_shader, shadow_pixel_shader);
 
             Foreach (command, render_queue) {
-                draw_meshes(command->meshes, command->position, command->scale, command->orientation, command->color, render_options, false);
-                draw_meshes(command->meshes, command->position, command->scale, command->orientation, command->color, render_options, true);
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
             }
 
             end_render_pass();
@@ -562,8 +561,8 @@ void main() {
 
             bind_shaders(vertex_shader, pixel_shader);
             Foreach (command, render_queue) {
-                draw_meshes(command->meshes, command->position, command->scale, command->orientation, command->color, render_options, false);
-                draw_meshes(command->meshes, command->position, command->scale, command->orientation, command->color, render_options, true);
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
             }
 
 

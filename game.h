@@ -7,9 +7,9 @@
 typedef u64 EntityID;
 
 struct Ship_Models {
-    Array<Loaded_Mesh> small_ship_meshes;
-    Array<Loaded_Mesh> big_ship_meshes;
-    Array<Loaded_Mesh> sniper_ship_meshes;
+    Model small_ship_model;
+    Model big_ship_model;
+    Model sniper_ship_model;
 };
 
 struct Camera {
@@ -53,7 +53,7 @@ struct Weapon {
 };
 
 struct Ship_Definition {
-    Array<Loaded_Mesh> *model;
+    Model *model;
     float move_speed;
     Weapon weapons[8];
     int num_weapons;

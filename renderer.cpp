@@ -110,6 +110,16 @@ void destroy_font(Font font) {
     destroy_texture(font.texture);
 }
 
+Model create_model(Allocator allocator) {
+    Model model = {};
+    model.meshes = make_array<Loaded_Mesh>(allocator);
+    return model;
+}
+
+void destroy_model(Model model) {
+    model.meshes.destroy();
+}
+
 void begin_render_pass(Render_Pass_Desc *pass) {
     assert(renderer_state.current_render_pass == nullptr);
     renderer_state.current_render_pass = pass;
@@ -183,8 +193,8 @@ void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int 
     issue_draw_call(num_vertices, num_indices);
 }
 
-void draw_meshes(Array<Loaded_Mesh> meshes, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color, Render_Options options, bool draw_transparency) {
-    Foreach (mesh, meshes) {
+void draw_model(Model model, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color, Render_Options options, bool draw_transparency) {
+    Foreach (mesh, model.meshes) {
         if (mesh->has_material) {
             if (mesh->material.has_transparency != draw_transparency) {
                 continue;

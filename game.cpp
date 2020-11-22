@@ -57,7 +57,7 @@ void init_game_state(Game_State *game_state, Ship_Models *ship_models) {
     game_state->active_entities = make_array<Entity *>(default_allocator(), 1024); // todo(josh): @Leak
 
     Ship_Definition small_ship = {};
-    small_ship.model = &ship_models->small_ship_meshes;
+    small_ship.model = &ship_models->small_ship_model;
     small_ship.move_speed = 5;
     small_ship.weapons[0].facing_direction = v3(0, 0, 1);
     small_ship.weapons[0].effective_angle = 10;
@@ -74,36 +74,36 @@ void init_game_state(Game_State *game_state, Ship_Models *ship_models) {
     small_ship.num_weapons = 2;
 
     Ship_Definition big_ship = {};
-    big_ship.model = &ship_models->big_ship_meshes;
+    big_ship.model = &ship_models->big_ship_model;
     big_ship.move_speed = 2;
     big_ship.weapons[0].facing_direction = v3(1, 0, 0);
     big_ship.weapons[0].effective_angle = 30;
     big_ship.weapons[0].shot_cooldown = 1;
     big_ship.weapons[0].projectile_color = v4(100, 20, 20, 1);
-    big_ship.weapons[0].offset_from_ship_position = v3(1, 0, 1);
+    big_ship.weapons[0].offset_from_ship_position = v3(1, 0, 3);
     big_ship.weapons[0].range = 25;
     big_ship.weapons[1].facing_direction = v3(1, 0, 0);
     big_ship.weapons[1].effective_angle = 30;
     big_ship.weapons[1].shot_cooldown = 1;
     big_ship.weapons[1].projectile_color = v4(100, 20, 20, 1);
-    big_ship.weapons[1].offset_from_ship_position = v3(1, 0, -1);
+    big_ship.weapons[1].offset_from_ship_position = v3(1, 0, -3);
     big_ship.weapons[1].range = 25;
     big_ship.weapons[2].facing_direction = v3(-1, 0, 0);
     big_ship.weapons[2].effective_angle = 30;
     big_ship.weapons[2].shot_cooldown = 1;
     big_ship.weapons[2].projectile_color = v4(100, 20, 20, 1);
-    big_ship.weapons[2].offset_from_ship_position = v3(-1, 0, 1);
+    big_ship.weapons[2].offset_from_ship_position = v3(-1, 0, 3);
     big_ship.weapons[2].range = 25;
     big_ship.weapons[3].facing_direction = v3(-1, 0, 0);
     big_ship.weapons[3].effective_angle = 30;
     big_ship.weapons[3].shot_cooldown = 1;
     big_ship.weapons[3].projectile_color = v4(100, 20, 20, 1);
-    big_ship.weapons[3].offset_from_ship_position = v3(-1, 0, -1);
+    big_ship.weapons[3].offset_from_ship_position = v3(-1, 0, -3);
     big_ship.weapons[3].range = 25;
     big_ship.num_weapons = 4;
 
     Ship_Definition sniper_ship = {};
-    sniper_ship.model = &ship_models->sniper_ship_meshes;
+    sniper_ship.model = &ship_models->sniper_ship_model;
     sniper_ship.move_speed = 3;
     sniper_ship.weapons[0].facing_direction = v3(0, 0, 1);
     sniper_ship.weapons[0].effective_angle = 5;
@@ -217,7 +217,7 @@ void update_game(Game_State *game_state, float dt, Window *window) {
     }
     else {
         game_state->camera.position.y = 50;
-        const float GAME_CAMERA_SPEED = 10;
+        const float GAME_CAMERA_SPEED = 15;
         if (get_input(window, INPUT_W)) game_state->camera.position.z += GAME_CAMERA_SPEED * dt;
         if (get_input(window, INPUT_A)) game_state->camera.position.x -= GAME_CAMERA_SPEED * dt;
         if (get_input(window, INPUT_S)) game_state->camera.position.z -= GAME_CAMERA_SPEED * dt;

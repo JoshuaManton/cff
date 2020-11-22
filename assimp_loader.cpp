@@ -31,7 +31,7 @@ void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *ver
     vert2->bitangent += bitangent;
 }
 
-void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_array) {
+void process_node(const aiScene *scene, aiNode *node, Model *out_model) {
     Array<Vertex> vertices = make_array<Vertex>(default_allocator(), 1024);
     defer(vertices.destroy());
 
@@ -218,15 +218,15 @@ void process_node(const aiScene *scene, aiNode *node, Array<Loaded_Mesh> *out_ar
             material,
             has_material,
         };
-        out_array->append(loaded_mesh);
+        out_model->meshes.append(loaded_mesh);
     }
 
     for (int i = 0; i < node->mNumChildren; i++) {
-        process_node(scene, node->mChildren[i], out_array);
+        process_node(scene, node->mChildren[i], out_model);
     }
 }
 
-void load_mesh_from_file(char *filename, Array<Loaded_Mesh> *out_array) {
+Model load_model_from_file(char *filename, Allocator allocator) {
     Assimp::Importer importer;
 
     const aiScene *scene = importer.ReadFile(filename,
@@ -240,5 +240,7 @@ void load_mesh_from_file(char *filename, Array<Loaded_Mesh> *out_array) {
         assert(false);
     }
 
-    process_node(scene, scene->mRootNode, out_array);
+    Model model = create_model(allocator);
+    process_node(scene, scene->mRootNode, &model);
+    return model;
 }
