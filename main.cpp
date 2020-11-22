@@ -9,7 +9,6 @@
 #include "math.h"
 #include "render_backend.h"
 #include "renderer.h"
-#include "game.h"
 
 #ifdef DEVELOPER
 #include "assimp_loader.cpp"
@@ -42,14 +41,6 @@ struct Draw_Command {
     Quaternion orientation;
     Vector4 color;
 };
-
-void draw_scene(Render_Options render_options, float time_since_startup, Array<Loaded_Mesh> sponza_meshes, Array<Loaded_Mesh> helmet_meshes) {
-    // Quaternion helmet_orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
-    // draw_model(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, false);
-    // draw_model(helmet_meshes, v3(0, 4, 0), v3(0.01, 0.01, 0.01), quaternion_identity(),    v4(1, 1, 1, 1), render_options, false);
-    // draw_model(sponza_meshes, v3(0, 0, 0), v3(1, 1, 1), quaternion_identity(), v4(1, 1, 1, 1), render_options, true);
-    // draw_model(helmet_meshes, v3(0, 4, 0), v3(1, 1, 1), helmet_orientation,    v4(1, 1, 1, 1), render_options, true);
-}
 
 struct Blur_CBuffer {
     int horizontal;
@@ -242,30 +233,8 @@ void main() {
     render_options.do_emission_map  = true;
     render_options.do_ao_map        = true;
 
-    Array<Loaded_Mesh> helmet_meshes = {};
-    helmet_meshes.allocator = default_allocator();
-    // load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
-
-    Array<Loaded_Mesh> sponza_meshes = {};
-    sponza_meshes.allocator = default_allocator();
-    // load_model_from_file("sponza/sponza.glb", default_allocator());
-
-    Ship_Models ship_models = {};
-
-    ship_models.small_ship_model = load_model_from_file("SM_Ship_Stealth_02.fbx", default_allocator());
-    ship_models.small_ship_model.meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_models.small_ship_model.meshes[0].material.metallic  = 1.0;
-    ship_models.small_ship_model.meshes[0].material.roughness = 0.35;
-
-    ship_models.big_ship_model = load_model_from_file("SM_Ship_Cruiser_01.fbx", default_allocator());
-    ship_models.big_ship_model.meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_models.big_ship_model.meshes[0].material.metallic  = 1.0;
-    ship_models.big_ship_model.meshes[0].material.roughness = 0.35;
-
-    ship_models.sniper_ship_model = load_model_from_file("SM_Ship_Cruiser_02.fbx", default_allocator());
-    ship_models.sniper_ship_model.meshes[0].material.albedo_map = create_texture_from_file("PolygonSciFiSpace_Texture_01_A.png", TF_R8G8B8A8_UINT_SRGB, TWM_LINEAR_WRAP);
-    ship_models.sniper_ship_model.meshes[0].material.metallic  = 1.0;
-    ship_models.sniper_ship_model.meshes[0].material.roughness = 0.35;
+    Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
+    Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
 
 
 
@@ -332,10 +301,8 @@ void main() {
     cube_model.meshes.append(cube_loaded_mesh);
 
 
-
-    Game_State game_state = {};
-    init_game_state(&game_state, &ship_models);
-
+    Vector3 camera_position = {};
+    Quaternion camera_orientation = quaternion_identity();
 
 
     Array<Draw_Command> render_queue = make_array<Draw_Command>(default_allocator(), 16);
@@ -366,7 +333,34 @@ void main() {
         if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
         if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
 
-        update_game(&game_state, dt, &main_window);
+        const float CAMERA_SPEED_BASE = 5;
+        const float CAMERA_SPEED_FAST = 20;
+        const float CAMERA_SPEED_SLOW = 0.5;
+
+        float camera_speed = CAMERA_SPEED_BASE;
+             if (get_input(&main_window, INPUT_SHIFT)) camera_speed = CAMERA_SPEED_FAST;
+        else if (get_input(&main_window, INPUT_ALT))   camera_speed = CAMERA_SPEED_SLOW;
+
+        if (get_input(&main_window, INPUT_E)) camera_position += quaternion_up(camera_orientation)      * camera_speed * dt;
+        if (get_input(&main_window, INPUT_Q)) camera_position -= quaternion_up(camera_orientation)      * camera_speed * dt;
+        if (get_input(&main_window, INPUT_W)) camera_position += quaternion_forward(camera_orientation) * camera_speed * dt;
+        if (get_input(&main_window, INPUT_S)) camera_position -= quaternion_forward(camera_orientation) * camera_speed * dt;
+        if (get_input(&main_window, INPUT_D)) camera_position += quaternion_right(camera_orientation)   * camera_speed * dt;
+        if (get_input(&main_window, INPUT_A)) camera_position -= quaternion_right(camera_orientation)   * camera_speed * dt;
+
+        if (get_input(&main_window, INPUT_MOUSE_RIGHT)) {
+            Vector2 delta = main_window.mouse_position_pixel_delta * 0.25f;
+            Vector3 rotate_vector = v3(-delta.y, delta.x, 0);
+
+            Quaternion x = axis_angle(v3(1, 0, 0), to_radians(rotate_vector.x));
+            Quaternion y = axis_angle(v3(0, 1, 0), to_radians(rotate_vector.y));
+            Quaternion z = axis_angle(v3(0, 0, 1), to_radians(rotate_vector.z));
+            Quaternion result = y * camera_orientation;
+            result = result * x;
+            result = result * z;
+            result = normalize(result);
+            camera_orientation = result;
+        }
 
 
 
@@ -384,36 +378,21 @@ void main() {
 
         render_queue.clear();
 
-        For (idx, game_state.active_entities) {
-            Entity *entity = game_state.active_entities[idx];
-            switch (entity->kind) {
-                case ENTITY_SHIP: {
-                    Draw_Command command = {};
-                    command.model = *entity->ship.definition.model;
-                    command.position = entity->position;
-                    command.scale = v3(0.0025, 0.0025, 0.0025);
-                    command.orientation = entity->orientation;
-                    if (entity->ship.player_controlled) {
-                        command.color = v4(1, 1, 1, 1);
-                    }
-                    else {
-                        command.color = v4(1, 0.25, 0.25, 1);
-                    }
-                    render_queue.append(command);
-                    break;
-                }
-                case ENTITY_PROJECTILE: {
-                    Draw_Command command = {};
-                    command.model = cube_model;
-                    command.position = entity->position;
-                    command.scale = v3(1, 1, 1);
-                    command.orientation = quaternion_identity();
-                    command.color = entity->projectile.color;
-                    render_queue.append(command);
-                    break;
-                }
-            }
-        }
+        Draw_Command helmet_draw_command = {};
+        helmet_draw_command.model = helmet_model;
+        helmet_draw_command.position = v3(0, 4, 0);
+        helmet_draw_command.orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
+        helmet_draw_command.scale = v3(1, 1, 1);
+        helmet_draw_command.color = v4(1, 1, 1, 1);
+        render_queue.append(helmet_draw_command);
+
+        Draw_Command sponza_draw_command = {};
+        sponza_draw_command.model = sponza_model;
+        sponza_draw_command.position = v3(0, 0, 0);
+        sponza_draw_command.orientation = quaternion_identity();
+        sponza_draw_command.scale = v3(1, 1, 1);
+        sponza_draw_command.color = v4(1, 1, 1, 1);
+        render_queue.append(sponza_draw_command);
 
 
 
@@ -481,83 +460,11 @@ void main() {
             bind_texture(shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
 
             Render_Pass_Desc scene_pass = {};
-            scene_pass.camera_position = game_state.camera.position;
-            scene_pass.camera_orientation = game_state.camera.orientation;
-            scene_pass.projection_matrix = camera_projection_matrix(game_state.camera, &main_window);
+            scene_pass.camera_position = camera_position;
+            scene_pass.camera_orientation = camera_orientation;
+            scene_pass.projection_matrix = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.01, 1000);
 
             begin_render_pass(&scene_pass);
-
-            Fixed_Function ff = {};
-            bind_shaders(vertex_shader, simple_pixel_shader);
-
-            Array<Vertex> ship_lines_vertices = make_array<Vertex>(default_allocator());
-            defer(ship_lines_vertices.destroy());
-            ff_begin(&ff, &ship_lines_vertices);
-            For (idx, game_state.active_entities) {
-                Entity *entity = game_state.active_entities[idx];
-                if (entity->kind == ENTITY_SHIP) {
-                    for (int j = 0; j < entity->ship.definition.num_weapons; j++) {
-                        Weapon *weapon = &entity->ship.definition.weapons[j];
-                        Entity *target = get_entity(&game_state, weapon->current_target_id);
-
-                        Vector3 weapon_position = get_weapon_position(weapon, entity);
-                        Vector3 weapon_direction = get_weapon_direction(weapon, entity);
-
-                        Vector3 min_direction = {};
-                        min_direction.x = weapon_direction.x * cos(to_radians(weapon->effective_angle)) - weapon_direction.z * sin(to_radians(weapon->effective_angle));
-                        min_direction.z = weapon_direction.x * sin(to_radians(weapon->effective_angle)) + weapon_direction.z * cos(to_radians(weapon->effective_angle));
-                        Vector3 max_direction = {};
-                        max_direction.x = weapon_direction.x * cos(to_radians(-weapon->effective_angle)) - weapon_direction.z * sin(to_radians(-weapon->effective_angle));
-                        max_direction.z = weapon_direction.x * sin(to_radians(-weapon->effective_angle)) + weapon_direction.z * cos(to_radians(-weapon->effective_angle));
-                        ff_line(&ff, weapon_position, weapon_position + min_direction * weapon->range, v4(0, 1, 0, 1));
-                        ff_line(&ff, weapon_position, weapon_position + max_direction * weapon->range, v4(0, 1, 0, 1));
-
-                        int last_theta = -weapon->effective_angle;
-                        for (int theta = last_theta + 1; theta <= weapon->effective_angle; theta += 1) {
-                            Vector3 last_direction = {};
-                            last_direction.x = weapon_direction.x * cos(to_radians((float)last_theta)) - weapon_direction.z * sin(to_radians((float)last_theta));
-                            last_direction.z = weapon_direction.x * sin(to_radians((float)last_theta)) + weapon_direction.z * cos(to_radians((float)last_theta));
-                            Vector3 direction = {};
-                            direction.x = weapon_direction.x * cos(to_radians((float)theta)) - weapon_direction.z * sin(to_radians((float)theta));
-                            direction.z = weapon_direction.x * sin(to_radians((float)theta)) + weapon_direction.z * cos(to_radians((float)theta));
-                            ff_line(&ff, weapon_position + last_direction * weapon->range, weapon_position + direction * weapon->range, v4(0, 1, 0, 1));
-                            last_theta = theta;
-                        }
-
-                        if (target) {
-                            ff_line(&ff, weapon_position, target->position, v4(0, 1, 0, 1));
-                        }
-                    }
-
-                    Vector3 ship_position = entity->position;
-                    for (int i = 0; i < entity->ship.num_commands; i++) {
-                        int command_idx = (entity->ship.command_cursor + i) % ARRAYSIZE(entity->ship.commands);
-                        Unit_Command command = entity->ship.commands[command_idx];
-                        switch (command.kind) {
-                            case UNIT_MOVE_COMMAND: {
-                                ff_line(&ff, ship_position, command.move.to, v4(0, 1, 0, 1));
-                                ship_position = command.move.to;
-                                break;
-                            }
-                            case UNIT_ROTATE_COMMAND: {
-                                Vector3 dir_to_point = normalize(command.rotate.position_to_rotate_towards - ship_position);
-                                Vector3 left = cross(dir_to_point, v3(0, 1, 0));
-                                left *= 0.5; // make it a little smaller
-                                Vector3 arrow_start = ship_position + dir_to_point;
-                                ff_line(&ff, ship_position, arrow_start, v4(0, 1, 0, 1));
-                                ff_line(&ff, arrow_start, arrow_start + left, v4(0, 1, 0, 1));
-                                ff_line(&ff, arrow_start, arrow_start - left, v4(0, 1, 0, 1));
-                                ff_line(&ff, arrow_start + left, arrow_start + dir_to_point, v4(0, 1, 0, 1));
-                                ff_line(&ff, arrow_start - left, arrow_start + dir_to_point, v4(0, 1, 0, 1));
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            set_primitive_topology(PT_LINE_LIST);
-            ff_end(&ff);
-            set_primitive_topology(PT_TRIANGLE_LIST);
 
             bind_shaders(vertex_shader, pixel_shader);
             Foreach (command, render_queue) {
@@ -565,13 +472,12 @@ void main() {
                 draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
             }
 
-
             // skybox
             bind_shaders(skybox_vertex_shader, skybox_pixel_shader);
             bind_texture(skybox_texture, TS_PBR_ALBEDO);
 
             set_backface_cull(false);
-            draw_mesh(cube_vertex_buffer, cube_index_buffer, 24, 36, game_state.camera.position, v3(1, 1, 1), quaternion_identity(), v4(3, 3, 3, 1));
+            draw_mesh(cube_vertex_buffer, cube_index_buffer, 24, 36, camera_position, v3(1, 1, 1), quaternion_identity(), v4(3, 3, 3, 1));
             set_backface_cull(true);
 
             end_render_pass();

@@ -287,3 +287,25 @@ void String_Builder::clear() {
 char *String_Builder::string() {
     return buf.data;
 }
+
+
+
+// path/to/file.txt -> path/to
+// returns null if it doesn't hit a '/' or '\\'
+char *path_directory(char *filepath, Allocator allocator) {
+    int length = strlen(filepath);
+    int end = length;
+    for (; end >= 0; end--) {
+        if (filepath[end] == '/' || filepath[end] == '\\') {
+            break;
+        }
+    }
+    if (end == 0) {
+        return nullptr;
+    }
+    int length_to_end = length - (length - end);
+    char *new_str = (char *)alloc(allocator, length_to_end+1);
+    memcpy(new_str, filepath, length_to_end);
+    new_str[length_to_end] = '\0';
+    return new_str;
+}

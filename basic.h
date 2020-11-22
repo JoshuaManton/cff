@@ -658,3 +658,5 @@ void Hashtable<Key, Value>::get_key_header(Key key, Key_Header<Key> **out_header
 //      logging.ln("Odin map removing ", NUM_ELEMS, " elements: ", (removal_end-removal_start)/freq, "s");
 //  }
 // }
+
+char *path_directory(char *filepath, Allocator allocator);

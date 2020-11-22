@@ -31,11 +31,11 @@ void calculate_tangents_and_bitangents(Vertex *vert0, Vertex *vert1, Vertex *ver
     vert2->bitangent += bitangent;
 }
 
-void process_node(const aiScene *scene, aiNode *node, Model *out_model) {
-    Array<Vertex> vertices = make_array<Vertex>(default_allocator(), 1024);
+void process_node(const aiScene *scene, aiNode *node, char *directory, Allocator allocator, Model *out_model) {
+    Array<Vertex> vertices = make_array<Vertex>(allocator, 1024);
     defer(vertices.destroy());
 
-    Array<u32> indices = make_array<u32>(default_allocator(), 1024);
+    Array<u32> indices = make_array<u32>(allocator, 1024);
     defer(indices.destroy());
 
     for (int i = 0; i < node->mNumMeshes; i++) {
@@ -132,10 +132,11 @@ void process_node(const aiScene *scene, aiNode *node, Model *out_model) {
                 if (strcmp(property->mKey.data, "$tex.file") == 0) {
                     assert(property->mType == aiPTI_String);
                     char *cstr = ((aiString *)property->mData)->data;
-                    String_Builder path_sb = make_string_builder(default_allocator());
+                    String_Builder path_sb = make_string_builder(allocator);
                     defer(destroy_string_builder(path_sb));
-                    // path_sb.print("sponza/");
+                    path_sb.printf("%s/", directory);
                     path_sb.print(cstr);
+                    printf("%s\n", path_sb.string());
                     switch (property->mSemantic) {
                         // todo(josh): there is probably a material parameter for the wrap mode ???
                         // todo(josh): there is probably a material parameter for the wrap mode ???
@@ -222,7 +223,7 @@ void process_node(const aiScene *scene, aiNode *node, Model *out_model) {
     }
 
     for (int i = 0; i < node->mNumChildren; i++) {
-        process_node(scene, node->mChildren[i], out_model);
+        process_node(scene, node->mChildren[i], directory, allocator, out_model);
     }
 }
 
@@ -240,7 +241,11 @@ Model load_model_from_file(char *filename, Allocator allocator) {
         assert(false);
     }
 
+    char *directory = path_directory(filename, allocator);
+    assert(directory != nullptr);
+    defer(free(allocator, directory));
+
     Model model = create_model(allocator);
-    process_node(scene, scene->mRootNode, &model);
+    process_node(scene, scene->mRootNode, directory, allocator, &model);
     return model;
 }

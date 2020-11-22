@@ -126,18 +126,18 @@ PS_OUTPUT main(PS_INPUT input) {
         output_color.rgb += emission_sample.rgb;
     }
 
-    // float total_density = 0;
-    // const float STEP_SIZE = 0.1;
-    // const int MAX_STEPS = 200;
-    // for (int step = 0; step < MAX_STEPS; step++) {
-    //     float3 ray_position = camera_position - direction_to_camera * STEP_SIZE * step;
-    //     float ray_distance = length(camera_position - ray_position);
-    //     if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transform, shadow_map)) {
-    //         float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
-    //         total_density += fog_amount * STEP_SIZE;
-    //     }
-    // }
-    // output_color.rgb = lerp(output_color.rgb, fog_base_color, saturate(total_density));
+    float total_density = 0;
+    const float STEP_SIZE = 0.1;
+    const int MAX_STEPS = 200;
+    for (int step = 0; step < MAX_STEPS; step++) {
+        float3 ray_position = camera_position - direction_to_camera * STEP_SIZE * step;
+        float ray_distance = length(camera_position - ray_position);
+        if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transform, shadow_map)) {
+            float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
+            total_density += fog_amount * STEP_SIZE;
+        }
+    }
+    output_color.rgb = lerp(output_color.rgb, fog_base_color, saturate(total_density));
 
 
     PS_OUTPUT output;
