@@ -7,7 +7,6 @@ float4 main(PS_INPUT input) : SV_Target {
     float4 output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
     output_color.rgb += bloom_map.Sample(main_sampler, input.texcoord.xy).rgb;
 
-    const float exposure = 0.25;
     output_color.rgb = float3(1.0, 1.0, 1.0) - exp(-output_color.rgb * exposure);
 
     return output_color;

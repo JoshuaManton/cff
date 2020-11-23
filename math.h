@@ -80,6 +80,7 @@ float   length     (Vector3 v);
 float   sqr_length (Vector3 v);
 Vector3 normalize  (Vector3 v);
 Vector3 cross      (Vector3 a, Vector3 b);
+Vector3 arbitrary_perpendicular(Vector3 a);
 Vector3 operator + (Vector3 a, Vector3 b);
 Vector3 operator +=(Vector3 &a, Vector3 b);
 Vector3 operator - (Vector3 a, Vector3 b);

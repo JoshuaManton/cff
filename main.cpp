@@ -18,14 +18,14 @@ TODO:
 -particle systems?
 -instancing (do we support this already?)
 -assimp model scale
--model bounding boxes/spheres
+-bounding boxes/spheres for meshes/models
 -dear imgui?
 -depth sorting to reduce overdraw
 -transparency sorting to alpha blend properly
 -point light shadows?
 -fix alpha blending without ruining bloom
 -spot lights
--dynamic exposure
+-auto-exposure
 -proper IBL
 -cascaded shadow maps
 -skeletal animation?
@@ -46,6 +46,11 @@ struct Blur_CBuffer {
     float _pad;
 };
 
+struct Final_CBuffer {
+    float exposure;
+    float pad[3];
+};
+
 #define BLOOM_BUFFER_DOWNSCALE 8.0
 
 Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture ping_pong_depth_buffer, Vertex_Shader vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_pixel_textured_shader, Buffer blur_cbuffer_handle) {
@@ -53,8 +58,10 @@ Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture pi
     blur_pass.camera_orientation = quaternion_identity();
     blur_pass.projection_matrix = construct_orthographic_matrix(0, ping_pong_buffers[1].description.width, 0, ping_pong_buffers[1].description.height, -1, 1);
     begin_render_pass(&blur_pass);
+    defer(end_render_pass());
 
     set_render_targets(&ping_pong_buffers[1], 1, &ping_pong_depth_buffer);
+    defer(unset_render_targets());
     clear_bound_render_targets(v4(0, 0, 0, 1));
     bind_shaders(vertex_shader, simple_pixel_textured_shader);
     draw_texture(
@@ -76,13 +83,11 @@ Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture pi
         bind_constant_buffers(&blur_cbuffer_handle, 1, CBS_BLUR);
 
         set_render_targets(last_render_target, 1, &ping_pong_depth_buffer);
+        defer(unset_render_targets());
         clear_bound_render_targets(v4(0, 0, 0, 1));
         draw_texture(source_texture, v3(0, 0, 0), v3(last_render_target->description.width, last_render_target->description.height, 0));
-        unset_render_targets();
     }
 
-    unset_render_targets();
-    end_render_pass();
     return last_render_target;
 }
 
@@ -239,6 +244,7 @@ void main() {
     Texture_Description shadow_map_description = {};
     shadow_map_description.width = 2048;
     shadow_map_description.height = 2048;
+    // todo(josh): this should just be one component per pixel
     shadow_map_description.format = TF_R16G16B16A16_FLOAT;
     shadow_map_description.wrap_mode = TWM_POINT_CLAMP;
     create_color_and_depth_buffers(shadow_map_description, &shadow_map_color_buffer, &shadow_map_depth_buffer);
@@ -252,6 +258,14 @@ void main() {
     hdr_description.wrap_mode = TWM_LINEAR_CLAMP;
     hdr_description.sample_count = 8;
     create_color_and_depth_buffers(hdr_description, &hdr_color_buffer, &hdr_depth_buffer);
+
+    Texture_Description ssao_depth_color_buffer_desc = {};
+    ssao_depth_color_buffer_desc.width = main_window.width;
+    ssao_depth_color_buffer_desc.height = main_window.height;
+    // todo(josh): this should just be one component per pixel
+    ssao_depth_color_buffer_desc.format = TF_R8G8B8A8_UINT;
+    ssao_depth_color_buffer_desc.render_target = true;
+    Texture ssao_depth_color_buffer = create_texture(ssao_depth_color_buffer_desc);
 
     Texture_Description bloom_desc = {};
     bloom_desc.width  = main_window.width;
@@ -279,6 +293,7 @@ void main() {
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
+    Buffer final_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(Final_CBuffer));
 
 
     bool freecam = false;
@@ -364,6 +379,7 @@ void main() {
 
         ensure_texture_size(&hdr_color_buffer, main_window.width, main_window.height);
         ensure_texture_size(&hdr_depth_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&ssao_depth_color_buffer, main_window.width, main_window.height);
         ensure_texture_size(&bloom_color_buffer, main_window.width, main_window.height);
         for (int i = 0; i < ARRAYSIZE(bloom_ping_pong_color_buffers); i++) {
             ensure_texture_size(&bloom_ping_pong_color_buffers[i], main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
@@ -390,6 +406,11 @@ void main() {
         sponza_draw_command.color = v4(1, 1, 1, 1);
         render_queue.append(sponza_draw_command);
 
+        Fixed_Function ff = {};
+        Array<Vertex> ff_vertices = make_array<Vertex>(default_allocator()); // @Alloc
+        defer(ff_vertices.destroy());
+        ff_begin(&ff, &ff_vertices);
+
 
 
         bind_vertex_format(default_vertex_format);
@@ -397,7 +418,6 @@ void main() {
         set_depth_test(true);
         set_primitive_topology(PT_TRIANGLE_LIST);
         set_alpha_blend(true);
-        Vertex ffverts[1024];
 
         Matrix4 sun_transform = {};
 
@@ -406,6 +426,7 @@ void main() {
         // draw scene to shadow map
         {
             set_render_targets(&shadow_map_color_buffer, 1, &shadow_map_depth_buffer);
+            defer(unset_render_targets());
             clear_bound_render_targets(v4(0, 0, 0, 0));
 
             Render_Pass_Desc shadow_pass = {};
@@ -414,16 +435,16 @@ void main() {
             shadow_pass.projection_matrix = construct_orthographic_matrix(-20, 20, -20, 20, -100, 100);
             sun_transform = shadow_pass.projection_matrix * construct_view_matrix(shadow_pass.camera_position, shadow_pass.camera_orientation);
             begin_render_pass(&shadow_pass);
+            defer(end_render_pass());
             bind_shaders(vertex_shader, shadow_pixel_shader);
 
             Foreach (command, render_queue) {
                 draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
                 draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
             }
-
-            end_render_pass();
-            unset_render_targets();
         }
+
+        Vector4 skybox_color = v4(10, 10, 10, 1);
 
         Lighting_CBuffer lighting = {};
         // lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup) * 3, 6, 0, 1);
@@ -439,7 +460,7 @@ void main() {
         lighting.fog_density    = 0.05;
         lighting.fog_y_level    = -1;
         lighting.has_skybox_map = 1;
-        lighting.skybox_color   = v4(10, 10, 10, 1);
+        lighting.skybox_color   = skybox_color;
         bind_texture(skybox_texture, TS_PBR_SKYBOX);
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
@@ -449,8 +470,10 @@ void main() {
             Texture color_buffers[2] = {
                 hdr_color_buffer,
                 bloom_color_buffer,
+                // ssao_depth_color_buffer,
             };
             set_render_targets(color_buffers, ARRAYSIZE(color_buffers), &hdr_depth_buffer);
+            defer(unset_render_targets());
             clear_bound_render_targets(v4(0, 0, 0, 0));
 
             bind_texture(shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
@@ -461,6 +484,7 @@ void main() {
             scene_pass.projection_matrix = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.01, 1000);
 
             begin_render_pass(&scene_pass);
+            defer(end_render_pass());
 
             bind_shaders(vertex_shader, pixel_shader);
             Foreach (command, render_queue) {
@@ -473,61 +497,70 @@ void main() {
             bind_texture(skybox_texture, TS_PBR_ALBEDO);
 
             set_backface_cull(false);
-            draw_mesh(cube_vertex_buffer, cube_index_buffer, 24, 36, camera_position, v3(1, 1, 1), quaternion_identity(), v4(3, 3, 3, 1));
+            draw_mesh(cube_vertex_buffer, cube_index_buffer, ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices), camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color);
             set_backface_cull(true);
 
-            end_render_pass();
-            unset_render_targets();
             bind_texture({}, TS_PBR_SHADOW_MAP);
+
+            // ff_line_circle(&ff, v3(0, 1, 0), 1, v3(0, 1, 0), v4(5, 0, 0, 1));
+            // set_primitive_topology(PT_LINE_LIST);
+            // bind_shaders(vertex_shader, simple_pixel_shader);
+            // ff_end(&ff);
+            // set_primitive_topology(PT_TRIANGLE_LIST);
         }
 
         Texture *last_bloom_blur_render_target = do_blur(bloom_color_buffer, bloom_ping_pong_color_buffers, bloom_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
 
-        set_render_targets(nullptr, 0, nullptr);
-        clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
+        // actually draw to the screen
+        {
+            set_render_targets(nullptr, 0, nullptr);
+            defer(unset_render_targets());
+            clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
 
-        Render_Pass_Desc screen_pass = {};
-        screen_pass.camera_position = v3(0, 0, 0);
-        screen_pass.camera_orientation = quaternion_identity();
-        screen_pass.projection_matrix = construct_orthographic_matrix(0, main_window.width, 0, main_window.height, -1, 1);
-        begin_render_pass(&screen_pass);
+            Render_Pass_Desc screen_pass = {};
+            screen_pass.camera_position = v3(0, 0, 0);
+            screen_pass.camera_orientation = quaternion_identity();
+            screen_pass.projection_matrix = construct_orthographic_matrix(0, main_window.width, 0, main_window.height, -1, 1);
+            begin_render_pass(&screen_pass);
+            defer(end_render_pass());
 
-        bind_texture(*last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
-        bind_shaders(vertex_shader, final_pixel_shader);
-        draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
-        bind_texture({}, TS_FINAL_BLOOM_MAP);
+            bind_texture(*last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
+            bind_shaders(vertex_shader, final_pixel_shader);
+            Final_CBuffer final_cbuffer = {};
+            final_cbuffer.exposure = 0.25;
+            update_buffer(final_cbuffer_handle, &final_cbuffer, sizeof(Final_CBuffer));
+            bind_constant_buffers(&final_cbuffer_handle, 1, CBS_FINAL);
+            draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
+            bind_texture({}, TS_FINAL_BLOOM_MAP);
 
-        bind_shaders(vertex_shader, simple_pixel_textured_shader);
-        draw_texture(bloom_color_buffer,               v3(0, 0, 0), v3(128, 128, 0));
-        draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0));
-        draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0));
+            bind_shaders(vertex_shader, simple_pixel_textured_shader);
+            draw_texture(bloom_color_buffer,               v3(0, 0, 0),   v3(128, 128, 0));
+            draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0));
+            draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0));
+            draw_texture(ssao_depth_color_buffer,          v3(384, 0, 0), v3(512, 128, 0));
 
-        // float z_3d = sin(time_since_startup) * sin(time_since_startup);
-        float z_3d = 1;
-        bind_shaders(vertex_shader, simple_pixel_3d_shader);
-        draw_texture(test_3d_texture, v3(384, 0, 0), v3(512, 128, 0), z_3d);
+            bind_texture(roboto_mono.texture, 0);
+            bind_shaders(vertex_shader, text_pixel_shader);
 
-        Fixed_Function ff = {};
-        Array<Vertex> text_vertices = make_array<Vertex>(default_allocator());
-        defer(text_vertices.destroy());
-        ff_begin(&ff, &text_vertices);
-        bind_texture(roboto_mono.texture, 0);
-        bind_shaders(vertex_shader, text_pixel_shader);
+            Vector3 text_pos = v3(10, main_window.height-roboto_mono.pixel_height, 0);
+            const float text_size = 1;
+            ff_text(&ff, "1. do_albedo_map",     roboto_mono, v4(1, 1, 1, render_options.do_albedo_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_text(&ff, "2. do_normal_map",     roboto_mono, v4(1, 1, 1, render_options.do_normal_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_text(&ff, "3. do_metallic_map",   roboto_mono, v4(1, 1, 1, render_options.do_metallic_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_text(&ff, "4. do_roughness_map",  roboto_mono, v4(1, 1, 1, render_options.do_roughness_map  ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_text(&ff, "5. do_emission_map",   roboto_mono, v4(1, 1, 1, render_options.do_emission_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
+            ff_end(&ff);
 
-        Vector3 text_pos = v3(10, main_window.height-roboto_mono.pixel_height, 0);
-        const float text_size = 1;
-        ff_text(&ff, "1. do_albedo_map",     roboto_mono, v4(1, 1, 1, render_options.do_albedo_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "2. do_normal_map",     roboto_mono, v4(1, 1, 1, render_options.do_normal_map     ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "3. do_metallic_map",   roboto_mono, v4(1, 1, 1, render_options.do_metallic_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "4. do_roughness_map",  roboto_mono, v4(1, 1, 1, render_options.do_roughness_map  ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "5. do_emission_map",   roboto_mono, v4(1, 1, 1, render_options.do_emission_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_end(&ff);
-        end_render_pass();
-
-        unset_render_targets();
-
+            // ff_line_circle(&ff, v3(100, 500, 0), 100, v3(0, 1, 0), v4(1, 0, 0, 1));
+            // ff_line_circle(&ff, v3(200, 500, 0), 100, v3(0, 1, 0), v4(1, 0, 0, 1));
+            // ff_line_circle(&ff, v3(300, 500, 0), 100, v3(0, 1, 0), v4(1, 0, 0, 1));
+            set_primitive_topology(PT_LINE_LIST);
+            bind_shaders(vertex_shader, simple_pixel_shader);
+            ff_end(&ff);
+            set_primitive_topology(PT_TRIANGLE_LIST);
+        }
 
         present(true);
     }

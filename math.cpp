@@ -135,6 +135,16 @@ Vector3 cross(Vector3 a, Vector3 b) {
     return result;
 }
 
+Vector3 arbitrary_perpendicular(Vector3 a) {
+    assert(length(a) == 1);
+    Vector3 b = v3(1, 0, 0);
+    if (fabsf(dot(a, b)) == 1) {
+        b = v3(0, 1, 0);
+    }
+    Vector3 d = cross(a, b);
+    return d;
+}
+
 Vector3 operator +(Vector3 a, Vector3 b) {
     return v3(a.x+b.x, a.y+b.y, a.z+b.z);
 }

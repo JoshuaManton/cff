@@ -99,6 +99,7 @@ struct Lighting_CBuffer {
 #define CBS_MATERIAL 2
 #define CBS_LIGHTING 3
 #define CBS_BLUR     4
+#define CBS_FINAL    5
 
 
 
@@ -166,4 +167,5 @@ void ff_tex_coord(Fixed_Function *ff, Vector3 tex_coord);
 void ff_color(Fixed_Function *ff, Vector4 color);
 void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector3 uv_overrides[2] = nullptr);
 void ff_line(Fixed_Function *ff, Vector3 a, Vector3 b, Vector4 color);
+void ff_line_circle(Fixed_Function *ff, Vector3 position, float radius, Vector3 up, Vector4 color, float resolution = 2);
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size);

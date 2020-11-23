@@ -77,6 +77,7 @@ PS_OUTPUT main(PS_INPUT input) {
         PS_OUTPUT output;
         output.color = float4(N * 0.5 + 0.5, 1.0);
         output.bloom_color = float4(0, 0, 0, 0);
+        output.depth = float4(input.position.z, input.position.z, input.position.z, 1);
         return output;
     }
 
@@ -150,5 +151,6 @@ PS_OUTPUT main(PS_INPUT input) {
         output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * BLOOM_THRESHOLD)) * SLOPE;
         output.bloom_color.a = output.color.a;
     }
+    output.depth = float4(input.position.z, input.position.z, input.position.z, 1);
     return output;
 }

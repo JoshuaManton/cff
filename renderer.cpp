@@ -231,8 +231,35 @@ void ff_quad(Fixed_Function *ff, Vector3 min, Vector3 max, Vector4 color, Vector
 }
 
 void ff_line(Fixed_Function *ff, Vector3 a, Vector3 b, Vector4 color) {
-    ff_vertex(ff, a); ff_color(ff, v4(0, 1, 0, 1));
-    ff_vertex(ff, b); ff_color(ff, v4(0, 1, 0, 1));
+    ff_vertex(ff, a); ff_color(ff, color);
+    ff_vertex(ff, b); ff_color(ff, color);
+}
+
+void ff_line_circle(Fixed_Function *ff, Vector3 position, float radius, Vector3 normal, Vector4 color, float resolution) {
+    Vector3 perp  = arbitrary_perpendicular(normal);
+    Vector3 perp2 = cross(normal, perp);
+    assert(length(normal) == 1);
+    assert(length(perp)   == 1);
+    assert(length(perp2)  == 1);
+    Vector3 columns[3] = {
+        perp,
+        perp2,
+        normal,
+    };
+    Matrix3 transform = m3(columns);
+    int last_theta = 0;
+    for (int theta = last_theta + resolution; theta <= 360; theta += resolution) {
+        float last_x = cos(to_radians((float)last_theta)) - sin(to_radians((float)last_theta)) * radius;
+        float last_y = sin(to_radians((float)last_theta)) + cos(to_radians((float)last_theta)) * radius;
+
+        float x = cos(to_radians((float)theta)) - sin(to_radians((float)theta)) * radius;
+        float y = sin(to_radians((float)theta)) + cos(to_radians((float)theta)) * radius;
+
+        Vector3 v0 = transform * v3(last_x, last_y, 0);
+        Vector3 v1 = transform * v3(x, y, 0);
+        ff_line(ff, position + v0, position + v1, color);
+        last_theta = theta;
+    }
 }
 
 void ff_text(Fixed_Function *ff, char *str, Font font, Vector4 color, Vector3 start_pos, float size) {
