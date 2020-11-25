@@ -23,10 +23,13 @@ struct PS_INPUT {
 struct PS_OUTPUT {
     float4 color       : SV_Target0;
     float4 bloom_color : SV_Target1;
-    float4 depth       : SV_Target2;
+    float4 position    : SV_Target2;
+    float4 normal      : SV_Target3;
+    float4 material    : SV_Target4;
 };
 
 cbuffer CBUFFER_PASS : register(b0) {
+    float2 screen_dimensions;
     matrix view_matrix;
     matrix projection_matrix;
     float3 camera_position;
@@ -70,8 +73,15 @@ cbuffer CBUFFER_LIGHTING : register(b3) {
 cbuffer CBUFFER_BLUR : register(b4) {
     int horizontal;
     float2 buffer_dimensions;
+    float blur_radius; // todo(josh): I don't remember what space this radius is in. investigate and make sure it's correct
 }
 
 cbuffer CBUFFER_FINAL : register(b5) {
     float exposure;
 }
+
+cbuffer CBUFFER_SSR : register(b6) {
+    float3 scene_camera_position;
+    matrix camera_matrix;
+    matrix inverse_camera_matrix;
+};

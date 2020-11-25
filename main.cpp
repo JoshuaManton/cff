@@ -15,21 +15,21 @@
 
 /*
 TODO:
--particle systems?
+-SSAO
+-auto-exposure
+-skeletal animation
+-particle systems
 -instancing (do we support this already?)
+-fix alpha blending without ruining bloom
 -assimp model scale
 -bounding boxes/spheres for meshes/models
 -dear imgui?
 -depth sorting to reduce overdraw
 -transparency sorting to alpha blend properly
 -point light shadows?
--fix alpha blending without ruining bloom
 -spot lights
--auto-exposure
 -proper IBL
 -cascaded shadow maps
--skeletal animation?
--AO?
 */
 
 struct Draw_Command {
@@ -43,7 +43,14 @@ struct Draw_Command {
 struct Blur_CBuffer {
     int horizontal;
     Vector2 buffer_dimensions;
-    float _pad;
+    float blur_radius;
+};
+
+struct SSR_CBuffer {
+    Vector3 scene_camera_position;
+    float pad;
+    Matrix4 camera_matrix;
+    Matrix4 inverse_camera_matrix;
 };
 
 struct Final_CBuffer {
@@ -53,39 +60,51 @@ struct Final_CBuffer {
 
 #define BLOOM_BUFFER_DOWNSCALE 8.0
 
-Texture *do_blur(Texture thing_to_blur, Texture ping_pong_buffers[2], Texture ping_pong_depth_buffer, Vertex_Shader vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_pixel_textured_shader, Buffer blur_cbuffer_handle) {
-    Render_Pass_Desc blur_pass = {};
-    blur_pass.camera_orientation = quaternion_identity();
-    blur_pass.projection_matrix = construct_orthographic_matrix(0, ping_pong_buffers[1].description.width, 0, ping_pong_buffers[1].description.height, -1, 1);
-    begin_render_pass(&blur_pass);
-    defer(end_render_pass());
+Texture do_blur(Texture thing_to_blur, float radius, int num_iterations, Texture ping_pong_buffers[2], Texture ping_pong_depth_buffer, Vertex_Shader vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_pixel_textured_shader, Buffer blur_cbuffer_handle) {
+    // initial copy pass
+    {
+        // todo(josh): this should just be a copy_texture()
+        // todo(josh): this should just be a copy_texture()
+        // todo(josh): this should just be a copy_texture()
 
-    set_render_targets(&ping_pong_buffers[1], 1, &ping_pong_depth_buffer);
-    defer(unset_render_targets());
-    clear_bound_render_targets(v4(0, 0, 0, 1));
-    bind_shaders(vertex_shader, simple_pixel_textured_shader);
-    draw_texture(
-        thing_to_blur,
-        v3(0, 0, 0),
-        v3(ping_pong_buffers[1].description.width, ping_pong_buffers[1].description.height, 0));
+        Render_Pass_Desc blur_pass = {};
+        blur_pass.render_target_bindings.color_bindings[0] = {ping_pong_buffers[1],   true, v4(0, 0, 0, 1)};
+        blur_pass.render_target_bindings.depth_binding     = {ping_pong_depth_buffer, true, 1};
+        blur_pass.camera_orientation = quaternion_identity();
+        blur_pass.projection_matrix = construct_orthographic_matrix(0, ping_pong_buffers[1].description.width, 0, ping_pong_buffers[1].description.height, -1, 1);
+        begin_render_pass(&blur_pass);
+        defer(end_render_pass());
 
-    Texture *last_render_target = {};
+        bind_shaders(vertex_shader, simple_pixel_textured_shader);
+        draw_texture(
+            thing_to_blur,
+            v3(0, 0, 0),
+            v3(ping_pong_buffers[1].description.width, ping_pong_buffers[1].description.height, 0));
+    }
+
+
+    Texture last_render_target = ping_pong_buffers[1];
     bind_shaders(vertex_shader, blur_pixel_shader);
-    for (int i = 0; i < 4; i++) {
-        last_render_target = &ping_pong_buffers[i % 2];
+    for (int i = 0; i < (num_iterations * 2); i++) {
+        last_render_target = ping_pong_buffers[i % 2];
 
         Texture source_texture = ping_pong_buffers[(i+1) % 2];
 
         Blur_CBuffer blur_cbuffer = {};
         blur_cbuffer.horizontal = i % 2;
         blur_cbuffer.buffer_dimensions = v2(source_texture.description.width, source_texture.description.height);
+        blur_cbuffer.blur_radius = radius;
         update_buffer(blur_cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
         bind_constant_buffers(&blur_cbuffer_handle, 1, CBS_BLUR);
 
-        set_render_targets(last_render_target, 1, &ping_pong_depth_buffer);
-        defer(unset_render_targets());
-        clear_bound_render_targets(v4(0, 0, 0, 1));
-        draw_texture(source_texture, v3(0, 0, 0), v3(last_render_target->description.width, last_render_target->description.height, 0));
+        Render_Pass_Desc blur_pass = {};
+        blur_pass.render_target_bindings.color_bindings[0] = {last_render_target,     true, v4(0, 0, 0, 1)};
+        blur_pass.render_target_bindings.depth_binding     = {ping_pong_depth_buffer, true, 1};
+        blur_pass.camera_orientation = quaternion_identity();
+        blur_pass.projection_matrix = construct_orthographic_matrix(0, ping_pong_buffers[1].description.width, 0, ping_pong_buffers[1].description.height, -1, 1);
+        begin_render_pass(&blur_pass);
+        defer(end_render_pass());
+        draw_texture(source_texture, v3(0, 0, 0), v3(last_render_target.description.width, last_render_target.description.height, 0));
     }
 
     return last_render_target;
@@ -115,10 +134,11 @@ void main() {
     Pixel_Shader  simple_pixel_textured_shader = compile_pixel_shader_from_file(L"simple_pixel_textured.hlsl");
     Pixel_Shader  simple_pixel_3d_shader       = compile_pixel_shader_from_file(L"simple_pixel_3d.hlsl");
     Pixel_Shader  text_pixel_shader            = compile_pixel_shader_from_file(L"text_pixel.hlsl");
-    Pixel_Shader  shadow_pixel_shader          = compile_pixel_shader_from_file(L"shadow_pixel.hlsl");
+    Pixel_Shader  depth_pixel_shader           = compile_pixel_shader_from_file(L"depth_pixel.hlsl");
     Pixel_Shader  blur_pixel_shader            = compile_pixel_shader_from_file(L"blur_pixel.hlsl");
     Pixel_Shader  final_pixel_shader           = compile_pixel_shader_from_file(L"final_pixel.hlsl");
     Pixel_Shader  skybox_pixel_shader          = compile_pixel_shader_from_file(L"skybox_pixel.hlsl");
+    Pixel_Shader  ssr_pixel_shader             = compile_pixel_shader_from_file(L"ssr_pixel.hlsl");
 
     // Make vertex format
     Vertex_Field vertex_fields[] = {
@@ -236,6 +256,11 @@ void main() {
 
     Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
     Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
+    sponza_model.meshes[8].material.roughness = 0.2;
+
+
+
+
 
 
 
@@ -256,16 +281,45 @@ void main() {
     hdr_description.height = main_window.height;
     hdr_description.format = TF_R16G16B16A16_FLOAT;
     hdr_description.wrap_mode = TWM_LINEAR_CLAMP;
-    hdr_description.sample_count = 8;
     create_color_and_depth_buffers(hdr_description, &hdr_color_buffer, &hdr_depth_buffer);
 
-    Texture_Description ssao_depth_color_buffer_desc = {};
-    ssao_depth_color_buffer_desc.width = main_window.width;
-    ssao_depth_color_buffer_desc.height = main_window.height;
-    // todo(josh): this should just be one component per pixel
-    ssao_depth_color_buffer_desc.format = TF_R8G8B8A8_UINT;
-    ssao_depth_color_buffer_desc.render_target = true;
-    Texture ssao_depth_color_buffer = create_texture(ssao_depth_color_buffer_desc);
+    Texture_Description depth_prepass_desc = {};
+    depth_prepass_desc.width = main_window.width;
+    depth_prepass_desc.height = main_window.height;
+    depth_prepass_desc.format = TF_R16G16B16A16_FLOAT;
+    depth_prepass_desc.render_target = true;
+    Texture depth_prepass_color_buffer = {};
+    Texture depth_prepass_depth_buffer = {};
+    create_color_and_depth_buffers(depth_prepass_desc, &depth_prepass_color_buffer, &depth_prepass_depth_buffer);
+
+    // Texture_Description ssao_depth_color_buffer_desc = {};
+    // ssao_depth_color_buffer_desc.width = main_window.width;
+    // ssao_depth_color_buffer_desc.height = main_window.height;
+    // // todo(josh): this should just be one component per pixel
+    // ssao_depth_color_buffer_desc.format = TF_R8G8B8A8_UINT;
+    // ssao_depth_color_buffer_desc.render_target = true;
+    // Texture ssao_depth_color_buffer = create_texture(ssao_depth_color_buffer_desc);
+
+    Texture_Description gbuffer_normals_desc = {};
+    gbuffer_normals_desc.width = main_window.width;
+    gbuffer_normals_desc.height = main_window.height;
+    gbuffer_normals_desc.format = TF_R16G16B16A16_FLOAT; // todo(josh): do we really need this format? would r8g8b8a8_uint suffice?
+    gbuffer_normals_desc.render_target = true;
+    Texture gbuffer_normals = create_texture(gbuffer_normals_desc);
+
+    Texture_Description gbuffer_positions_desc = {};
+    gbuffer_positions_desc.width = main_window.width;
+    gbuffer_positions_desc.height = main_window.height;
+    gbuffer_positions_desc.format = TF_R16G16B16A16_FLOAT;
+    gbuffer_positions_desc.render_target = true;
+    Texture gbuffer_positions = create_texture(gbuffer_positions_desc);
+
+    Texture_Description gbuffer_metal_roughness_desc = {};
+    gbuffer_metal_roughness_desc.width = main_window.width;
+    gbuffer_metal_roughness_desc.height = main_window.height;
+    gbuffer_metal_roughness_desc.format = TF_R8G8B8A8_UINT;
+    gbuffer_metal_roughness_desc.render_target = true;
+    Texture gbuffer_metal_roughness = create_texture(gbuffer_metal_roughness_desc);
 
     Texture_Description bloom_desc = {};
     bloom_desc.width  = main_window.width;
@@ -274,25 +328,42 @@ void main() {
     bloom_desc.format = TF_R16G16B16A16_FLOAT;
     bloom_desc.wrap_mode = TWM_LINEAR_CLAMP;
     bloom_desc.render_target = true;
-    bloom_desc.sample_count = 8;
     Texture bloom_color_buffer = create_texture(bloom_desc);
 
-    Texture_Description bloom_ping_pong_desc = {};
-    bloom_ping_pong_desc.width  = main_window.width  / BLOOM_BUFFER_DOWNSCALE;
-    bloom_ping_pong_desc.height = main_window.height / BLOOM_BUFFER_DOWNSCALE;
-    bloom_ping_pong_desc.type = TT_2D;
-    bloom_ping_pong_desc.wrap_mode = TWM_LINEAR_CLAMP;
-    bloom_ping_pong_desc.format = TF_R16G16B16A16_FLOAT;
-    bloom_ping_pong_desc.render_target = true;
+    Texture_Description ssr_color_buffer_desc = {};
+    ssr_color_buffer_desc.width  = main_window.width;
+    ssr_color_buffer_desc.height = main_window.height;
+    ssr_color_buffer_desc.type = TT_2D;
+    ssr_color_buffer_desc.format = TF_R16G16B16A16_FLOAT;
+    ssr_color_buffer_desc.wrap_mode = TWM_LINEAR_CLAMP;
+    ssr_color_buffer_desc.render_target = true;
+    Texture ssr_color_buffer = create_texture(ssr_color_buffer_desc);
+
+    Texture_Description blur_ping_pong_desc = {};
+    blur_ping_pong_desc.width  = main_window.width  / BLOOM_BUFFER_DOWNSCALE;
+    blur_ping_pong_desc.height = main_window.height / BLOOM_BUFFER_DOWNSCALE;
+    blur_ping_pong_desc.type = TT_2D;
+    blur_ping_pong_desc.wrap_mode = TWM_LINEAR_CLAMP;
+    blur_ping_pong_desc.format = TF_R16G16B16A16_FLOAT;
+    blur_ping_pong_desc.render_target = true;
+
     Texture bloom_ping_pong_color_buffers[2] = {};
-    bloom_ping_pong_color_buffers[0] = create_texture(bloom_ping_pong_desc);
-    bloom_ping_pong_color_buffers[1] = create_texture(bloom_ping_pong_desc);
-    Texture_Description bloom_ping_pong_depth_desc = bloom_ping_pong_desc;
-    bloom_ping_pong_depth_desc.format = TF_DEPTH_STENCIL;
-    Texture bloom_ping_pong_depth_buffer = create_texture(bloom_ping_pong_depth_desc);
+    bloom_ping_pong_color_buffers[0] = create_texture(blur_ping_pong_desc);
+    bloom_ping_pong_color_buffers[1] = create_texture(blur_ping_pong_desc);
+    Texture_Description blur_ping_pong_depth_desc = blur_ping_pong_desc;
+    blur_ping_pong_depth_desc.format = TF_DEPTH_STENCIL;
+    Texture bloom_ping_pong_depth_buffer = create_texture(blur_ping_pong_depth_desc);
+
+    Texture ssr_blur_ping_pong_buffers[2] = {};
+    ssr_blur_ping_pong_buffers[0] = create_texture(blur_ping_pong_desc);
+    ssr_blur_ping_pong_buffers[1] = create_texture(blur_ping_pong_desc);
+    Texture_Description ssr_blur_ping_pong_depth_desc = blur_ping_pong_desc;
+    ssr_blur_ping_pong_depth_desc.format = TF_DEPTH_STENCIL;
+    Texture ssr_blur_ping_pong_depth_buffer = create_texture(ssr_blur_ping_pong_depth_desc);
 
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
+    Buffer ssr_cbuffer_handle      = create_buffer(BT_CONSTANT, nullptr, sizeof(SSR_CBuffer));
     Buffer final_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(Final_CBuffer));
 
 
@@ -377,14 +448,24 @@ void main() {
 
         ensure_swap_chain_size(main_window.width, main_window.height);
 
+        ensure_texture_size(&depth_prepass_color_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&depth_prepass_depth_buffer, main_window.width, main_window.height);
         ensure_texture_size(&hdr_color_buffer, main_window.width, main_window.height);
         ensure_texture_size(&hdr_depth_buffer, main_window.width, main_window.height);
-        ensure_texture_size(&ssao_depth_color_buffer, main_window.width, main_window.height);
+        // ensure_texture_size(&ssao_depth_color_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&gbuffer_positions, main_window.width, main_window.height);
+        ensure_texture_size(&gbuffer_metal_roughness, main_window.width, main_window.height);
+        ensure_texture_size(&gbuffer_normals, main_window.width, main_window.height);
         ensure_texture_size(&bloom_color_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&ssr_color_buffer, main_window.width, main_window.height);
         for (int i = 0; i < ARRAYSIZE(bloom_ping_pong_color_buffers); i++) {
             ensure_texture_size(&bloom_ping_pong_color_buffers[i], main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
         }
         ensure_texture_size(&bloom_ping_pong_depth_buffer, main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
+        for (int i = 0; i < ARRAYSIZE(ssr_blur_ping_pong_buffers); i++) {
+            ensure_texture_size(&ssr_blur_ping_pong_buffers[i], main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
+        }
+        ensure_texture_size(&ssr_blur_ping_pong_depth_buffer, main_window.width / BLOOM_BUFFER_DOWNSCALE, main_window.height / BLOOM_BUFFER_DOWNSCALE);
 
 
 
@@ -422,21 +503,20 @@ void main() {
         Matrix4 sun_transform = {};
 
         Quaternion sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
+        // Quaternion sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90)) * axis_angle(v3(1, 0, 0), to_radians(90));
 
         // draw scene to shadow map
         {
-            set_render_targets(&shadow_map_color_buffer, 1, &shadow_map_depth_buffer);
-            defer(unset_render_targets());
-            clear_bound_render_targets(v4(0, 0, 0, 0));
-
             Render_Pass_Desc shadow_pass = {};
+            shadow_pass.render_target_bindings.color_bindings[0] = {shadow_map_color_buffer, true, v4(0, 0, 0, 0)};
+            shadow_pass.render_target_bindings.depth_binding     = {shadow_map_depth_buffer, true, 1};
             shadow_pass.camera_position = v3(0, 20, 0);
             shadow_pass.camera_orientation = sun_orientation;
             shadow_pass.projection_matrix = construct_orthographic_matrix(-20, 20, -20, 20, -100, 100);
             sun_transform = shadow_pass.projection_matrix * construct_view_matrix(shadow_pass.camera_position, shadow_pass.camera_orientation);
             begin_render_pass(&shadow_pass);
             defer(end_render_pass());
-            bind_shaders(vertex_shader, shadow_pixel_shader);
+            bind_shaders(vertex_shader, depth_pixel_shader);
 
             Foreach (command, render_queue) {
                 draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
@@ -465,79 +545,133 @@ void main() {
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
 
-        // draw scene to hdr buffer
+        // draw scene
         {
-            Texture color_buffers[2] = {
-                hdr_color_buffer,
-                bloom_color_buffer,
-                // ssao_depth_color_buffer,
-            };
-            set_render_targets(color_buffers, ARRAYSIZE(color_buffers), &hdr_depth_buffer);
-            defer(unset_render_targets());
-            clear_bound_render_targets(v4(0, 0, 0, 0));
+            Render_Pass_Desc scene_pass_desc = {};
+            scene_pass_desc.camera_position = camera_position;
+            scene_pass_desc.camera_orientation = camera_orientation;
+            scene_pass_desc.projection_matrix = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.01, 1000);
 
-            bind_texture(shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
+            // depth prepass
+            {
+                Render_Pass_Desc depth_prepass = scene_pass_desc;
+                depth_prepass.render_target_bindings.color_bindings[0] = {depth_prepass_color_buffer, true, v4(0, 0, 0, 0)};
+                depth_prepass.render_target_bindings.depth_binding     = {depth_prepass_depth_buffer, true, 1};
+                begin_render_pass(&depth_prepass);
+                defer(end_render_pass());
+                bind_shaders(vertex_shader, depth_pixel_shader);
+                Foreach (command, render_queue) {
+                    // todo(josh): what do we do about transparent geo here?
+                    draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
+                    draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
+                }
 
-            Render_Pass_Desc scene_pass = {};
-            scene_pass.camera_position = camera_position;
-            scene_pass.camera_orientation = camera_orientation;
-            scene_pass.projection_matrix = construct_perspective_matrix(to_radians(60), (float)main_window.width / (float)main_window.height, 0.01, 1000);
-
-            begin_render_pass(&scene_pass);
-            defer(end_render_pass());
-
-            bind_shaders(vertex_shader, pixel_shader);
-            Foreach (command, render_queue) {
-                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
-                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
+                // todo(josh): any reason to draw the skybox here? probably not
             }
 
-            // skybox
-            bind_shaders(skybox_vertex_shader, skybox_pixel_shader);
-            bind_texture(skybox_texture, TS_PBR_ALBEDO);
+            // draw scene to hdr buffer
+            {
+                Render_Pass_Desc scene_pass = scene_pass_desc;
+                scene_pass.render_target_bindings.color_bindings[0] = {hdr_color_buffer,        true};
+                scene_pass.render_target_bindings.color_bindings[1] = {bloom_color_buffer,      true};
+                scene_pass.render_target_bindings.color_bindings[2] = {gbuffer_positions,       true};
+                scene_pass.render_target_bindings.color_bindings[3] = {gbuffer_normals,         true};
+                scene_pass.render_target_bindings.color_bindings[4] = {gbuffer_metal_roughness, true};
+                scene_pass.render_target_bindings.depth_binding     = {hdr_depth_buffer,        true, 1};
+                begin_render_pass(&scene_pass);
+                defer(end_render_pass());
+                bind_texture(shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
+                defer(bind_texture({}, TS_PBR_SHADOW_MAP));
+                bind_texture(depth_prepass_color_buffer, TS_PBR_DEPTH_PREPASS);
+                defer(bind_texture({}, TS_PBR_DEPTH_PREPASS));
+                bind_shaders(vertex_shader, pixel_shader);
+                Foreach (command, render_queue) {
+                    draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
+                    draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
+                }
 
-            set_backface_cull(false);
-            draw_mesh(cube_vertex_buffer, cube_index_buffer, ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices), camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color);
-            set_backface_cull(true);
+                // skybox
+                bind_shaders(skybox_vertex_shader, skybox_pixel_shader);
+                bind_texture(skybox_texture, TS_PBR_ALBEDO);
 
-            bind_texture({}, TS_PBR_SHADOW_MAP);
+                set_backface_cull(false);
+                draw_mesh(cube_vertex_buffer, cube_index_buffer, ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices), camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color);
+                set_backface_cull(true);
 
-            // ff_line_circle(&ff, v3(0, 1, 0), 1, v3(0, 1, 0), v4(5, 0, 0, 1));
-            // set_primitive_topology(PT_LINE_LIST);
-            // bind_shaders(vertex_shader, simple_pixel_shader);
-            // ff_end(&ff);
-            // set_primitive_topology(PT_TRIANGLE_LIST);
+                // ff_line_circle(&ff, v3(0, 1, 0), 1, v3(0, 1, 0), v4(5, 0, 0, 1));
+                // set_primitive_topology(PT_LINE_LIST);
+                // bind_shaders(vertex_shader, simple_pixel_shader);
+                // ff_end(&ff);
+                // set_primitive_topology(PT_TRIANGLE_LIST);
+            }
+
+            // do screen-space reflections
+            {
+                SSR_CBuffer ssr_cbuffer = {};
+                ssr_cbuffer.scene_camera_position = scene_pass_desc.camera_position;
+                ssr_cbuffer.camera_matrix = scene_pass_desc.projection_matrix * construct_view_matrix(scene_pass_desc.camera_position, scene_pass_desc.camera_orientation);
+                ssr_cbuffer.inverse_camera_matrix = inverse(ssr_cbuffer.camera_matrix);
+                update_buffer(ssr_cbuffer_handle, &ssr_cbuffer, sizeof(SSR_CBuffer));
+                bind_constant_buffers(&ssr_cbuffer_handle, 1, CBS_SSR);
+
+                Render_Pass_Desc ssr_pass = {};
+                ssr_pass.render_target_bindings.color_bindings[0] = {ssr_color_buffer, true};
+                ssr_pass.render_target_bindings.depth_binding     = {{},               true, 1}; // todo(josh): we really shouldn't be binding a depth buffer here
+                ssr_pass.camera_position = v3(0, 0, 0);
+                ssr_pass.camera_orientation = quaternion_identity();
+                ssr_pass.projection_matrix = construct_orthographic_matrix(0, main_window.width, 0, main_window.height, -1, 1);
+                begin_render_pass(&ssr_pass);
+                defer(end_render_pass());
+
+                bind_texture(gbuffer_normals, TS_SSR_NORMAL_MAP);
+                defer(bind_texture({}, TS_SSR_NORMAL_MAP));
+                bind_texture(gbuffer_positions, TS_SSR_POSITIONS_MAP);
+                defer(bind_texture({}, TS_SSR_POSITIONS_MAP));
+                bind_texture(gbuffer_metal_roughness, TS_SSR_METAL_ROUGHNESS_MAP);
+                defer(bind_texture({}, TS_SSR_POSITIONS_MAP));
+
+                bind_shaders(vertex_shader, ssr_pixel_shader);
+                draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
+            }
         }
 
-        Texture *last_bloom_blur_render_target = do_blur(bloom_color_buffer, bloom_ping_pong_color_buffers, bloom_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
+        Texture last_bloom_blur_render_target = do_blur(bloom_color_buffer, 10, 2, bloom_ping_pong_color_buffers, bloom_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
+        Texture last_ssr_blur_render_target = do_blur(ssr_color_buffer, 2, 1, ssr_blur_ping_pong_buffers, ssr_blur_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
 
         // actually draw to the screen
         {
-            set_render_targets(nullptr, 0, nullptr);
-            defer(unset_render_targets());
-            clear_bound_render_targets(v4(0.39, 0.58, 0.93, 1.0f));
-
             Render_Pass_Desc screen_pass = {};
+            screen_pass.render_target_bindings.color_bindings[0] = {{}, true, v4(0.39, 0.58, 0.93, 1.0f)};
+            screen_pass.render_target_bindings.depth_binding     = {{}, true, 1};
             screen_pass.camera_position = v3(0, 0, 0);
             screen_pass.camera_orientation = quaternion_identity();
             screen_pass.projection_matrix = construct_orthographic_matrix(0, main_window.width, 0, main_window.height, -1, 1);
             begin_render_pass(&screen_pass);
             defer(end_render_pass());
 
-            bind_texture(*last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
+            bind_texture(last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
+            defer(bind_texture({}, TS_FINAL_BLOOM_MAP));
+            bind_texture(last_ssr_blur_render_target, TS_FINAL_SSR_MAP);
+            defer(bind_texture({}, TS_FINAL_SSR_MAP));
             bind_shaders(vertex_shader, final_pixel_shader);
             Final_CBuffer final_cbuffer = {};
             final_cbuffer.exposure = 0.25;
+            if (render_options.visualize_normals) {
+                final_cbuffer.exposure = 1;
+            }
             update_buffer(final_cbuffer_handle, &final_cbuffer, sizeof(Final_CBuffer));
             bind_constant_buffers(&final_cbuffer_handle, 1, CBS_FINAL);
             draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
-            bind_texture({}, TS_FINAL_BLOOM_MAP);
 
+            /*
             bind_shaders(vertex_shader, simple_pixel_textured_shader);
             draw_texture(bloom_color_buffer,               v3(0, 0, 0),   v3(128, 128, 0));
-            draw_texture(bloom_ping_pong_color_buffers[0], v3(128, 0, 0), v3(256, 128, 0));
-            draw_texture(bloom_ping_pong_color_buffers[1], v3(256, 0, 0), v3(384, 128, 0));
-            draw_texture(ssao_depth_color_buffer,          v3(384, 0, 0), v3(512, 128, 0));
+            draw_texture(last_bloom_blur_render_target,    v3(128, 0, 0), v3(256, 128, 0));
+            draw_texture(last_ssr_blur_render_target,      v3(256, 0, 0), v3(384, 128, 0));
+            draw_texture(gbuffer_positions,                v3(384, 0, 0), v3(512, 128, 0));
+            draw_texture(gbuffer_normals,                  v3(512, 0, 0), v3(640, 128, 0));
+            draw_texture(gbuffer_metal_roughness,          v3(640, 0, 0), v3(768, 128, 0));
+            draw_texture(depth_prepass_color_buffer,       v3(768, 0, 0), v3(896, 128, 0));
 
             bind_texture(roboto_mono.texture, 0);
             bind_shaders(vertex_shader, text_pixel_shader);
@@ -552,14 +686,7 @@ void main() {
             ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
             ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
             ff_end(&ff);
-
-            // ff_line_circle(&ff, v3(100, 500, 0), 100, v3(0, 1, 0), v4(1, 0, 0, 1));
-            // ff_line_circle(&ff, v3(200, 500, 0), 100, v3(0, 1, 0), v4(1, 0, 0, 1));
-            // ff_line_circle(&ff, v3(300, 500, 0), 100, v3(0, 1, 0), v4(1, 0, 0, 1));
-            set_primitive_topology(PT_LINE_LIST);
-            bind_shaders(vertex_shader, simple_pixel_shader);
-            ff_end(&ff);
-            set_primitive_topology(PT_TRIANGLE_LIST);
+            */
         }
 
         present(true);

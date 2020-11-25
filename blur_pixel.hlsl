@@ -13,10 +13,9 @@ float4 main(PS_INPUT input) : SV_Target {
         texel_offset = float2(0.0, texel_size.y);
     }
 
-    const float RADIUS = 10;
     float total_weight = 0;
-    for (float i = -RADIUS; i <= RADIUS; i++) {
-        float factor = exp(-(i / RADIUS) * (i / RADIUS));
+    for (float i = -blur_radius; i <= blur_radius; i++) {
+        float factor = exp(-(i / blur_radius) * (i / blur_radius));
         total_weight += factor;
         output_color += albedo_map.Sample(main_sampler, input.texcoord.xy + texel_offset * i).rgb * factor;
     }

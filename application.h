@@ -365,6 +365,7 @@ void delete_texture_data(byte *data);
 
 void init_graphics_driver(Window *window);
 void ensure_swap_chain_size(int width, int height);
+void get_swapchain_size(int *out_width, int *out_height);
 
 void set_viewport(int x, int y, int width, int height);
 void set_depth_test(bool enabled);
@@ -402,9 +403,27 @@ void    unbind_all_textures();
 void    copy_texture(Texture dst, Texture src);
 void    set_cubemap_textures(Texture texture, byte *face_pixel_data[6]);
 
-void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer);
+struct Color_Buffer_Binding {
+    Texture texture;
+    bool clear;
+    Vector4 clear_color;
+};
+
+struct Depth_Buffer_Binding {
+    Texture texture;
+    bool clear;
+    float clear_depth;
+    // todo(josh): clear_stencil
+};
+
+struct Render_Target_Bindings {
+    Color_Buffer_Binding color_bindings[CFF_MAX_BOUND_RENDER_TARGETS];
+    Depth_Buffer_Binding depth_binding;
+};
+
+void set_render_targets(Render_Target_Bindings bindings);
 void unset_render_targets();
-void clear_bound_render_targets(Vector4 color);
+// void clear_bound_render_targets(Vector4 color);
 
 void issue_draw_call(int vertex_count, int index_count, int instance_count = 0);
 void present(bool vsync);
@@ -1220,6 +1239,11 @@ void ensure_swap_chain_size(int width, int height) {
     }
 }
 
+void get_swapchain_size(int *out_width, int *out_height) {
+    *out_width  = directx.swap_chain_width;
+    *out_height = directx.swap_chain_height;
+}
+
 DXGI_FORMAT dx_vertex_field_type(Vertex_Field_Type vft) {
     switch (vft) {
         case VFT_INT:    return DXGI_FORMAT_R32_SINT;
@@ -1323,7 +1347,7 @@ void destroy_buffer(Buffer buffer) {
     buffer->Release();
 }
 
-#define D3D_SHADER_COMPILE_FLAGS (D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS)
+#define D3D_SHADER_COMPILE_FLAGS (D3DCOMPILE_DEBUG /*| D3DCOMPILE_WARNINGS_ARE_ERRORS*/ | D3DCOMPILE_SKIP_OPTIMIZATION)
 
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};
@@ -1332,7 +1356,7 @@ Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh)
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
-        ASSERT(false);
+        // ASSERT(false);
     }
     ASSERT(result == S_OK);
     ID3D11VertexShader *vertex_shader_handle = {};
@@ -1352,7 +1376,7 @@ Pixel_Shader compile_pixel_shader_from_file(wchar_t *filename) { // todo(josh): 
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
-        ASSERT(false);
+        // ASSERT(false);
     }
     ASSERT(result == S_OK);
     ID3D11PixelShader *pixel_shader = {};
@@ -1375,7 +1399,7 @@ Compute_Shader compile_compute_shader_from_file(wchar_t *filename) {
     if (errors) {
         auto str = (char *)errors->GetBufferPointer();
         printf(str);
-        ASSERT(false);
+        // ASSERT(false);
     }
     ASSERT(result == S_OK);
     ID3D11ComputeShader *compute_shader = {};
@@ -1766,69 +1790,64 @@ void unbind_all_textures() {
 }
 
 void copy_texture(Texture dst, Texture src) {
-    ASSERT(false && "unimplemented");
-    // if (src.description.sample_count > 1) {
-    //     ASSERT(dst.description.format == src.description.format);
-    //     directx.device_context->ResolveSubresource((ID3D11Resource *)dst.handle, 0, (ID3D11Resource *)src.handle, 0, dx_texture_format_mapping[dst.description.format]);
-    // }
-    // else {
-    //     directx.device_context->CopyResource((ID3D11Resource *)dst.handle, (ID3D11Resource *)src.handle);
-    // }
+    directx.device_context->CopyResource((ID3D11Resource *)dst.backend.handle_2d, (ID3D11Resource *)src.backend.handle_2d);
 }
 
-void set_render_targets(Texture *color_buffers, int num_color_buffers, Texture *depth_buffer) {
-    ASSERT(num_color_buffers <= CFF_MAX_BOUND_RENDER_TARGETS);
-
+void set_render_targets(Render_Target_Bindings bindings) {
     unset_render_targets();
 
-    int viewport_width  = 0;
-    int viewport_height = 0;
-    if (num_color_buffers > 0) {
-        for (int i = 0; i < num_color_buffers; i++) {
-            Texture color_buffer = color_buffers[i];
-            ASSERT(directx.cur_rtvs[i] == nullptr);
+    for (int idx = 0; idx < ARRAYSIZE(bindings.color_bindings); idx++) {
+        Texture color_buffer = bindings.color_bindings[idx].texture;
+        bool clear = bindings.color_bindings[idx].clear;
+        Vector4 clear_color = bindings.color_bindings[idx].clear_color;
+
+        ASSERT(directx.cur_rtvs[idx] == nullptr);
+
+        if (color_buffer.valid) {
             ASSERT(color_buffer.description.type == TT_2D);
             ASSERT(color_buffer.description.render_target);
-
-            directx.current_render_targets[i] = color_buffer;
-            if (viewport_width == 0) {
-                viewport_width  = color_buffer.description.width;
-                viewport_height = color_buffer.description.height;
-            }
+            directx.current_render_targets[idx] = color_buffer;
             bool msaa = color_buffer.description.sample_count > 1;
             if (msaa) {
                 ASSERT(color_buffer.backend.handle_msaa_2d != nullptr);
             }
-            directx.cur_rtvs[i] = dx_create_render_target_view(msaa ? color_buffer.backend.handle_msaa_2d : color_buffer.backend.handle_2d, color_buffer.description.format, msaa);
+            directx.cur_rtvs[idx] = dx_create_render_target_view(msaa ? color_buffer.backend.handle_msaa_2d : color_buffer.backend.handle_2d, color_buffer.description.format, msaa);
+        }
+        else {
+            if (idx == 0) {
+                // bind the swapchain as the render target
+                ID3D11Texture2D *back_buffer_texture = {};
+                auto result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
+                ASSERT(result == S_OK);
+                ASSERT(directx.cur_rtvs[0] == nullptr);
+                directx.cur_rtvs[0] = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT, false); // todo(josh): swap chain msaa
+                back_buffer_texture->Release();
+            }
+        }
+
+        if (directx.cur_rtvs[idx] && clear) {
+            float color_elements[4] = { clear_color.x, clear_color.y, clear_color.z, clear_color.w };
+            directx.device_context->ClearRenderTargetView(directx.cur_rtvs[idx], color_elements);
         }
     }
-    else {
-        viewport_width  = directx.swap_chain_width;
-        viewport_height = directx.swap_chain_height;
-        ID3D11Texture2D *back_buffer_texture = {};
-        auto result = directx.swap_chain_handle->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&back_buffer_texture);
-        ASSERT(result == S_OK);
-        ASSERT(directx.cur_rtvs[0] == nullptr);
-        directx.cur_rtvs[0] = dx_create_render_target_view(back_buffer_texture, SWAP_CHAIN_FORMAT, false); // todo(josh): swap chain msaa
-        back_buffer_texture->Release();
+
+    Depth_Buffer_Binding depth_binding = bindings.depth_binding;
+    Texture *depth_buffer_to_use = &directx.swap_chain_depth_buffer;
+    if (depth_binding.texture.valid) {
+        depth_buffer_to_use = &depth_binding.texture;;
     }
 
-    Texture *depth_buffer_to_use = depth_buffer;
-    if (depth_buffer_to_use == nullptr) {
-        depth_buffer_to_use = &directx.swap_chain_depth_buffer;
-    }
     ASSERT(directx.cur_dsv == nullptr);
     ASSERT(depth_buffer_to_use != nullptr);
     ASSERT(depth_buffer_to_use->description.type == TT_2D);
     ASSERT(depth_buffer_to_use->description.render_target);
     bool depth_msaa = depth_buffer_to_use->description.sample_count > 1;
     directx.cur_dsv = dx_create_depth_stencil_view(depth_msaa ? depth_buffer_to_use->backend.handle_msaa_2d : depth_buffer_to_use->backend.handle_2d, depth_buffer_to_use->description.format, depth_msaa);
+    if (depth_binding.clear) {
+        directx.device_context->ClearDepthStencilView(directx.cur_dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, depth_binding.clear_depth, 0);
+    }
 
     directx.device_context->OMSetRenderTargets(CFF_MAX_BOUND_RENDER_TARGETS, &directx.cur_rtvs[0], directx.cur_dsv);
-
-    ASSERT(viewport_width  != 0);
-    ASSERT(viewport_height != 0);
-    set_viewport(0, 0, viewport_width, viewport_height);
 }
 
 void unset_render_targets() {
@@ -1855,18 +1874,18 @@ void unset_render_targets() {
     }
 }
 
-void clear_bound_render_targets(Vector4 color) {
-    for (int i = 0; i < CFF_MAX_BOUND_RENDER_TARGETS; i++) {
-        ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
-        if (rtv != nullptr) {
-            float color_elements[4] = { color.x, color.y, color.z, color.w };
-            directx.device_context->ClearRenderTargetView(rtv, color_elements);
-        }
-    }
-    if (directx.cur_dsv != nullptr) {
-        directx.device_context->ClearDepthStencilView(directx.cur_dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
-    }
-}
+// void clear_bound_render_targets(Vector4 color) {
+//     for (int i = 0; i < CFF_MAX_BOUND_RENDER_TARGETS; i++) {
+//         ID3D11RenderTargetView *rtv = directx.cur_rtvs[i];
+//         if (rtv != nullptr) {
+//             float color_elements[4] = { color.x, color.y, color.z, color.w };
+//             directx.device_context->ClearRenderTargetView(rtv, color_elements);
+//         }
+//     }
+//     if (directx.cur_dsv != nullptr) {
+//         directx.device_context->ClearDepthStencilView(directx.cur_dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1, 0);
+//     }
+// }
 
 void present(bool vsync) {
     directx.swap_chain_handle->Present(vsync, 0);

@@ -77,19 +77,37 @@ void destroy_model(Model model) {
 }
 
 void begin_render_pass(Render_Pass_Desc *pass) {
+    int viewport_width  = 0;
+    int viewport_height = 0;
+    Color_Buffer_Binding color_binding = pass->render_target_bindings.color_bindings[0];
+    if (color_binding.texture.valid) {
+        viewport_width  = color_binding.texture.description.width;
+        viewport_height = color_binding.texture.description.height;
+    }
+    else {
+        get_swapchain_size(&viewport_width, &viewport_height);
+    }
+    ASSERT(viewport_width  != 0);
+    ASSERT(viewport_height != 0);
+    set_viewport(0, 0, viewport_width, viewport_height);
+
     assert(renderer_state.current_render_pass == nullptr);
     renderer_state.current_render_pass = pass;
     Pass_CBuffer pass_cbuffer = {};
+    pass_cbuffer.screen_dimensions = v2((float)viewport_width, (float)viewport_height);
     pass_cbuffer.view_matrix = construct_view_matrix(pass->camera_position, pass->camera_orientation);
     pass_cbuffer.projection_matrix = pass->projection_matrix;
     pass_cbuffer.camera_position = pass->camera_position;
     update_buffer(renderer_state.pass_cbuffer_handle, &pass_cbuffer, sizeof(Pass_CBuffer));
     bind_constant_buffers(&renderer_state.pass_cbuffer_handle, 1, CBS_PASS);
+
+    set_render_targets(pass->render_target_bindings);
 }
 
 void end_render_pass() {
     assert(renderer_state.current_render_pass != nullptr);
     renderer_state.current_render_pass = nullptr;
+    unset_render_targets();
 }
 
 void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options options) {

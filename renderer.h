@@ -48,10 +48,12 @@ struct Model {
 Model create_model(Allocator allocator);
 
 struct Pass_CBuffer {
+    Vector2 screen_dimensions;
+    f32 pad[2];
     Matrix4 view_matrix;
     Matrix4 projection_matrix;
     Vector3 camera_position;
-    f32 pad0;
+    f32 pad2;
 };
 
 struct Model_CBuffer {
@@ -100,23 +102,30 @@ struct Lighting_CBuffer {
 #define CBS_LIGHTING 3
 #define CBS_BLUR     4
 #define CBS_FINAL    5
+#define CBS_SSR      6
 
 
 
-#define TS_PBR_ALBEDO     0
-#define TS_PBR_NORMAL     1
-#define TS_PBR_METALLIC   2
-#define TS_PBR_ROUGHNESS  3
-#define TS_PBR_EMISSION   4
-#define TS_PBR_AO         5
-#define TS_PBR_SHADOW_MAP 6
-#define TS_PBR_CAMERA_BOX 7
-#define TS_PBR_SKYBOX     8
+#define TS_PBR_ALBEDO        0
+#define TS_PBR_NORMAL        1
+#define TS_PBR_METALLIC      2
+#define TS_PBR_ROUGHNESS     3
+#define TS_PBR_EMISSION      4
+#define TS_PBR_AO            5
+#define TS_PBR_SHADOW_MAP    6
+#define TS_PBR_DEPTH_PREPASS 7
+#define TS_PBR_SKYBOX        8
 
 #define TS_FINAL_MAIN_VIEW 0
 #define TS_FINAL_BLOOM_MAP 1
+#define TS_FINAL_SSR_MAP   2
 
 #define TS_SIMPLE_ALBEDO 0
+
+#define TS_SSR_SCENE_MAP           0
+#define TS_SSR_NORMAL_MAP          1
+#define TS_SSR_POSITIONS_MAP       2
+#define TS_SSR_METAL_ROUGHNESS_MAP 3
 
 
 
@@ -141,6 +150,7 @@ struct Render_Options {
 };
 
 struct Render_Pass_Desc {
+    Render_Target_Bindings render_target_bindings;
     Vector3 camera_position;
     Quaternion camera_orientation;
     Matrix4 projection_matrix;

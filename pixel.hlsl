@@ -8,7 +8,7 @@ Texture2D   roughness_map : register(t3);
 Texture2D   emission_map  : register(t4);
 Texture2D   ao_map        : register(t5);
 Texture2D   shadow_map    : register(t6);
-Texture3D   camera_box    : register(t7);
+Texture2D   depth_prepass : register(t7);
 TextureCube skybox_map    : register(t8);
 
 int sun_can_see_point(float3 position, row_major matrix sun_matrix, Texture2D shadow_map_texture) {
@@ -73,13 +73,6 @@ PS_OUTPUT main(PS_INPUT input) {
         N = N * 2.0 - 1.0;
         N = normalize(mul(input.tbn, N));
     }
-    if (visualize_normals == 1) {
-        PS_OUTPUT output;
-        output.color = float4(N * 0.5 + 0.5, 1.0);
-        output.bloom_color = float4(0, 0, 0, 0);
-        output.depth = float4(input.position.z, input.position.z, input.position.z, 1);
-        return output;
-    }
 
     float distance_to_pixel_position = length(camera_position - input.world_position);
     float3 direction_to_camera = (camera_position - input.world_position) / distance_to_pixel_position;
@@ -90,14 +83,24 @@ PS_OUTPUT main(PS_INPUT input) {
     }
     output_color.rgb *= model_color.rgb * input.color.rgb;
 
-
     float3 albedo = output_color.rgb;
-
+    float ao = 1.0;
     if (has_ao_map) {
-        output_color.rgb *= ambient * ao_map.Sample(main_sampler, input.texcoord.xy).r;
+        ao = ao_map.Sample(main_sampler, input.texcoord.xy).r;
     }
-    else {
-        output_color.rgb *= ambient;
+    output_color.rgb *= ambient * ao;
+
+    float4 normal_as_color = float4(N * 0.5 + 0.5, 1.0);
+
+    // todo(josh): delete this if we continue with deferred rendering
+    if (visualize_normals == 1) {
+        PS_OUTPUT output;
+        output.color = normal_as_color;
+        output.bloom_color = float4(0, 0, 0, 0);
+        output.position = float4(input.world_position, 1.0);
+        output.normal = normal_as_color;
+        output.material = float4(metallic, roughness, ao, 1.0);
+        return output;
     }
 
     for (int point_light_index = 0; point_light_index < num_point_lights; point_light_index++) {
@@ -117,9 +120,10 @@ PS_OUTPUT main(PS_INPUT input) {
     }
 
     if (has_skybox_map) {
-        float3 reflected_direction = normalize(reflect(-direction_to_camera, N));
-        float4 skybox_sample_color = skybox_map.Sample(main_sampler, reflected_direction) * skybox_color;
-        output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, reflected_direction, skybox_sample_color.rgb, 0);
+        // todo(josh): figure out what to do with skybox reflections
+        // float3 reflected_direction = normalize(reflect(-direction_to_camera, N));
+        // float4 skybox_sample_color = skybox_map.Sample(main_sampler, reflected_direction) * skybox_color;
+        // output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, reflected_direction, skybox_sample_color.rgb, 0);
     }
 
     if (has_emission_map) {
@@ -144,6 +148,9 @@ PS_OUTPUT main(PS_INPUT input) {
     PS_OUTPUT output;
     output.color = output_color;
     output.bloom_color = float4(0, 0, 0, output.color.a);
+    output.position = float4(input.world_position, 1.0);
+    output.normal = normal_as_color;
+    output.material = float4(metallic, roughness, ao, 1.0);
     float color_magnitude = length(output.color.rgb);
     const float BLOOM_THRESHOLD = 10.0;
     if (color_magnitude > BLOOM_THRESHOLD) {
@@ -151,6 +158,5 @@ PS_OUTPUT main(PS_INPUT input) {
         output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * BLOOM_THRESHOLD)) * SLOPE;
         output.bloom_color.a = output.color.a;
     }
-    output.depth = float4(input.position.z, input.position.z, input.position.z, 1);
     return output;
 }
