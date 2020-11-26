@@ -270,12 +270,12 @@ struct Texture_Description {
     int height;
     int depth;
     bool render_target;
+    bool cpu_read_target;
     bool uav;
     int sample_count;
     int mipmap_count;
     Texture_Format format;
     Texture_Type type;
-    // is_cpu_read_target
     Texture_Wrap_Mode wrap_mode;
     byte *color_data;
 };
@@ -1546,14 +1546,22 @@ Texture create_texture(Texture_Description desc) {
             texture_desc.MipLevels        = desc.mipmap_count;
             texture_desc.Format           = texture_format;
             texture_desc.SampleDesc.Count = 1;
-            texture_desc.Usage            = D3D11_USAGE_DEFAULT;
             texture_desc.ArraySize        = 1;
+            if (desc.cpu_read_target) {
+                texture_desc.Usage = D3D11_USAGE_STAGING;
+                texture_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            }
+            else {
+                texture_desc.Usage = D3D11_USAGE_DEFAULT;
+            }
 
             if (texture_format_infos[desc.format].is_depth_format) {
                 texture_desc.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
             }
             else {
-                texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                if (!desc.cpu_read_target) {
+                    texture_desc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                }
                 if (desc.uav) {
                     texture_desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
                 }

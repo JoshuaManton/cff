@@ -9,23 +9,26 @@
 #include "math.h"
 #include "renderer.h"
 
+#include "half.cpp"
+
 #ifdef DEVELOPER
 #include "assimp_loader.cpp"
 #endif
 
 /*
 TODO:
+-particle systems
+-fix alpha blending without ruining bloom
+-suggestion from martijn: color the fog based on the 1x1 downsample from last frame
+-transparency sorting to alpha blend properly
+-dear imgui?
 -SSAO
 -auto-exposure
 -skeletal animation
--particle systems
 -instancing (do we support this already?)
--fix alpha blending without ruining bloom
 -assimp model scale
 -bounding boxes/spheres for meshes/models
--dear imgui?
 -depth sorting to reduce overdraw
--transparency sorting to alpha blend properly
 -point light shadows?
 -spot lights
 -proper IBL
@@ -86,9 +89,8 @@ Texture do_blur(Texture thing_to_blur, float radius, int num_iterations, Texture
     Texture last_render_target = ping_pong_buffers[1];
     bind_shaders(vertex_shader, blur_pixel_shader);
     for (int i = 0; i < (num_iterations * 2); i++) {
-        last_render_target = ping_pong_buffers[i % 2];
-
         Texture source_texture = ping_pong_buffers[(i+1) % 2];
+        last_render_target = ping_pong_buffers[i % 2];
 
         Blur_CBuffer blur_cbuffer = {};
         blur_cbuffer.horizontal = i % 2;
@@ -246,22 +248,6 @@ void main() {
     black_texture_description.color_data = black_texture_data;
     Texture black_texture = create_texture(black_texture_description);
 
-    Render_Options render_options = {};
-    render_options.do_albedo_map    = true;
-    render_options.do_normal_map    = true;
-    render_options.do_metallic_map  = true;
-    render_options.do_roughness_map = true;
-    render_options.do_emission_map  = true;
-    render_options.do_ao_map        = true;
-
-    Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
-    Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
-    sponza_model.meshes[8].material.roughness = 0.2;
-
-
-
-
-
 
 
     Texture shadow_map_color_buffer = {};
@@ -282,6 +268,15 @@ void main() {
     hdr_description.format = TF_R16G16B16A16_FLOAT;
     hdr_description.wrap_mode = TWM_LINEAR_CLAMP;
     create_color_and_depth_buffers(hdr_description, &hdr_color_buffer, &hdr_depth_buffer);
+
+    Texture_Description final_composite_desc = {};
+    final_composite_desc.width = main_window.width;
+    final_composite_desc.height = main_window.height;
+    final_composite_desc.format = TF_R16G16B16A16_FLOAT;
+    final_composite_desc.wrap_mode = TWM_LINEAR_CLAMP;
+    Texture final_composite_color_buffer = {};
+    Texture final_composite_depth_buffer = {};
+    create_color_and_depth_buffers(final_composite_desc, &final_composite_color_buffer, &final_composite_depth_buffer);
 
     Texture_Description depth_prepass_desc = {};
     depth_prepass_desc.width = main_window.width;
@@ -361,10 +356,50 @@ void main() {
     ssr_blur_ping_pong_depth_desc.format = TF_DEPTH_STENCIL;
     Texture ssr_blur_ping_pong_depth_buffer = create_texture(ssr_blur_ping_pong_depth_desc);
 
+    // todo(josh): do we need to do every single power of two?
+    int auto_exposure_downsample_sizes[10] = {
+        512, 256, 128, 64, 32, 16, 8, 4, 2, 1,
+    };
+
+    Texture_Description auto_exposure_downsample_desc = {};
+    auto_exposure_downsample_desc.wrap_mode = TWM_LINEAR_CLAMP;
+    auto_exposure_downsample_desc.format = TF_R16G16B16A16_FLOAT;
+    auto_exposure_downsample_desc.render_target = true;
+    Texture auto_exposure_downsample_buffers[ARRAYSIZE(auto_exposure_downsample_sizes)] = {};
+    for (int i = 0; i < ARRAYSIZE(auto_exposure_downsample_buffers); i++) {
+        Texture_Description desc = auto_exposure_downsample_desc;
+        desc.width  = auto_exposure_downsample_sizes[i];
+        desc.height = auto_exposure_downsample_sizes[i];
+        auto_exposure_downsample_buffers[i] = create_texture(desc);
+    }
+    Texture_Description auto_exposure_cpu_read_buffer_desc = auto_exposure_downsample_desc;
+    auto_exposure_cpu_read_buffer_desc.width  = 8;
+    auto_exposure_cpu_read_buffer_desc.height = 8;
+    auto_exposure_cpu_read_buffer_desc.render_target = false;
+    auto_exposure_cpu_read_buffer_desc.cpu_read_target = true;
+    Texture auto_exposure_cpu_read_buffer = create_texture(auto_exposure_cpu_read_buffer_desc);
+
+
+
     Buffer lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     Buffer blur_cbuffer_handle     = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
     Buffer ssr_cbuffer_handle      = create_buffer(BT_CONSTANT, nullptr, sizeof(SSR_CBuffer));
     Buffer final_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(Final_CBuffer));
+
+
+
+    Render_Options render_options = {};
+    render_options.do_albedo_map    = true;
+    render_options.do_normal_map    = true;
+    render_options.do_metallic_map  = true;
+    render_options.do_roughness_map = true;
+    render_options.do_emission_map  = true;
+    render_options.do_ao_map        = true;
+
+    Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
+    Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
+    sponza_model.meshes[8].material.roughness = 0.2;
+
 
 
     bool freecam = false;
@@ -391,6 +426,8 @@ void main() {
 
     const float FIXED_DT = 1.0f / 120;
 
+    float current_exposure = 0.25;
+
     float time_since_startup = 0;
     const double time_at_startup = time_now();
     double last_frame_start_time = time_now();
@@ -415,7 +452,7 @@ void main() {
         if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
         if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
 
-        const float CAMERA_SPEED_BASE = 5;
+        const float CAMERA_SPEED_BASE = 3;
         const float CAMERA_SPEED_FAST = 20;
         const float CAMERA_SPEED_SLOW = 0.5;
 
@@ -452,6 +489,8 @@ void main() {
         ensure_texture_size(&depth_prepass_depth_buffer, main_window.width, main_window.height);
         ensure_texture_size(&hdr_color_buffer, main_window.width, main_window.height);
         ensure_texture_size(&hdr_depth_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&final_composite_color_buffer, main_window.width, main_window.height);
+        ensure_texture_size(&final_composite_depth_buffer, main_window.width, main_window.height);
         // ensure_texture_size(&ssao_depth_color_buffer, main_window.width, main_window.height);
         ensure_texture_size(&gbuffer_positions, main_window.width, main_window.height);
         ensure_texture_size(&gbuffer_metal_roughness, main_window.width, main_window.height);
@@ -636,7 +675,103 @@ void main() {
         }
 
         Texture last_bloom_blur_render_target = do_blur(bloom_color_buffer, 10, 2, bloom_ping_pong_color_buffers, bloom_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
-        Texture last_ssr_blur_render_target = do_blur(ssr_color_buffer, 2, 1, ssr_blur_ping_pong_buffers, ssr_blur_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
+        // Texture last_ssr_blur_render_target = do_blur(ssr_color_buffer, 2, 1, ssr_blur_ping_pong_buffers, ssr_blur_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_pixel_textured_shader, blur_cbuffer_handle);
+
+        {
+            D3D11_MAPPED_SUBRESOURCE texture_resource = {};
+            auto result = directx.device_context->Map(*((ID3D11Resource **)&auto_exposure_cpu_read_buffer.backend.handle_2d), 0, D3D11_MAP_READ, 0, &texture_resource);
+            assert(result == S_OK);
+
+            int pixel_size = texture_format_infos[auto_exposure_cpu_read_buffer.description.format].pixel_size_in_bytes;
+            assert(pixel_size == sizeof(u64));
+            int pixels_length_in_bytes = auto_exposure_cpu_read_buffer.description.width * auto_exposure_cpu_read_buffer.description.height * pixel_size;
+            int pixels_length_in_u64 = pixels_length_in_bytes / 8;
+            u64 *pixels = (u64 *)texture_resource.pData;
+            u64 middle_pixel = pixels[4 + (auto_exposure_cpu_read_buffer.description.width * 4)];
+            u16 middle_pixel_r = (u16)(middle_pixel >> 0);
+            u16 middle_pixel_g = (u16)(middle_pixel >> 16);
+            u16 middle_pixel_b = (u16)(middle_pixel >> 32);
+            u32 ru32 = half_to_float(middle_pixel_r);
+            float r = *((float *)(&ru32));
+            u32 gu32 = half_to_float(middle_pixel_g);
+            float g = *((float *)(&gu32));
+            u32 bu32 = half_to_float(middle_pixel_b);
+            float b = *((float *)(&bu32));
+
+            directx.device_context->Unmap(*((ID3D11Resource **)&auto_exposure_cpu_read_buffer.backend.handle_2d), 0);
+
+            Vector3 color = v3(r*r, g*g, b*b);
+            float brightness = length(color * v3(0.2, 0.7, 0.1)); // todo(josh): (0.2, 0.7, 0.1) are not exact. martijn: "if you want the exact ones, look at wikipedia at the Y component of the RGB primaries of the sRGB color space"
+            float exposure_this_frame = 0.1 / (brightness + 1e-3);
+
+            if (abs(current_exposure - exposure_this_frame) > 0.1) {
+                const float EXPOSURE_SPEED = 0.5;
+                if (current_exposure < exposure_this_frame) {
+                    current_exposure += EXPOSURE_SPEED * dt;
+                    if (current_exposure > exposure_this_frame) {
+                        current_exposure = exposure_this_frame;
+                    }
+                }
+                else if (current_exposure > exposure_this_frame) {
+                    current_exposure -= EXPOSURE_SPEED * dt;
+                    if (current_exposure < exposure_this_frame) {
+                        current_exposure = exposure_this_frame;
+                    }
+                }
+            }
+            else {
+                current_exposure = lerp(current_exposure, exposure_this_frame, 1 * dt);
+            }
+        }
+
+        // make the final composite
+        {
+            Render_Pass_Desc screen_pass = {};
+            screen_pass.render_target_bindings.color_bindings[0] = {final_composite_color_buffer, true, v4(0, 0, 0, 0)};
+            screen_pass.render_target_bindings.depth_binding     = {final_composite_depth_buffer, true, 1};
+            screen_pass.camera_position = v3(0, 0, 0);
+            screen_pass.camera_orientation = quaternion_identity();
+            screen_pass.projection_matrix = construct_orthographic_matrix(0, main_window.width, 0, main_window.height, -1, 1);
+            begin_render_pass(&screen_pass);
+            defer(end_render_pass());
+
+            bind_texture(last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
+            defer(bind_texture({}, TS_FINAL_BLOOM_MAP));
+            bind_texture(ssr_color_buffer, TS_FINAL_SSR_MAP);
+            defer(bind_texture({}, TS_FINAL_SSR_MAP));
+
+            bind_shaders(vertex_shader, final_pixel_shader);
+
+            Final_CBuffer final_cbuffer = {};
+            final_cbuffer.exposure = current_exposure;
+            if (render_options.visualize_normals) {
+                final_cbuffer.exposure = 1;
+            }
+            update_buffer(final_cbuffer_handle, &final_cbuffer, sizeof(Final_CBuffer));
+            bind_constant_buffers(&final_cbuffer_handle, 1, CBS_FINAL);
+            draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
+        }
+
+        // calculate exposure brightness for next frame
+        {
+            set_alpha_blend(false);
+            defer(set_alpha_blend(true));
+            bind_shaders(vertex_shader, simple_pixel_textured_shader);
+            Texture thing_to_draw = final_composite_color_buffer;
+            for (int i = 0; i < ARRAYSIZE(auto_exposure_downsample_buffers); i++) {
+                Render_Pass_Desc screen_pass = {};
+                screen_pass.render_target_bindings.color_bindings[0] = {auto_exposure_downsample_buffers[i], true, v4(0, 0, 0, 0)};
+                screen_pass.render_target_bindings.depth_binding     = {{}, true, 1};
+                screen_pass.camera_position = v3(0, 0, 0);
+                screen_pass.camera_orientation = quaternion_identity();
+                screen_pass.projection_matrix = construct_orthographic_matrix(0, thing_to_draw.description.width, 0, thing_to_draw.description.height, -1, 1);
+                begin_render_pass(&screen_pass);
+                defer(end_render_pass());
+                draw_texture(thing_to_draw, v3(0, 0, 0), v3(thing_to_draw.description.width, thing_to_draw.description.height, 0));
+                thing_to_draw = auto_exposure_downsample_buffers[i];
+            }
+            copy_texture(auto_exposure_cpu_read_buffer, auto_exposure_downsample_buffers[6]);
+        }
 
         // actually draw to the screen
         {
@@ -649,29 +784,17 @@ void main() {
             begin_render_pass(&screen_pass);
             defer(end_render_pass());
 
-            bind_texture(last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
-            defer(bind_texture({}, TS_FINAL_BLOOM_MAP));
-            bind_texture(last_ssr_blur_render_target, TS_FINAL_SSR_MAP);
-            defer(bind_texture({}, TS_FINAL_SSR_MAP));
-            bind_shaders(vertex_shader, final_pixel_shader);
-            Final_CBuffer final_cbuffer = {};
-            final_cbuffer.exposure = 0.25;
-            if (render_options.visualize_normals) {
-                final_cbuffer.exposure = 1;
-            }
-            update_buffer(final_cbuffer_handle, &final_cbuffer, sizeof(Final_CBuffer));
-            bind_constant_buffers(&final_cbuffer_handle, 1, CBS_FINAL);
-            draw_texture(hdr_color_buffer, v3(0, 0, 0), v3(main_window.width, main_window.height, 0));
+            bind_shaders(vertex_shader, simple_pixel_textured_shader);
+            draw_texture(final_composite_color_buffer,        v3(0, 0, 0),   v3(main_window.width, main_window.height, 0));
 
             /*
-            bind_shaders(vertex_shader, simple_pixel_textured_shader);
-            draw_texture(bloom_color_buffer,               v3(0, 0, 0),   v3(128, 128, 0));
-            draw_texture(last_bloom_blur_render_target,    v3(128, 0, 0), v3(256, 128, 0));
-            draw_texture(last_ssr_blur_render_target,      v3(256, 0, 0), v3(384, 128, 0));
-            draw_texture(gbuffer_positions,                v3(384, 0, 0), v3(512, 128, 0));
-            draw_texture(gbuffer_normals,                  v3(512, 0, 0), v3(640, 128, 0));
-            draw_texture(gbuffer_metal_roughness,          v3(640, 0, 0), v3(768, 128, 0));
-            draw_texture(depth_prepass_color_buffer,       v3(768, 0, 0), v3(896, 128, 0));
+            draw_texture(bloom_color_buffer,                  v3(0, 0, 0),   v3(128, 128, 0));
+            draw_texture(last_bloom_blur_render_target,       v3(128, 0, 0), v3(256, 128, 0));
+            draw_texture(ssr_color_buffer,                    v3(256, 0, 0), v3(384, 128, 0));
+            draw_texture(gbuffer_positions,                   v3(384, 0, 0), v3(512, 128, 0));
+            draw_texture(gbuffer_normals,                     v3(512, 0, 0), v3(640, 128, 0));
+            draw_texture(gbuffer_metal_roughness,             v3(640, 0, 0), v3(768, 128, 0));
+            draw_texture(auto_exposure_downsample_buffers[6], v3(768, 0, 0), v3(896, 128, 0));
 
             bind_texture(roboto_mono.texture, 0);
             bind_shaders(vertex_shader, text_pixel_shader);

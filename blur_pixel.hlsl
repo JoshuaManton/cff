@@ -14,7 +14,8 @@ float4 main(PS_INPUT input) : SV_Target {
     }
 
     float total_weight = 0;
-    for (float i = -blur_radius; i <= blur_radius; i++) {
+    for (int _i = -blur_radius; _i <= blur_radius; _i++) {
+        float i = float(_i);
         float factor = exp(-(i / blur_radius) * (i / blur_radius));
         total_weight += factor;
         output_color += albedo_map.Sample(main_sampler, input.texcoord.xy + texel_offset * i).rgb * factor;

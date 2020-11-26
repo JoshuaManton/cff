@@ -40,7 +40,7 @@ float4 main(PS_INPUT input) : SV_Target0 {
             float3 offset_to_light = ray_position - scene_pixel_position;
             float distance_to_light = length(offset_to_light);
             // todo(josh): this attenuation is to make the edges of the screen reflection a little softer but it looks bad so figure out something better
-            float attentuation_fade_term = 1.0 - (saturate(length(ray_position_viewport_space.xy)));
+            float attentuation_fade_term = 1.0 - (saturate(length(ray_position_position_sample_viewport_space.xy)));
             // todo(josh): attenuate ray_position_screen_sample?
             // todo(josh): 0 or 1 for analytic parameter?
             float attentuation = saturate(1.0 / (distance_to_light * distance_to_light));

@@ -116,9 +116,9 @@ struct Lighting_CBuffer {
 #define TS_PBR_DEPTH_PREPASS 7
 #define TS_PBR_SKYBOX        8
 
-#define TS_FINAL_MAIN_VIEW 0
-#define TS_FINAL_BLOOM_MAP 1
-#define TS_FINAL_SSR_MAP   2
+#define TS_FINAL_MAIN_VIEW     0
+#define TS_FINAL_BLOOM_MAP     1
+#define TS_FINAL_SSR_MAP       2
 
 #define TS_SIMPLE_ALBEDO 0
 

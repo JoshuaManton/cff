@@ -7,6 +7,14 @@ f64 to_radians_f64(f64 degrees) { return degrees * RAD_PER_DEG; }
 f32 to_degrees    (f32 radians) { return radians * DEG_PER_RAD; }
 f64 to_degrees_f64(f64 radians) { return radians * DEG_PER_RAD; }
 
+float clamp(float v, float a, float b) {
+    return fmax(fmin(v, b), a);
+}
+
+float lerp(float a, float b, float t) {
+    return a + ((b - a) * t);
+}
+
 Vector2 v2(float x, float y) {
     Vector2 result;
     result.x = x;

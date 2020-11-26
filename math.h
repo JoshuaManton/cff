@@ -13,6 +13,11 @@ f64 to_radians_f64(f64 degrees);
 f32 to_degrees    (f32 radians);
 f64 to_degrees_f64(f64 radians);
 
+float clamp(float v, float a, float b);
+float lerp(float a, float b, float t);
+
+
+
 struct Vector2;
 struct Vector3;
 struct Vector4;
