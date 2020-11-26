@@ -46,6 +46,7 @@ struct Model {
 };
 
 Model create_model(Allocator allocator);
+// todo(josh): destroy_model()
 
 struct Pass_CBuffer {
     Vector2 screen_dimensions;
@@ -94,6 +95,19 @@ struct Lighting_CBuffer {
     Vector4 skybox_color;
 };
 
+struct Blur_CBuffer {
+    int horizontal;
+    Vector2 buffer_dimensions;
+    float blur_radius;
+};
+
+struct SSR_CBuffer {
+    Vector3 scene_camera_position;
+    float pad;
+    Matrix4 camera_matrix;
+    Matrix4 inverse_camera_matrix;
+};
+
 
 
 #define CBS_PASS     0
@@ -113,8 +127,7 @@ struct Lighting_CBuffer {
 #define TS_PBR_EMISSION      4
 #define TS_PBR_AO            5
 #define TS_PBR_SHADOW_MAP    6
-#define TS_PBR_DEPTH_PREPASS 7
-#define TS_PBR_SKYBOX        8
+#define TS_PBR_SKYBOX        7
 
 #define TS_FINAL_MAIN_VIEW     0
 #define TS_FINAL_BLOOM_MAP     1
@@ -139,6 +152,8 @@ struct Font {
 Font load_font_from_file(char *filename, float size);
 void destroy_font(Font font);
 
+
+
 struct Render_Options {
     bool do_albedo_map;
     bool do_normal_map;
@@ -161,6 +176,24 @@ void end_render_pass();
 void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int num_indices, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color);
 void draw_model(Model model, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color, Render_Options options, bool draw_transparency);
 void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override = 0);
+
+
+
+struct Blurrer {
+    Texture ping_pong_color_buffers[2];
+    Texture ping_pong_depth_buffer;
+    Vertex_Shader vertex_shader;
+    Pixel_Shader blur_pixel_shader;
+    Pixel_Shader simple_textured_pixel_shader;
+    Buffer cbuffer_handle;
+};
+
+Blurrer make_blurrer(int width, int height, Vertex_Shader simple_vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_textured_pixel_shader);
+void destroy_blurrer(Blurrer blurrer);
+void ensure_blurrer_texture_sizes(Blurrer *blurrer, int width, int height);
+Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_iterations);
+
+
 
 struct Fixed_Function {
     Array<Vertex> *array;

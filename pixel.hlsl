@@ -8,8 +8,7 @@ Texture2D   roughness_map : register(t3);
 Texture2D   emission_map  : register(t4);
 Texture2D   ao_map        : register(t5);
 Texture2D   shadow_map    : register(t6);
-Texture2D   depth_prepass : register(t7);
-TextureCube skybox_map    : register(t8);
+TextureCube skybox_map    : register(t7);
 
 int sun_can_see_point(float3 position, row_major matrix sun_matrix, Texture2D shadow_map_texture) {
     float4 position_sun_space = mul(sun_matrix, float4(position, 1.0));

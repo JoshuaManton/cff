@@ -16,6 +16,63 @@ void init_renderer(Window *window) {
     renderer_state.model_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Model_CBuffer));
 }
 
+
+
+Model create_model(Allocator allocator) {
+    Model model = {};
+    model.meshes = make_array<Loaded_Mesh>(allocator);
+    return model;
+}
+
+void destroy_model(Model model) {
+    model.meshes.destroy();
+}
+
+
+
+void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options options) {
+    PBR_Material_CBuffer material_cbuffer = {};
+    material_cbuffer.ambient   = material.ambient;
+    material_cbuffer.metallic  = material.metallic;
+    material_cbuffer.roughness = material.roughness;
+    material_cbuffer.visualize_normals = options.visualize_normals;
+
+    if (material.albedo_map.valid && options.do_albedo_map) {
+        bind_texture(material.albedo_map, TS_PBR_ALBEDO);
+        material_cbuffer.has_albedo_map = 1;
+    }
+    if (material.normal_map.valid && options.do_normal_map) {
+        bind_texture(material.normal_map, TS_PBR_NORMAL);
+        material_cbuffer.has_normal_map = 1;
+    }
+    if (material.metallic_map.valid && options.do_metallic_map) {
+        bind_texture(material.metallic_map, TS_PBR_METALLIC);
+        material_cbuffer.has_metallic_map = 1;
+    }
+    if (material.roughness_map.valid && options.do_roughness_map) {
+        bind_texture(material.roughness_map, TS_PBR_ROUGHNESS);
+        material_cbuffer.has_roughness_map = 1;
+    }
+    if (material.emission_map.valid && options.do_emission_map) {
+        bind_texture(material.emission_map, TS_PBR_EMISSION);
+        material_cbuffer.has_emission_map = 1;
+    }
+    if (material.ao_map.valid && options.do_ao_map) {
+        bind_texture(material.ao_map, TS_PBR_AO);
+        material_cbuffer.has_ao_map = 1;
+    }
+
+    update_buffer(buffer, &material_cbuffer, sizeof(PBR_Material_CBuffer));
+    bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
+}
+
+Buffer create_pbr_material_cbuffer() {
+    Buffer buffer = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
+    return buffer;
+}
+
+
+
 Font load_font_from_file(char *filename, float size) {
     int ttf_data_len;
     unsigned char *ttf_data = (unsigned char *)read_entire_file(filename, &ttf_data_len);
@@ -66,15 +123,7 @@ void destroy_font(Font font) {
     destroy_texture(font.texture);
 }
 
-Model create_model(Allocator allocator) {
-    Model model = {};
-    model.meshes = make_array<Loaded_Mesh>(allocator);
-    return model;
-}
 
-void destroy_model(Model model) {
-    model.meshes.destroy();
-}
 
 void begin_render_pass(Render_Pass_Desc *pass) {
     int viewport_width  = 0;
@@ -108,47 +157,6 @@ void end_render_pass() {
     assert(renderer_state.current_render_pass != nullptr);
     renderer_state.current_render_pass = nullptr;
     unset_render_targets();
-}
-
-void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options options) {
-    PBR_Material_CBuffer material_cbuffer = {};
-    material_cbuffer.ambient   = material.ambient;
-    material_cbuffer.metallic  = material.metallic;
-    material_cbuffer.roughness = material.roughness;
-    material_cbuffer.visualize_normals = options.visualize_normals;
-
-    if (material.albedo_map.valid && options.do_albedo_map) {
-        bind_texture(material.albedo_map, TS_PBR_ALBEDO);
-        material_cbuffer.has_albedo_map = 1;
-    }
-    if (material.normal_map.valid && options.do_normal_map) {
-        bind_texture(material.normal_map, TS_PBR_NORMAL);
-        material_cbuffer.has_normal_map = 1;
-    }
-    if (material.metallic_map.valid && options.do_metallic_map) {
-        bind_texture(material.metallic_map, TS_PBR_METALLIC);
-        material_cbuffer.has_metallic_map = 1;
-    }
-    if (material.roughness_map.valid && options.do_roughness_map) {
-        bind_texture(material.roughness_map, TS_PBR_ROUGHNESS);
-        material_cbuffer.has_roughness_map = 1;
-    }
-    if (material.emission_map.valid && options.do_emission_map) {
-        bind_texture(material.emission_map, TS_PBR_EMISSION);
-        material_cbuffer.has_emission_map = 1;
-    }
-    if (material.ao_map.valid && options.do_ao_map) {
-        bind_texture(material.ao_map, TS_PBR_AO);
-        material_cbuffer.has_ao_map = 1;
-    }
-
-    update_buffer(buffer, &material_cbuffer, sizeof(PBR_Material_CBuffer));
-    bind_constant_buffers(&buffer, 1, CBS_MATERIAL);
-}
-
-Buffer create_pbr_material_cbuffer() {
-    Buffer buffer = create_buffer(BT_CONSTANT, nullptr, sizeof(PBR_Material_CBuffer));
-    return buffer;
 }
 
 void draw_mesh(Buffer vertex_buffer, Buffer index_buffer, int num_vertices, int num_indices, Vector3 position, Vector3 scale, Quaternion orientation, Vector4 color) {
@@ -194,6 +202,98 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override) {
     ff_end(&ff);
     bind_texture({}, 0);
 }
+
+
+
+Blurrer make_blurrer(int width, int height, Vertex_Shader simple_vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_textured_pixel_shader) {
+    Blurrer blurrer = {};
+
+    Texture_Description blur_ping_pong_desc = {};
+    blur_ping_pong_desc.width  = width;
+    blur_ping_pong_desc.height = height;
+    blur_ping_pong_desc.type = TT_2D;
+    blur_ping_pong_desc.wrap_mode = TWM_LINEAR_CLAMP;
+    blur_ping_pong_desc.format = TF_R16G16B16A16_FLOAT;
+    blur_ping_pong_desc.render_target = true;
+
+    blurrer.ping_pong_color_buffers[0] = create_texture(blur_ping_pong_desc);
+    blurrer.ping_pong_color_buffers[1] = create_texture(blur_ping_pong_desc);
+    Texture_Description blur_ping_pong_depth_desc = blur_ping_pong_desc;
+    blur_ping_pong_depth_desc.format = TF_DEPTH_STENCIL;
+    blurrer.ping_pong_depth_buffer = create_texture(blur_ping_pong_depth_desc);
+
+    blurrer.vertex_shader = simple_vertex_shader;
+    blurrer.blur_pixel_shader = blur_pixel_shader;
+    blurrer.simple_textured_pixel_shader = simple_textured_pixel_shader;
+    blurrer.cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Blur_CBuffer));
+
+    return blurrer;
+}
+
+void destroy_blurrer(Blurrer blurrer) {
+    destroy_texture(blurrer.ping_pong_color_buffers[0]);
+    destroy_texture(blurrer.ping_pong_color_buffers[1]);
+    destroy_texture(blurrer.ping_pong_depth_buffer);
+    destroy_buffer(blurrer.cbuffer_handle);
+}
+
+void ensure_blurrer_texture_sizes(Blurrer *blurrer, int width, int height) {
+    for (int i = 0; i < ARRAYSIZE(blurrer->ping_pong_color_buffers); i++) {
+        ensure_texture_size(&blurrer->ping_pong_color_buffers[i], width, height);
+    }
+    ensure_texture_size(&blurrer->ping_pong_depth_buffer, width, height);
+}
+
+Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_iterations) {
+    // initial copy pass
+    {
+        // todo(josh): this should just be a copy_texture()
+        // todo(josh): this should just be a copy_texture()
+        // todo(josh): this should just be a copy_texture()
+
+        Render_Pass_Desc blur_pass = {};
+        blur_pass.render_target_bindings.color_bindings[0] = {blurrer->ping_pong_color_buffers[1],   true, v4(0, 0, 0, 1)};
+        blur_pass.render_target_bindings.depth_binding     = {blurrer->ping_pong_depth_buffer, true, 1};
+        blur_pass.camera_orientation = quaternion_identity();
+        blur_pass.projection_matrix = construct_orthographic_matrix(0, blurrer->ping_pong_color_buffers[1].description.width, 0, blurrer->ping_pong_color_buffers[1].description.height, -1, 1);
+        begin_render_pass(&blur_pass);
+        defer(end_render_pass());
+
+        bind_shaders(blurrer->vertex_shader, blurrer->simple_textured_pixel_shader);
+        draw_texture(
+            thing_to_blur,
+            v3(0, 0, 0),
+            v3(blurrer->ping_pong_color_buffers[1].description.width, blurrer->ping_pong_color_buffers[1].description.height, 0));
+    }
+
+
+    Texture last_render_target = blurrer->ping_pong_color_buffers[1];
+    bind_shaders(blurrer->vertex_shader, blurrer->blur_pixel_shader);
+    for (int i = 0; i < (num_iterations * 2); i++) {
+        Texture source_texture = blurrer->ping_pong_color_buffers[(i+1) % 2];
+        last_render_target = blurrer->ping_pong_color_buffers[i % 2];
+
+        Blur_CBuffer blur_cbuffer = {};
+        blur_cbuffer.horizontal = i % 2;
+        blur_cbuffer.buffer_dimensions = v2(source_texture.description.width, source_texture.description.height);
+        blur_cbuffer.blur_radius = radius;
+        update_buffer(blurrer->cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
+        bind_constant_buffers(&blurrer->cbuffer_handle, 1, CBS_BLUR);
+
+        Render_Pass_Desc blur_pass = {};
+        blur_pass.render_target_bindings.color_bindings[0] = {last_render_target,     true, v4(0, 0, 0, 1)};
+        blur_pass.render_target_bindings.depth_binding     = {blurrer->ping_pong_depth_buffer, true, 1};
+        blur_pass.camera_orientation = quaternion_identity();
+        blur_pass.projection_matrix = construct_orthographic_matrix(0, blurrer->ping_pong_color_buffers[1].description.width, 0, blurrer->ping_pong_color_buffers[1].description.height, -1, 1);
+        begin_render_pass(&blur_pass);
+        defer(end_render_pass());
+        draw_texture(source_texture, v3(0, 0, 0), v3(last_render_target.description.width, last_render_target.description.height, 0));
+    }
+
+    return last_render_target;
+}
+
+
 
 void ff_begin(Fixed_Function *ff, Array<Vertex> *array) {
     ff->array = array;
