@@ -958,6 +958,8 @@ struct DirectX {
 
 static DirectX directx;
 
+#include "dearimgui.cpp"
+
 static DXGI_FORMAT dx_texture_format_mapping[TF_COUNT];
 
 ID3D11RenderTargetView *dx_create_render_target_view(ID3D11Texture2D *backing_texture, Texture_Format format, bool msaa) {
@@ -1152,7 +1154,6 @@ void init_graphics_driver(Window *window) {
 
     // alpha blend state
     D3D11_BLEND_DESC alpha_blend_desc = {};
-    // alpha_blend_desc.AlphaToCoverageEnable          = true;
     alpha_blend_desc.RenderTarget[0].BlendEnable    = true;
     alpha_blend_desc.RenderTarget[0].SrcBlend       = D3D11_BLEND_SRC_ALPHA;
     alpha_blend_desc.RenderTarget[0].DestBlend      = D3D11_BLEND_INV_SRC_ALPHA;
@@ -1170,6 +1171,9 @@ void init_graphics_driver(Window *window) {
     no_blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     result = directx.device->CreateBlendState(&no_blend_desc, &directx.no_alpha_blend_state);
     ASSERT(result == S_OK);
+
+    // init_dear_imgui(window, directx.device, directx.device_context);
+    init_dear_imgui();
 }
 
 void set_viewport(int x, int y, int width, int height) {

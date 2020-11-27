@@ -162,6 +162,11 @@ struct Render_Options {
     bool do_emission_map;
     bool do_ao_map;
     bool visualize_normals;
+
+    float bloom_radius;
+    int bloom_iterations;
+
+    float exposure_modifier;
 };
 
 struct Render_Pass_Desc {

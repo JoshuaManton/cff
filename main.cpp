@@ -17,13 +17,11 @@
 
 /*
 TODO:
--dear imgui?
 -particle systems
+-SSAO
 -fix alpha blending without ruining bloom
 -suggestion from martijn: color the fog based on the 1x1 downsample from last frame
 -transparency sorting to alpha blend properly
--SSAO
--auto-exposure
 -skeletal animation
 -instancing (do we support this already?)
 -assimp model scale
@@ -49,6 +47,8 @@ struct Final_CBuffer {
 };
 
 #define BLOOM_BUFFER_DOWNSCALE 8.0
+
+void draw_render_options_window(Render_Options *render_options);
 
 void main() {
     init_platform();
@@ -295,6 +295,9 @@ void main() {
     render_options.do_roughness_map = true;
     render_options.do_emission_map  = true;
     render_options.do_ao_map        = true;
+    render_options.bloom_radius = 10;
+    render_options.bloom_iterations = 2;
+    render_options.exposure_modifier = 0.1;
 
     Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
     Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
@@ -340,13 +343,12 @@ void main() {
             break;
         }
 
-        if (get_input_down(&main_window, INPUT_1)) { render_options.do_albedo_map     = !render_options.do_albedo_map;     }
-        if (get_input_down(&main_window, INPUT_2)) { render_options.do_normal_map     = !render_options.do_normal_map;     }
-        if (get_input_down(&main_window, INPUT_3)) { render_options.do_metallic_map   = !render_options.do_metallic_map;   }
-        if (get_input_down(&main_window, INPUT_4)) { render_options.do_roughness_map  = !render_options.do_roughness_map;  }
-        if (get_input_down(&main_window, INPUT_5)) { render_options.do_emission_map   = !render_options.do_emission_map;   }
-        if (get_input_down(&main_window, INPUT_6)) { render_options.do_ao_map         = !render_options.do_ao_map;         }
-        if (get_input_down(&main_window, INPUT_7)) { render_options.visualize_normals = !render_options.visualize_normals; }
+        dear_imgui_new_frame(&main_window, dt);
+        bool t = true;
+
+        draw_render_options_window(&render_options);
+
+        // ImGui::ShowDemoWindow(&t);
 
         const float CAMERA_SPEED_BASE = 3;
         const float CAMERA_SPEED_FAST = 20;
@@ -542,7 +544,7 @@ void main() {
             }
         }
 
-        Texture last_bloom_blur_render_target = do_blur(&blurrer, bloom_color_buffer, 10, 2);
+        Texture last_bloom_blur_render_target = do_blur(&blurrer, bloom_color_buffer, render_options.bloom_radius, render_options.bloom_iterations);
         // Texture last_ssr_blur_render_target = do_blur(&blurrer, ssr_color_buffer, 2, 1, ssr_blur_ping_pong_buffers, ssr_blur_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_textured_pixel_shader, blur_cbuffer_handle);
 
         {
@@ -574,7 +576,7 @@ void main() {
 
             Vector3 color = v3(r*r, g*g, b*b);
             float brightness = length(color * v3(0.2, 0.7, 0.1)); // todo(josh): (0.2, 0.7, 0.1) are not exact. martijn: "if you want the exact ones, look at wikipedia at the Y component of the RGB primaries of the sRGB color space"
-            float exposure_this_frame = 0.1 / (brightness + 1e-3);
+            float exposure_this_frame = render_options.exposure_modifier / (brightness + 1e-3);
 
             if (abs(current_exposure - exposure_this_frame) > 0.1) {
                 const float EXPOSURE_SPEED = 0.5;
@@ -682,8 +684,27 @@ void main() {
             ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
             ff_end(&ff);
             */
+
+            dear_imgui_render(true);
         }
 
         present(true);
+    }
+}
+
+void draw_render_options_window(Render_Options *render_options) {
+    if (ImGui::Begin("Renderer")) {
+        defer(ImGui::End());
+        ImGui::Checkbox("do albedo map",     &render_options->do_albedo_map);
+        ImGui::Checkbox("do normal map",     &render_options->do_normal_map);
+        ImGui::Checkbox("do metallic map",   &render_options->do_metallic_map);
+        ImGui::Checkbox("do roughness map",  &render_options->do_roughness_map);
+        ImGui::Checkbox("do emission map",   &render_options->do_emission_map);
+        ImGui::Checkbox("do ao map",         &render_options->do_ao_map);
+        ImGui::Checkbox("visualize normals", &render_options->visualize_normals);
+
+        ImGui::SliderFloat("bloom radius",      &render_options->bloom_radius, 1, 100);
+        ImGui::SliderInt("bloom iterations",    &render_options->bloom_iterations, 0, 10);
+        ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
     }
 }

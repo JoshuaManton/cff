@@ -1,2 +1,2 @@
-cl /MP /Zi /Od /Fd /Iexternal main.cpp math.cpp basic.cpp renderer.cpp assimp-vc141-mtd.lib user32.lib d3d11.lib d3dcompiler.lib -DCFF_PLATFORM_WINDOWS=1 -DCFF_GRAPHICS_DIRECTX11=1 /EHsc /link /DEBUG
+cl /MP /Zi /Od /Fd /Iexternal main.cpp math.cpp basic.cpp renderer.cpp external/dearimgui/imgui.cpp external/dearimgui/imgui_demo.cpp external/dearimgui/imgui_draw.cpp external/dearimgui/imgui_widgets.cpp assimp-vc141-mtd.lib user32.lib d3d11.lib d3dcompiler.lib -DCFF_PLATFORM_WINDOWS=1 -DCFF_GRAPHICS_DIRECTX11=1 /EHsc /link /DEBUG
 @rm *.obj
