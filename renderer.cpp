@@ -401,6 +401,10 @@ void create_renderer3d(Renderer3D *out_renderer, Window *window) {
     out_renderer->skybox_texture = create_texture(skybox_desc);
     set_cubemap_textures(out_renderer->skybox_texture, skybox_faces);
 
+    for (int idx = 0; idx < ARRAYSIZE(skybox_faces); idx++) {
+        delete_texture_data(skybox_faces[idx]);
+    }
+
     // make shadow map
     Texture_Description shadow_map_description = {};
     shadow_map_description.width = 2048;
@@ -609,12 +613,9 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             bind_shaders(renderer->skybox_vertex_shader, renderer->skybox_pixel_shader);
             bind_texture(renderer->skybox_texture, TS_PBR_ALBEDO);
 
-            // todo(josh): draw the skybox
-            // set_backface_cull(false);
-            // draw_mesh(cube_vertex_buffer, cube_index_buffer, ARRAYSIZE(cube_vertices), ARRAYSIZE(cube_indices), camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color);
-            // set_backface_cull(true);
-
-
+            set_backface_cull(false);
+            draw_model(renderer->cube_model, camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color, render_options, false);
+            set_backface_cull(true);
 
             // ff_line_circle(&ff, v3(0, 1, 0), 1, v3(0, 1, 0), v4(5, 0, 0, 1));
             // set_primitive_topology(PT_LINE_LIST);
