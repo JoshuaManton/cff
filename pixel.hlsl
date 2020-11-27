@@ -87,7 +87,7 @@ PS_OUTPUT main(PS_INPUT input) {
     if (has_ao_map) {
         ao = ao_map.Sample(main_sampler, input.texcoord.xy).r;
     }
-    output_color.rgb *= ambient * ao;
+    output_color.rgb *= (ambient * ambient_modifier) * ao;
 
     float4 normal_as_color = float4(N * 0.5 + 0.5, 1.0);
 
@@ -150,11 +150,10 @@ PS_OUTPUT main(PS_INPUT input) {
     output.position = float4(input.world_position, 1.0);
     output.normal = normal_as_color;
     output.material = float4(metallic, roughness, ao, 1.0);
-    float color_magnitude = length(output.color.rgb);
-    const float BLOOM_THRESHOLD = 10.0;
-    if (color_magnitude > BLOOM_THRESHOLD) {
+    float color_magnitude = dot(output.color.rgb, float3(0.2, 0.7, 0.1)); // todo(josh): @CorrectBrightness (0.2, 0.7, 0.1) are not exact. martijn: "if you want the exact ones, look at wikipedia at the Y component of the RGB primaries of the sRGB color space"
+    if (color_magnitude > bloom_threshold) {
         const float SLOPE = 0.5;
-        output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * BLOOM_THRESHOLD)) * SLOPE;
+        output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * bloom_threshold)) * SLOPE;
         output.bloom_color.a = output.color.a;
     }
     return output;

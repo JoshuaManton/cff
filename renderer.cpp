@@ -295,6 +295,10 @@ Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_i
 
 
 
+
+
+
+
 void ff_begin(Fixed_Function *ff, Array<Vertex> *array) {
     ff->array = array;
 }

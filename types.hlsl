@@ -60,12 +60,14 @@ cbuffer CBUFFER_LIGHTING : register(b3) {
     float4 point_light_positions[MAX_POINT_LIGHTS];
     float4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
-    matrix sun_transform;
     float3 sun_direction;
+    matrix sun_transform;
     float3 sun_color;
     float fog_y_level;
     float fog_density;
     float3 fog_base_color;
+    float bloom_threshold;
+    float ambient_modifier;
     int has_skybox_map;
     float4 skybox_color;
 };

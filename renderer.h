@@ -82,16 +82,16 @@ struct Lighting_CBuffer {
     Vector4 point_light_positions[MAX_POINT_LIGHTS];
     Vector4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
-    float pad1[3];
-    Matrix4 sun_transform;
     Vector3 sun_direction;
-    float pad2;
+    Matrix4 sun_transform;
     Vector3 sun_color;
     float fog_y_level;
     float fog_density;
     Vector3 fog_base_color;
+    float bloom_threshold;
+    float ambient_modifier;
     int has_skybox_map;
-    float pad3[3];
+    float pad[1];
     Vector4 skybox_color;
 };
 
@@ -163,8 +163,11 @@ struct Render_Options {
     bool do_ao_map;
     bool visualize_normals;
 
+    float ambient_modifier;
+
     float bloom_radius;
     int bloom_iterations;
+    float bloom_threshold;
 
     float exposure_modifier;
 };

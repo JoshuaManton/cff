@@ -298,6 +298,8 @@ void main() {
     render_options.bloom_radius = 10;
     render_options.bloom_iterations = 2;
     render_options.exposure_modifier = 0.1;
+    render_options.bloom_threshold = 10;
+    render_options.ambient_modifier = 1;
 
     Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
     Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
@@ -469,6 +471,8 @@ void main() {
         lighting.fog_y_level    = -1;
         lighting.has_skybox_map = 1;
         lighting.skybox_color   = skybox_color;
+        lighting.bloom_threshold = render_options.bloom_threshold;
+        lighting.ambient_modifier = render_options.ambient_modifier;
         bind_texture(skybox_texture, TS_PBR_SKYBOX);
         update_buffer(lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
         bind_constant_buffers(&lighting_cbuffer_handle, 1, CBS_LIGHTING);
@@ -575,7 +579,7 @@ void main() {
             directx.device_context->Unmap(*((ID3D11Resource **)&auto_exposure_cpu_read_buffer.backend.handle_2d), 0);
 
             Vector3 color = v3(r*r, g*g, b*b);
-            float brightness = length(color * v3(0.2, 0.7, 0.1)); // todo(josh): (0.2, 0.7, 0.1) are not exact. martijn: "if you want the exact ones, look at wikipedia at the Y component of the RGB primaries of the sRGB color space"
+            float brightness = dot(color, v3(0.2, 0.7, 0.1)); // todo(josh): @CorrectBrightness (0.2, 0.7, 0.1) are not exact. martijn: "if you want the exact ones, look at wikipedia at the Y component of the RGB primaries of the sRGB color space"
             float exposure_this_frame = render_options.exposure_modifier / (brightness + 1e-3);
 
             if (abs(current_exposure - exposure_this_frame) > 0.1) {
@@ -694,7 +698,6 @@ void main() {
 
 void draw_render_options_window(Render_Options *render_options) {
     if (ImGui::Begin("Renderer")) {
-        defer(ImGui::End());
         ImGui::Checkbox("do albedo map",     &render_options->do_albedo_map);
         ImGui::Checkbox("do normal map",     &render_options->do_normal_map);
         ImGui::Checkbox("do metallic map",   &render_options->do_metallic_map);
@@ -703,8 +706,13 @@ void draw_render_options_window(Render_Options *render_options) {
         ImGui::Checkbox("do ao map",         &render_options->do_ao_map);
         ImGui::Checkbox("visualize normals", &render_options->visualize_normals);
 
+        ImGui::SliderFloat("ambient modifier",   &render_options->ambient_modifier, 0, 1);
+
         ImGui::SliderFloat("bloom radius",      &render_options->bloom_radius, 1, 100);
         ImGui::SliderInt("bloom iterations",    &render_options->bloom_iterations, 0, 10);
+        ImGui::SliderFloat("bloom threshold",   &render_options->bloom_threshold, 0, 50);
+
         ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
     }
+    ImGui::End();
 }
