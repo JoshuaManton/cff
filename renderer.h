@@ -163,6 +163,9 @@ struct Render_Options {
     bool do_ao_map;
     bool visualize_normals;
 
+    Vector3 sun_color;
+    float sun_intensity;
+
     float ambient_modifier;
 
     float bloom_radius;
@@ -170,6 +173,8 @@ struct Render_Options {
     float bloom_threshold;
 
     float exposure_modifier;
+
+    Vector3 fog_color;
 };
 
 struct Render_Pass_Desc {

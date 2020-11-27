@@ -1351,7 +1351,8 @@ void destroy_buffer(Buffer buffer) {
     buffer->Release();
 }
 
-#define D3D_SHADER_COMPILE_FLAGS (D3DCOMPILE_DEBUG /*| D3DCOMPILE_WARNINGS_ARE_ERRORS*/ | D3DCOMPILE_SKIP_OPTIMIZATION)
+// #define D3D_SHADER_COMPILE_FLAGS (D3DCOMPILE_DEBUG /*| D3DCOMPILE_WARNINGS_ARE_ERRORS*/ | D3DCOMPILE_SKIP_OPTIMIZATION)
+#define D3D_SHADER_COMPILE_FLAGS (D3DCOMPILE_DEBUG /*| D3DCOMPILE_WARNINGS_ARE_ERRORS*/)
 
 Vertex_Shader compile_vertex_shader_from_file(wchar_t *filename) { // todo(josh): use a temp allocator to go from char * to wchar_t *
     ID3D10Blob *errors = {};

@@ -52,20 +52,11 @@ void draw_render_options_window(Render_Options *render_options);
 
 void main() {
     init_platform();
-
     Window main_window = create_window(1920, 1080);
-
     init_render_backend(&main_window);
     init_renderer(&main_window);
 
-    Texture_Description test_3d_texture_description = {};
-    test_3d_texture_description.width  = 128;
-    test_3d_texture_description.height = 128;
-    test_3d_texture_description.depth  = 128;
-    test_3d_texture_description.uav = true;
-    test_3d_texture_description.type = TT_3D;
-    test_3d_texture_description.format = TF_R32G32B32A32_FLOAT;
-    Texture test_3d_texture = create_texture(test_3d_texture_description);
+
 
     Vertex_Shader vertex_shader                = compile_vertex_shader_from_file(L"vertex.hlsl");
     Vertex_Shader skybox_vertex_shader         = compile_vertex_shader_from_file(L"skybox_vertex.hlsl");
@@ -134,6 +125,19 @@ void main() {
 
     Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices[0]) * 24);
     Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices[0])  * 36);
+
+    Loaded_Mesh cube_loaded_mesh = {};
+    cube_loaded_mesh.vertex_buffer = cube_vertex_buffer;
+    cube_loaded_mesh.num_vertices = ARRAYSIZE(cube_vertices);
+    cube_loaded_mesh.index_buffer = cube_index_buffer;
+    cube_loaded_mesh.num_indices = ARRAYSIZE(cube_indices);
+    cube_loaded_mesh.has_material = true;
+    cube_loaded_mesh.material.cbuffer_handle = create_pbr_material_cbuffer();
+    cube_loaded_mesh.material.ambient = 0.5;
+    cube_loaded_mesh.material.roughness = 0.3;
+    cube_loaded_mesh.material.metallic = 1;
+    Model cube_model = create_model(default_allocator());
+    cube_model.meshes.append(cube_loaded_mesh);
 
     int skybox_width;
     int skybox_height;
@@ -300,25 +304,13 @@ void main() {
     render_options.exposure_modifier = 0.1;
     render_options.bloom_threshold = 10;
     render_options.ambient_modifier = 1;
+    render_options.sun_color = v3(1, 0.7, 0.3);
+    render_options.sun_intensity = 200;
+    render_options.fog_color = v3(1, 0.7, 0.3);
 
     Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
     Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
-    sponza_model.meshes[8].material.roughness = 0.2;
-
-
-
-    Loaded_Mesh cube_loaded_mesh = {};
-    cube_loaded_mesh.vertex_buffer = cube_vertex_buffer;
-    cube_loaded_mesh.num_vertices = ARRAYSIZE(cube_vertices);
-    cube_loaded_mesh.index_buffer = cube_index_buffer;
-    cube_loaded_mesh.num_indices = ARRAYSIZE(cube_indices);
-    cube_loaded_mesh.has_material = true;
-    cube_loaded_mesh.material.cbuffer_handle = create_pbr_material_cbuffer();
-    cube_loaded_mesh.material.ambient = 0.5;
-    cube_loaded_mesh.material.roughness = 0.3;
-    cube_loaded_mesh.material.metallic = 1;
-    Model cube_model = create_model(default_allocator());
-    cube_model.meshes.append(cube_loaded_mesh);
+    // sponza_model.meshes[8].material.roughness = 0.2;
 
 
     Vector3 camera_position = {};
@@ -346,11 +338,8 @@ void main() {
         }
 
         dear_imgui_new_frame(&main_window, dt);
-        bool t = true;
 
         draw_render_options_window(&render_options);
-
-        // ImGui::ShowDemoWindow(&t);
 
         const float CAMERA_SPEED_BASE = 3;
         const float CAMERA_SPEED_FAST = 20;
@@ -464,9 +453,9 @@ void main() {
         // lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
         // lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 500;
         lighting.sun_direction = quaternion_forward(sun_orientation);
-        lighting.sun_color = v3(1, 1, 1) * 200;
+        lighting.sun_color = render_options.sun_color * render_options.sun_intensity;
         lighting.sun_transform = sun_transform;
-        lighting.fog_base_color = v3(1, 1, 1);
+        lighting.fog_base_color = render_options.fog_color;
         lighting.fog_density    = 0.05;
         lighting.fog_y_level    = -1;
         lighting.has_skybox_map = 1;
@@ -549,7 +538,7 @@ void main() {
         }
 
         Texture last_bloom_blur_render_target = do_blur(&blurrer, bloom_color_buffer, render_options.bloom_radius, render_options.bloom_iterations);
-        // Texture last_ssr_blur_render_target = do_blur(&blurrer, ssr_color_buffer, 2, 1, ssr_blur_ping_pong_buffers, ssr_blur_ping_pong_depth_buffer, vertex_shader, blur_pixel_shader, simple_textured_pixel_shader, blur_cbuffer_handle);
+        // Texture last_ssr_blur_render_target = do_blur(&blurrer, ssr_color_buffer, 2, 1);
 
         {
             // todo(josh): abstract this d3d dependency
@@ -713,6 +702,16 @@ void draw_render_options_window(Render_Options *render_options) {
         ImGui::SliderFloat("bloom threshold",   &render_options->bloom_threshold, 0, 50);
 
         ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
+
+        ImGui::SliderFloat("sun color r", &render_options->sun_color.x, 0, 1);
+        ImGui::SliderFloat("sun color g", &render_options->sun_color.y, 0, 1);
+        ImGui::SliderFloat("sun color b", &render_options->sun_color.z, 0, 1);
+        ImGui::SliderFloat("sun intensity", &render_options->sun_intensity, 0, 500);
+
+        ImGui::SliderFloat("fog color r", &render_options->fog_color.x, 0, 1);
+        ImGui::SliderFloat("fog color g", &render_options->fog_color.y, 0, 1);
+        ImGui::SliderFloat("fog color b", &render_options->fog_color.z, 0, 1);
+
     }
     ImGui::End();
 }
