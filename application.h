@@ -359,6 +359,8 @@ Texture create_texture_from_file(char *filename, Texture_Format format, Texture_
 byte *load_texture_data_from_file(char *filename, int *width, int *height);
 void delete_texture_data(byte *data);
 
+Texture_Format_Info get_texture_format_info(Texture_Format format);
+
 
 
 // the following are all defined by the specific graphics backend we are compiling with.
@@ -402,6 +404,9 @@ void    bind_texture(Texture texture, int slot);
 void    unbind_all_textures();
 void    copy_texture(Texture dst, Texture src);
 void    set_cubemap_textures(Texture texture, byte *face_pixel_data[6]);
+
+void *map_texture(Texture *texture);
+void  unmap_texture(Texture *texture);
 
 struct Color_Buffer_Binding {
     Texture texture;
@@ -851,6 +856,10 @@ void init_render_backend(Window *window) {
     }
 
     init_graphics_driver(window);
+}
+
+Texture_Format_Info get_texture_format_info(Texture_Format format) {
+    return texture_format_infos[format];
 }
 
 void create_color_and_depth_buffers(Texture_Description description, Texture *out_color_buffer, Texture *out_depth_buffer) {
@@ -1729,6 +1738,17 @@ void set_cubemap_textures(Texture texture, byte *face_pixel_data[6]) {
             directx.device_context->UpdateSubresource((ID3D11Resource *)texture.backend.handle_2d, (u32)idx, nullptr, face_data, num_channels * (u32)texture.description.width, 0);
         }
     }
+}
+
+void *map_texture(Texture *texture) {
+    D3D11_MAPPED_SUBRESOURCE texture_resource = {};
+    auto result = directx.device_context->Map(*((ID3D11Resource **)&texture->backend.handle_2d), 0, D3D11_MAP_READ, 0, &texture_resource);
+    assert(result == S_OK);
+    return texture_resource.pData;
+}
+
+void unmap_texture(Texture *texture) {
+    directx.device_context->Unmap(*((ID3D11Resource **)&texture->backend.handle_2d), 0);
 }
 
 ID3D11ShaderResourceView *dx_create_shader_resource_view(Texture texture) {
