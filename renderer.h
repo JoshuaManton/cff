@@ -72,9 +72,9 @@ struct PBR_Material_CBuffer {
     float ambient;
     float metallic;
     float roughness;
-    int visualize_normals;
     float pad0;
     float pad1;
+    float pad2;
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
@@ -125,25 +125,26 @@ struct Final_CBuffer {
 
 
 
-#define TS_PBR_ALBEDO        0
-#define TS_PBR_NORMAL        1
-#define TS_PBR_METALLIC      2
-#define TS_PBR_ROUGHNESS     3
-#define TS_PBR_EMISSION      4
-#define TS_PBR_AO            5
-#define TS_PBR_SHADOW_MAP    6
-#define TS_PBR_SKYBOX        7
+#define TS_PBR_ALBEDO           0
+#define TS_PBR_NORMAL           1
+#define TS_PBR_METALLIC         2
+#define TS_PBR_ROUGHNESS        3
+#define TS_PBR_EMISSION         4
+#define TS_PBR_AO               5
+#define TS_PBR_SHADOW_MAP       6
+#define TS_PBR_SKYBOX           7
 
-#define TS_FINAL_MAIN_VIEW     0
-#define TS_FINAL_BLOOM_MAP     1
-#define TS_FINAL_SSR_MAP       2
+#define TS_FINAL_MAIN_VIEW    0
+#define TS_FINAL_BLOOM_MAP    1
+#define TS_FINAL_SSR_MAP      2
 
-#define TS_SIMPLE_ALBEDO 0
+#define TS_SIMPLE_ALBEDO    0
 
-#define TS_SSR_SCENE_MAP           0
-#define TS_SSR_NORMAL_MAP          1
-#define TS_SSR_POSITIONS_MAP       2
-#define TS_SSR_METAL_ROUGHNESS_MAP 3
+#define TS_SSR_LIT_SCENE_MAP       0
+#define TS_SSR_ALBEDO_MAP          1
+#define TS_SSR_NORMAL_MAP          2
+#define TS_SSR_POSITIONS_MAP       3
+#define TS_SSR_METAL_ROUGHNESS_MAP 4
 
 
 
@@ -159,6 +160,16 @@ void destroy_font(Font font);
 
 
 
+enum Debug_Render_Mode {
+    RM_DEFAULT, // draw the final lit composite of the scene
+    RM_ALBEDO,
+    RM_POSITIONS,
+    RM_NORMALS,
+    RM_METALLIC_ROUGHNESS,
+
+    RM_COUNT,
+};
+
 struct Render_Options {
     bool do_albedo_map;
     bool do_normal_map;
@@ -166,7 +177,6 @@ struct Render_Options {
     bool do_roughness_map;
     bool do_emission_map;
     bool do_ao_map;
-    bool visualize_normals;
 
     Vector3 sun_color;
     float sun_intensity;
@@ -180,7 +190,11 @@ struct Render_Options {
     float exposure_modifier;
 
     Vector3 fog_color;
+
+    Debug_Render_Mode debug_render_mode;
 };
+
+void draw_render_options_editor_window(Render_Options *render_options);
 
 struct Render_Pass_Desc {
     Render_Target_Bindings render_target_bindings;
@@ -242,6 +256,7 @@ struct Renderer3D {
     Texture shadow_map_depth_buffer;
     Texture hdr_color_buffer;
     Texture hdr_depth_buffer;
+    Texture gbuffer_albedo;
     Texture gbuffer_normals;
     Texture gbuffer_positions;
     Texture gbuffer_metal_roughness;
@@ -259,6 +274,9 @@ struct Renderer3D {
     Buffer final_cbuffer_handle;
 
     float current_exposure;
+
+    Texture black_texture;
+    Texture white_texture;
 };
 
 struct Draw_Command {

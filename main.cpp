@@ -31,45 +31,17 @@ TODO:
 -cascaded shadow maps
 */
 
-void draw_render_options_window(Render_Options *render_options);
-
 void main() {
     init_platform();
     Window main_window = create_window(1920, 1080);
     init_render_backend(&main_window);
     init_renderer(&main_window);
 
-
-
     Renderer3D renderer = {};
     create_renderer3d(&renderer, &main_window);
 
     Font roboto_mono = load_font_from_file("fonts/roboto_mono.ttf", 32);
     Font roboto      = load_font_from_file("fonts/roboto.ttf", 32);
-
-    byte white_texture_data[16] = {
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-    };
-    Texture_Description white_texture_description = {};
-    white_texture_description.width = 2;
-    white_texture_description.height = 2;
-    white_texture_description.color_data = white_texture_data;
-    Texture white_texture = create_texture(white_texture_description);
-
-    byte black_texture_data[16] = {
-        0, 0, 0, 255,
-        0, 0, 0, 255,
-        0, 0, 0, 255,
-        0, 0, 0, 255,
-    };
-    Texture_Description black_texture_description = {};
-    black_texture_description.width = 2;
-    black_texture_description.height = 2;
-    black_texture_description.color_data = black_texture_data;
-    Texture black_texture = create_texture(black_texture_description);
 
     Render_Options render_options = {};
     render_options.do_albedo_map    = true;
@@ -114,7 +86,7 @@ void main() {
 
         dear_imgui_new_frame(&main_window, dt);
 
-        draw_render_options_window(&render_options);
+        draw_render_options_editor_window(&render_options);
 
         const float CAMERA_SPEED_BASE = 3;
         const float CAMERA_SPEED_FAST = 20;
@@ -167,35 +139,4 @@ void main() {
         dear_imgui_render(true);
         present(true);
     }
-}
-
-void draw_render_options_window(Render_Options *render_options) {
-    if (ImGui::Begin("Renderer")) {
-        ImGui::Checkbox("do albedo map",     &render_options->do_albedo_map);
-        ImGui::Checkbox("do normal map",     &render_options->do_normal_map);
-        ImGui::Checkbox("do metallic map",   &render_options->do_metallic_map);
-        ImGui::Checkbox("do roughness map",  &render_options->do_roughness_map);
-        ImGui::Checkbox("do emission map",   &render_options->do_emission_map);
-        ImGui::Checkbox("do ao map",         &render_options->do_ao_map);
-        ImGui::Checkbox("visualize normals", &render_options->visualize_normals);
-
-        ImGui::SliderFloat("ambient modifier",   &render_options->ambient_modifier, 0, 1);
-
-        ImGui::SliderFloat("bloom radius",      &render_options->bloom_radius, 1, 100);
-        ImGui::SliderInt("bloom iterations",    &render_options->bloom_iterations, 0, 10);
-        ImGui::SliderFloat("bloom threshold",   &render_options->bloom_threshold, 0, 50);
-
-        ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
-
-        ImGui::SliderFloat("sun color r", &render_options->sun_color.x, 0, 1);
-        ImGui::SliderFloat("sun color g", &render_options->sun_color.y, 0, 1);
-        ImGui::SliderFloat("sun color b", &render_options->sun_color.z, 0, 1);
-        ImGui::SliderFloat("sun intensity", &render_options->sun_intensity, 0, 500);
-
-        ImGui::SliderFloat("fog color r", &render_options->fog_color.x, 0, 1);
-        ImGui::SliderFloat("fog color g", &render_options->fog_color.y, 0, 1);
-        ImGui::SliderFloat("fog color b", &render_options->fog_color.z, 0, 1);
-
-    }
-    ImGui::End();
 }

@@ -23,9 +23,10 @@ struct PS_INPUT {
 struct PS_OUTPUT {
     float4 color       : SV_Target0;
     float4 bloom_color : SV_Target1;
-    float4 position    : SV_Target2;
-    float4 normal      : SV_Target3;
-    float4 material    : SV_Target4;
+    float4 albedo      : SV_Target2;
+    float4 position    : SV_Target3;
+    float4 normal      : SV_Target4;
+    float4 material    : SV_Target5;
 };
 
 cbuffer CBUFFER_PASS : register(b0) {
@@ -50,9 +51,9 @@ cbuffer CBUFFER_MATERIAL : register(b2) {
     float ambient;
     float metallic;
     float roughness;
-    int visualize_normals;
     float pad0;
     float pad1;
+    float pad2;
 };
 
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights

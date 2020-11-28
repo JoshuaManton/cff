@@ -5,6 +5,8 @@
 
 #include "half.cpp"
 
+#include "external/dearimgui/imgui.h"
+
 struct Renderer_State {
     Render_Pass_Desc *current_render_pass;
     Buffer pass_cbuffer_handle;
@@ -37,7 +39,6 @@ void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options opt
     material_cbuffer.ambient   = material.ambient;
     material_cbuffer.metallic  = material.metallic;
     material_cbuffer.roughness = material.roughness;
-    material_cbuffer.visualize_normals = options.visualize_normals;
 
     if (material.albedo_map.valid && options.do_albedo_map) {
         bind_texture(material.albedo_map, TS_PBR_ALBEDO);
@@ -203,6 +204,42 @@ void draw_texture(Texture texture, Vector3 min, Vector3 max, float z_override) {
     ff_quad(&ff, min, max, v4(1, 1, 1, 1), uvs);
     ff_end(&ff);
     bind_texture({}, 0);
+}
+
+void draw_render_options_editor_window(Render_Options *render_options) {
+    if (ImGui::Begin("Renderer")) {
+        ImGui::Text("Render Mode");
+        ImGui::RadioButton("Default",     reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_DEFAULT); ImGui::SameLine();
+        ImGui::RadioButton("Albedo",      reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_ALBEDO);
+        ImGui::RadioButton("Positions",   reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_POSITIONS); ImGui::SameLine();
+        ImGui::RadioButton("Normals",     reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_NORMALS);
+        ImGui::RadioButton("Metal/Rough", reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_METALLIC_ROUGHNESS);
+
+        ImGui::Checkbox("do albedo map",     &render_options->do_albedo_map);
+        ImGui::Checkbox("do normal map",     &render_options->do_normal_map);
+        ImGui::Checkbox("do metallic map",   &render_options->do_metallic_map);
+        ImGui::Checkbox("do roughness map",  &render_options->do_roughness_map);
+        ImGui::Checkbox("do emission map",   &render_options->do_emission_map);
+        ImGui::Checkbox("do ao map",         &render_options->do_ao_map);
+
+        ImGui::SliderFloat("ambient modifier",   &render_options->ambient_modifier, 0, 1);
+
+        ImGui::SliderFloat("bloom radius",      &render_options->bloom_radius, 1, 100);
+        ImGui::SliderInt("bloom iterations",    &render_options->bloom_iterations, 0, 10);
+        ImGui::SliderFloat("bloom threshold",   &render_options->bloom_threshold, 0, 50);
+
+        ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
+
+        ImGui::SliderFloat("sun color r", &render_options->sun_color.x, 0, 1);
+        ImGui::SliderFloat("sun color g", &render_options->sun_color.y, 0, 1);
+        ImGui::SliderFloat("sun color b", &render_options->sun_color.z, 0, 1);
+        ImGui::SliderFloat("sun intensity", &render_options->sun_intensity, 0, 500);
+
+        ImGui::SliderFloat("fog color r", &render_options->fog_color.x, 0, 1);
+        ImGui::SliderFloat("fog color g", &render_options->fog_color.y, 0, 1);
+        ImGui::SliderFloat("fog color b", &render_options->fog_color.z, 0, 1);
+    }
+    ImGui::End();
 }
 
 
@@ -423,6 +460,13 @@ void create_renderer3d(Renderer3D *out_renderer, Window *window) {
     create_color_and_depth_buffers(hdr_description, &out_renderer->hdr_color_buffer, &out_renderer->hdr_depth_buffer);
 
     // make gbuffer
+    Texture_Description gbuffer_albedo_desc = {};
+    gbuffer_albedo_desc.width = window->width;
+    gbuffer_albedo_desc.height = window->height;
+    gbuffer_albedo_desc.format = TF_R16G16B16A16_FLOAT; // todo(josh): do we really need this format? would r8g8b8a8_uint suffice?
+    gbuffer_albedo_desc.render_target = true;
+    out_renderer->gbuffer_albedo = create_texture(gbuffer_albedo_desc);
+
     Texture_Description gbuffer_normals_desc = {};
     gbuffer_normals_desc.width = window->width;
     gbuffer_normals_desc.height = window->height;
@@ -504,6 +548,31 @@ void create_renderer3d(Renderer3D *out_renderer, Window *window) {
     out_renderer->lighting_cbuffer_handle = create_buffer(BT_CONSTANT, nullptr, sizeof(Lighting_CBuffer));
     out_renderer->ssr_cbuffer_handle      = create_buffer(BT_CONSTANT, nullptr, sizeof(SSR_CBuffer));
     out_renderer->final_cbuffer_handle    = create_buffer(BT_CONSTANT, nullptr, sizeof(Final_CBuffer));
+
+    // make black and white textures
+    byte white_texture_data[16] = {
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+        255, 255, 255, 255,
+    };
+    Texture_Description white_texture_description = {};
+    white_texture_description.width = 2;
+    white_texture_description.height = 2;
+    white_texture_description.color_data = white_texture_data;
+    out_renderer->white_texture = create_texture(white_texture_description);
+
+    byte black_texture_data[16] = {
+        0, 0, 0, 255,
+        0, 0, 0, 255,
+        0, 0, 0, 255,
+        0, 0, 0, 255,
+    };
+    Texture_Description black_texture_description = {};
+    black_texture_description.width = 2;
+    black_texture_description.height = 2;
+    black_texture_description.color_data = black_texture_data;
+    out_renderer->black_texture = create_texture(black_texture_description);
 }
 
 void destroy_renderer3d(Renderer3D *renderer) {
@@ -518,6 +587,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
     ensure_texture_size(&renderer->final_composite_color_buffer, window->width, window->height);
     ensure_texture_size(&renderer->final_composite_depth_buffer, window->width, window->height);
     // ensure_texture_size(&renderer->ssao_depth_color_buffer, window->width, window->height);
+    ensure_texture_size(&renderer->gbuffer_albedo, window->width, window->height);
     ensure_texture_size(&renderer->gbuffer_positions, window->width, window->height);
     ensure_texture_size(&renderer->gbuffer_metal_roughness, window->width, window->height);
     ensure_texture_size(&renderer->gbuffer_normals, window->width, window->height);
@@ -595,9 +665,10 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             Render_Pass_Desc scene_pass = scene_pass_desc;
             scene_pass.render_target_bindings.color_bindings[0] = {renderer->hdr_color_buffer,        true};
             scene_pass.render_target_bindings.color_bindings[1] = {renderer->bloom_color_buffer,      true};
-            scene_pass.render_target_bindings.color_bindings[2] = {renderer->gbuffer_positions,       true};
-            scene_pass.render_target_bindings.color_bindings[3] = {renderer->gbuffer_normals,         true};
-            scene_pass.render_target_bindings.color_bindings[4] = {renderer->gbuffer_metal_roughness, true};
+            scene_pass.render_target_bindings.color_bindings[2] = {renderer->gbuffer_albedo,          true};
+            scene_pass.render_target_bindings.color_bindings[3] = {renderer->gbuffer_positions,       true};
+            scene_pass.render_target_bindings.color_bindings[4] = {renderer->gbuffer_normals,         true};
+            scene_pass.render_target_bindings.color_bindings[5] = {renderer->gbuffer_metal_roughness, true};
             scene_pass.render_target_bindings.depth_binding     = {renderer->hdr_depth_buffer,        true, 1};
             begin_render_pass(&scene_pass);
             defer(end_render_pass());
@@ -642,6 +713,8 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             begin_render_pass(&ssr_pass);
             defer(end_render_pass());
 
+            bind_texture(renderer->gbuffer_albedo, TS_SSR_ALBEDO_MAP);
+            defer(bind_texture({}, TS_SSR_ALBEDO_MAP));
             bind_texture(renderer->gbuffer_normals, TS_SSR_NORMAL_MAP);
             defer(bind_texture({}, TS_SSR_NORMAL_MAP));
             bind_texture(renderer->gbuffer_positions, TS_SSR_POSITIONS_MAP);
@@ -720,9 +793,6 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
 
         Final_CBuffer final_cbuffer = {};
         final_cbuffer.exposure = renderer->current_exposure;
-        if (render_options.visualize_normals) {
-            final_cbuffer.exposure = 1;
-        }
         update_buffer(renderer->final_cbuffer_handle, &final_cbuffer, sizeof(Final_CBuffer));
         bind_constant_buffers(&renderer->final_cbuffer_handle, 1, CBS_FINAL);
         draw_texture(renderer->hdr_color_buffer, v3(0, 0, 0), v3(window->width, window->height, 0));
@@ -761,7 +831,14 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
         defer(end_render_pass());
 
         bind_shaders(renderer->vertex_shader, renderer->simple_textured_pixel_shader);
-        draw_texture(renderer->final_composite_color_buffer,        v3(0, 0, 0),   v3(window->width, window->height, 0));
+
+        switch (render_options.debug_render_mode) {
+            case RM_DEFAULT:            draw_texture(renderer->final_composite_color_buffer, v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
+            case RM_ALBEDO:             draw_texture(renderer->gbuffer_albedo,               v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
+            case RM_POSITIONS:          draw_texture(renderer->gbuffer_positions,            v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
+            case RM_NORMALS:            draw_texture(renderer->gbuffer_normals,              v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
+            case RM_METALLIC_ROUGHNESS: draw_texture(renderer->gbuffer_metal_roughness,      v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
+        }
 
         /*
         draw_texture(bloom_color_buffer,                  v3(0, 0, 0),   v3(128, 128, 0));
@@ -783,7 +860,6 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
         ff_text(&ff, "4. do_roughness_map",  roboto_mono, v4(1, 1, 1, render_options.do_roughness_map  ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_text(&ff, "5. do_emission_map",   roboto_mono, v4(1, 1, 1, render_options.do_emission_map   ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_text(&ff, "6. do_ao_map",         roboto_mono, v4(1, 1, 1, render_options.do_ao_map         ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
-        ff_text(&ff, "7. visualize_normals", roboto_mono, v4(1, 1, 1, render_options.visualize_normals ? 1.0 : 0.2), text_pos, text_size); text_pos.y -= roboto_mono.pixel_height * text_size;
         ff_end(&ff);
         */
     }

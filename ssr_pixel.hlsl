@@ -1,10 +1,11 @@
 #include "types.hlsl"
 #include "pbr.hlsl"
 
-Texture2D scene_map           : register(t0);
-Texture2D normal_map          : register(t1);
-Texture2D positions_map       : register(t2);
-Texture2D metal_roughness_map : register(t3);
+Texture2D lit_scene_map       : register(t0);
+Texture2D albedo_map          : register(t1);
+Texture2D normal_map          : register(t2);
+Texture2D positions_map       : register(t3);
+Texture2D metal_roughness_map : register(t4);
 
 float3 ray_march(float3 surface_color, float3 surface_pixel_position, float3 surface_normal, float3 dir_to_pixel, float3 ray_direction, float metallic, float roughness) {
     float step_distance = 0;
@@ -31,7 +32,7 @@ float3 ray_march(float3 surface_color, float3 surface_pixel_position, float3 sur
 
             // todo(josh): maybe binary search to get closer to the surface that the ray hit?
 
-            float3 ray_position_screen_sample = scene_map.Sample(main_sampler, ray_position_uv).rgb;
+            float3 ray_position_screen_sample = lit_scene_map.Sample(main_sampler, ray_position_uv).rgb;
 
             float3 offset_to_light = ray_position - surface_pixel_position;
             float distance_to_light = length(offset_to_light);
@@ -57,7 +58,7 @@ float3 arbitrary_perpendicular(float3 a) {
 
 float4 main(PS_INPUT input) : SV_Target0 {
     float2 screen_uv = float2(input.position.xy / screen_dimensions);
-    float3 surface_color = scene_map.Sample(main_sampler, screen_uv).xyz;
+    float3 surface_color = albedo_map.Sample(main_sampler, screen_uv).xyz;
     float3 surface_normal = normal_map.Sample(main_sampler, screen_uv).xyz;
     surface_normal = surface_normal * 2 - 1;
     float3 surface_pixel_position = positions_map.Sample(main_sampler, screen_uv).xyz;
@@ -78,9 +79,9 @@ float4 main(PS_INPUT input) : SV_Target0 {
     //     }
     // }
 
-    // float4 main_scene_sample = scene_map.Sample(main_sampler, screen_uv);
+    // float4 main_scene_sample = lit_scene_map.Sample(main_sampler, screen_uv);
     // main_scene_sample.rgb += reflected_color;
     return float4(reflected_color, 1.0);
-    // float4 scene_color = scene_map.Sample(main_sampler, input.texcoord.xy);
+    // float4 scene_color = lit_scene_map.Sample(main_sampler, input.texcoord.xy);
     // return float4(scene_color.r, 0, 0, 1);
 }

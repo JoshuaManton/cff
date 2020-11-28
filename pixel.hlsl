@@ -72,6 +72,7 @@ PS_OUTPUT main(PS_INPUT input) {
         N = N * 2.0 - 1.0;
         N = normalize(mul(input.tbn, N));
     }
+    float4 normal_as_color = float4(N * 0.5 + 0.5, 1.0);
 
     float distance_to_pixel_position = length(camera_position - input.world_position);
     float3 direction_to_camera = (camera_position - input.world_position) / distance_to_pixel_position;
@@ -88,19 +89,6 @@ PS_OUTPUT main(PS_INPUT input) {
         ao = ao_map.Sample(main_sampler, input.texcoord.xy).r;
     }
     output_color.rgb *= (ambient * ambient_modifier) * ao;
-
-    float4 normal_as_color = float4(N * 0.5 + 0.5, 1.0);
-
-    // todo(josh): delete this if we continue with deferred rendering
-    if (visualize_normals == 1) {
-        PS_OUTPUT output;
-        output.color = normal_as_color;
-        output.bloom_color = float4(0, 0, 0, 0);
-        output.position = float4(input.world_position, 1.0);
-        output.normal = normal_as_color;
-        output.material = float4(metallic, roughness, ao, 1.0);
-        return output;
-    }
 
     for (int point_light_index = 0; point_light_index < num_point_lights; point_light_index++) {
         float3 light_position = point_light_positions[point_light_index].xyz;
@@ -146,6 +134,7 @@ PS_OUTPUT main(PS_INPUT input) {
 
     PS_OUTPUT output;
     output.color = output_color;
+    output.albedo = float4(albedo, 1.0);
     output.bloom_color = float4(0, 0, 0, output.color.a);
     output.position = float4(input.world_position, 1.0);
     output.normal = normal_as_color;
