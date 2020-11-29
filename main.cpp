@@ -15,20 +15,20 @@
 
 /*
 TODO:
+-fully defer lighting calculations
+-bounding boxes/spheres for meshes/models
+-cascaded shadow maps
 -particle systems
 -SSAO
 -fix alpha blending without ruining bloom
--suggestion from martijn: color the fog based on the 1x1 downsample from last frame
 -transparency sorting to alpha blend properly
 -skeletal animation
 -instancing (do we support this already?)
 -assimp model scale
--bounding boxes/spheres for meshes/models
 -depth sorting to reduce overdraw
+-proper IBL
 -point light shadows?
 -spot lights
--proper IBL
--cascaded shadow maps
 */
 
 void main() {
@@ -43,21 +43,27 @@ void main() {
     Font roboto_mono = load_font_from_file("fonts/roboto_mono.ttf", 32);
     Font roboto      = load_font_from_file("fonts/roboto.ttf", 32);
 
-    Render_Options render_options = {};
-    render_options.do_albedo_map    = true;
-    render_options.do_normal_map    = true;
-    render_options.do_metallic_map  = true;
-    render_options.do_roughness_map = true;
-    render_options.do_emission_map  = true;
-    render_options.do_ao_map        = true;
-    render_options.bloom_radius = 10;
-    render_options.bloom_iterations = 2;
+    Render_Options render_options    = {};
+    render_options.do_albedo_map     = true;
+    render_options.do_normal_map     = true;
+    render_options.do_metallic_map   = true;
+    render_options.do_roughness_map  = true;
+    render_options.do_emission_map   = true;
+    render_options.do_ao_map         = true;
+    render_options.do_bloom          = true;
+    render_options.blur_function     = BF_GAUSSIAN;
+    render_options.bloom_radius      = 10;
+    render_options.bloom_iterations  = 2;
+    render_options.bloom_threshold   = 10;
+    render_options.gaussian_height   = 0.03;
     render_options.exposure_modifier = 0.1;
-    render_options.bloom_threshold = 10;
-    render_options.ambient_modifier = 1;
-    render_options.sun_color = v3(1, 0.7, 0.3);
-    render_options.sun_intensity = 200;
-    render_options.fog_color = v3(1, 0.7, 0.3);
+    render_options.ambient_modifier  = 1;
+    render_options.do_shadows        = true;
+    render_options.sun_color         = v3(1, 0.7, 0.3);
+    render_options.sun_intensity     = 200;
+    render_options.do_fog            = true;
+    render_options.fog_color         = v3(1, 0.7, 0.3);
+    render_options.fog_density       = 0.05;
 
     Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
     Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
@@ -134,6 +140,8 @@ void main() {
         sponza_draw_command.scale = v3(1, 1, 1);
         sponza_draw_command.color = v4(1, 1, 1, 1);
         render_queue.append(sponza_draw_command);
+
+        render_options.sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
 
         render_scene(&renderer, render_queue, camera_position, camera_orientation, render_options, &main_window, time_since_startup, dt);
         dear_imgui_render(true);

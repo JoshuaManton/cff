@@ -85,13 +85,13 @@ struct Lighting_CBuffer {
     Vector3 sun_direction;
     Matrix4 sun_transform;
     Vector3 sun_color;
+    int do_fog;
+    Vector3 fog_color;
     float fog_y_level;
     float fog_density;
-    Vector3 fog_base_color;
     float bloom_threshold;
     float ambient_modifier;
     int has_skybox_map;
-    float pad[1];
     Vector4 skybox_color;
 };
 
@@ -99,6 +99,9 @@ struct Blur_CBuffer {
     int horizontal;
     Vector2 buffer_dimensions;
     float blur_radius;
+    int blur_function;
+    float gaussian_height;
+    float pad[2];
 };
 
 struct SSR_CBuffer {
@@ -170,6 +173,13 @@ enum Debug_Render_Mode {
     RM_COUNT,
 };
 
+enum Blur_Function { // note(josh): this must match :BlurFunction
+    BF_MARTIJN,
+    BF_GAUSSIAN,
+
+    BF_COUNT,
+};
+
 struct Render_Options {
     bool do_albedo_map;
     bool do_normal_map;
@@ -178,18 +188,25 @@ struct Render_Options {
     bool do_emission_map;
     bool do_ao_map;
 
+    bool do_shadows;
+    Quaternion sun_orientation;
     Vector3 sun_color;
     float sun_intensity;
 
     float ambient_modifier;
 
+    bool do_bloom;
     float bloom_radius;
     int bloom_iterations;
     float bloom_threshold;
+    Blur_Function blur_function;
+    float gaussian_height;
 
     float exposure_modifier;
 
+    bool do_fog;
     Vector3 fog_color;
+    float fog_density;
 
     Debug_Render_Mode debug_render_mode;
 };
@@ -223,7 +240,7 @@ struct Blurrer {
 Blurrer make_blurrer(int width, int height, Vertex_Shader simple_vertex_shader, Pixel_Shader blur_pixel_shader, Pixel_Shader simple_textured_pixel_shader);
 void destroy_blurrer(Blurrer blurrer);
 void ensure_blurrer_texture_sizes(Blurrer *blurrer, int width, int height);
-Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_iterations);
+Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_iterations, Render_Options render_options);
 
 
 
@@ -231,7 +248,7 @@ Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_i
 #define BLOOM_BUFFER_DOWNSCALE 8.0
 
 struct Renderer3D {
-    // todo(josh): we currently @leak everything in here. still need to implement destroy_renderer3d()
+    // todo(josh): we currently @leak everything in here
 
     Vertex_Shader vertex_shader;
     Vertex_Shader skybox_vertex_shader;

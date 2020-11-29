@@ -64,9 +64,10 @@ cbuffer CBUFFER_LIGHTING : register(b3) {
     float3 sun_direction;
     matrix sun_transform;
     float3 sun_color;
+    int do_fog;
+    float3 fog_color;
     float fog_y_level;
     float fog_density;
-    float3 fog_base_color;
     float bloom_threshold;
     float ambient_modifier;
     int has_skybox_map;
@@ -76,12 +77,18 @@ cbuffer CBUFFER_LIGHTING : register(b3) {
 cbuffer CBUFFER_BLUR : register(b4) {
     int horizontal;
     float2 buffer_dimensions;
-    float blur_radius; // todo(josh): I don't remember what space this radius is in. investigate and make sure it's correct
-}
+    float blur_radius; // todo(josh): I don't remember what space this radius is in. investigate and make sure it makes sense
+    int blur_function;
+    float gaussian_height;
+};
+
+// :BlurFunction
+#define BLUR_FUNCTION_MARTIJN 0
+#define BLUR_FUNCTION_GAUSSIAN 1
 
 cbuffer CBUFFER_FINAL : register(b5) {
     float exposure;
-}
+};
 
 cbuffer CBUFFER_SSR : register(b6) {
     float3 scene_camera_position;

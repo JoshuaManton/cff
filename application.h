@@ -228,8 +228,10 @@ enum Texture_Format {
     TF_INVALID,
 
     TF_R8_UINT,
+    TF_R16_FLOAT,
     TF_R32_INT,
     TF_R32_FLOAT,
+    TF_R16G16_FLOAT,
     TF_R16G16B16A16_FLOAT,
     TF_R32G32B32A32_FLOAT,
     TF_R8G8B8A8_UINT,
@@ -338,6 +340,14 @@ enum Primitive_Topology {
     PT_COUNT,
 };
 
+enum Cull_Mode {
+    CM_BACKFACE,
+    CM_FRONTFACE,
+    CM_NO_CULL,
+
+    CM_COUNT,
+};
+
 #ifndef CFF_MAX_BOUND_TEXTURES
 #define CFF_MAX_BOUND_TEXTURES 12
 #endif
@@ -371,7 +381,7 @@ void get_swapchain_size(int *out_width, int *out_height);
 
 void set_viewport(int x, int y, int width, int height);
 void set_depth_test(bool enabled);
-void set_backface_cull(bool enabled);
+void set_cull_mode(Cull_Mode cull_mode);
 void set_primitive_topology(Primitive_Topology pt);
 void set_alpha_blend(bool enabled);
 
@@ -837,8 +847,10 @@ Texture_Format_Info texture_format_infos[TF_COUNT];
 
 void init_render_backend(Window *window) {
     texture_format_infos[TF_R8_UINT]            = {1,  1, false};
+    texture_format_infos[TF_R16_FLOAT]          = {2,  1, false};
     texture_format_infos[TF_R32_INT]            = {4,  1, false};
     texture_format_infos[TF_R32_FLOAT]          = {4,  1, false};
+    texture_format_infos[TF_R16G16_FLOAT]       = {4,  2, false};
     texture_format_infos[TF_R16G16B16A16_FLOAT] = {8,  4, false};
     texture_format_infos[TF_R32G32B32A32_FLOAT] = {16, 4, false};
     texture_format_infos[TF_R8G8B8A8_UINT]      = {4,  4, false};
@@ -949,6 +961,7 @@ struct DirectX {
 
     ID3D11RasterizerState *no_cull_rasterizer;
     ID3D11RasterizerState *backface_cull_rasterizer;
+    ID3D11RasterizerState *frontface_cull_rasterizer;
     ID3D11DepthStencilState *depth_test_state;
     ID3D11DepthStencilState *no_depth_test_state;
     ID3D11SamplerState *linear_wrap_sampler;
@@ -1008,8 +1021,10 @@ ID3D11DepthStencilView *dx_create_depth_stencil_view(ID3D11Texture2D *backing_te
 
 void init_graphics_driver(Window *window) {
     dx_texture_format_mapping[TF_R8_UINT]            = DXGI_FORMAT_R8_UNORM;
+    dx_texture_format_mapping[TF_R16_FLOAT]          = DXGI_FORMAT_R16_FLOAT;
     dx_texture_format_mapping[TF_R32_INT]            = DXGI_FORMAT_R32_SINT;
     dx_texture_format_mapping[TF_R32_FLOAT]          = DXGI_FORMAT_R32_FLOAT;
+    dx_texture_format_mapping[TF_R16G16_FLOAT]       = DXGI_FORMAT_R16G16_FLOAT;
     dx_texture_format_mapping[TF_R16G16B16A16_FLOAT] = DXGI_FORMAT_R16G16B16A16_FLOAT;
     dx_texture_format_mapping[TF_R32G32B32A32_FLOAT] = DXGI_FORMAT_R32G32B32A32_FLOAT;
     dx_texture_format_mapping[TF_R8G8B8A8_UINT]      = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1088,6 +1103,15 @@ void init_graphics_driver(Window *window) {
     backface_cull_rasterizer_desc.DepthClipEnable = true;
     backface_cull_rasterizer_desc.MultisampleEnable = true; // todo(josh): can I just have multisample enabled on all rasterizers?
     result = directx.device->CreateRasterizerState(&backface_cull_rasterizer_desc, &directx.backface_cull_rasterizer);
+    ASSERT(result == S_OK);
+
+    // Make frontface cull rasterizer
+    D3D11_RASTERIZER_DESC frontface_cull_rasterizer_desc = {};
+    frontface_cull_rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+    frontface_cull_rasterizer_desc.CullMode = D3D11_CULL_FRONT;
+    frontface_cull_rasterizer_desc.DepthClipEnable = true;
+    frontface_cull_rasterizer_desc.MultisampleEnable = true; // todo(josh): can I just have multisample enabled on all rasterizers?
+    result = directx.device->CreateRasterizerState(&frontface_cull_rasterizer_desc, &directx.frontface_cull_rasterizer);
     ASSERT(result == S_OK);
 
     // Depth test state
@@ -1205,12 +1229,23 @@ void set_depth_test(bool enabled) {
     }
 }
 
-void set_backface_cull(bool enabled) {
-    if (enabled) {
-        directx.device_context->RSSetState(directx.backface_cull_rasterizer);
-    }
-    else {
-        directx.device_context->RSSetState(directx.no_cull_rasterizer);
+void set_cull_mode(Cull_Mode cull_mode) {
+    switch (cull_mode) {
+        case CM_BACKFACE: {
+            directx.device_context->RSSetState(directx.backface_cull_rasterizer);
+            break;
+        }
+        case CM_FRONTFACE: {
+            directx.device_context->RSSetState(directx.frontface_cull_rasterizer);
+            break;
+        }
+        case CM_NO_CULL: {
+            directx.device_context->RSSetState(directx.no_cull_rasterizer);
+            break;
+        }
+        default: {
+            ASSERTF(false, "Unknown Cull_Mode: %d\n", cull_mode);
+        }
     }
 }
 

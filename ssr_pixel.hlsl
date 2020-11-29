@@ -12,7 +12,7 @@ float3 ray_march(float3 surface_color, float3 surface_pixel_position, float3 sur
     const float STEP_SIZE = 0.1;
     float3 reflected_color = float3(0, 0, 0);
     [loop]
-    while (step_distance < 5) {
+    while (step_distance < 10) {
         step_distance += STEP_SIZE;
         float3 ray_position = surface_pixel_position + ray_direction * step_distance;
         float4 ray_position_viewport_space = mul(camera_matrix, float4(ray_position, 1.0));
@@ -34,12 +34,12 @@ float3 ray_march(float3 surface_color, float3 surface_pixel_position, float3 sur
 
             float3 ray_position_screen_sample = lit_scene_map.Sample(main_sampler, ray_position_uv).rgb;
 
+            // attenuate based on how close the sample is to the edge of the screen to avoid hard edges
+            float attentuation_fade_term = 1.0 - (saturate(length(ray_position_position_sample_viewport_space.xy)));
             float3 offset_to_light = ray_position - surface_pixel_position;
             float distance_to_light = length(offset_to_light);
-            // todo(josh): this attenuation is to make the edges of the screen reflection a little softer but it looks bad so figure out something better
-            float attentuation_fade_term = 1.0 - (saturate(length(ray_position_position_sample_viewport_space.xy)));
-            // todo(josh): 0 or 1 for analytic parameter?
             float attentuation = saturate(1.0 / ((distance_to_light * distance_to_light) + 1));
+            // todo(josh): 0 or 1 for analytic parameter?
             reflected_color.rgb = attentuation_fade_term * calculate_light(surface_color, metallic, roughness, surface_normal, -dir_to_pixel, ray_direction, ray_position_screen_sample * attentuation, 1);
             break;
         }

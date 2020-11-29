@@ -214,30 +214,41 @@ void draw_render_options_editor_window(Render_Options *render_options) {
         ImGui::RadioButton("Positions",   reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_POSITIONS); ImGui::SameLine();
         ImGui::RadioButton("Normals",     reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_NORMALS);
         ImGui::RadioButton("Metal/Rough", reinterpret_cast<int *>(&render_options->debug_render_mode), (int)RM_METALLIC_ROUGHNESS);
+        ImGui::Separator();
 
+        ImGui::Text("Texture Maps");
         ImGui::Checkbox("do albedo map",     &render_options->do_albedo_map);
         ImGui::Checkbox("do normal map",     &render_options->do_normal_map);
         ImGui::Checkbox("do metallic map",   &render_options->do_metallic_map);
         ImGui::Checkbox("do roughness map",  &render_options->do_roughness_map);
         ImGui::Checkbox("do emission map",   &render_options->do_emission_map);
         ImGui::Checkbox("do ao map",         &render_options->do_ao_map);
+        ImGui::Separator();
 
+        ImGui::Text("Lighting");
         ImGui::SliderFloat("ambient modifier",   &render_options->ambient_modifier, 0, 1);
 
-        ImGui::SliderFloat("bloom radius",      &render_options->bloom_radius, 1, 100);
-        ImGui::SliderInt("bloom iterations",    &render_options->bloom_iterations, 0, 10);
-        ImGui::SliderFloat("bloom threshold",   &render_options->bloom_threshold, 0, 50);
-
-        ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
-
-        ImGui::SliderFloat("sun color r", &render_options->sun_color.x, 0, 1);
-        ImGui::SliderFloat("sun color g", &render_options->sun_color.y, 0, 1);
-        ImGui::SliderFloat("sun color b", &render_options->sun_color.z, 0, 1);
+        ImGui::Checkbox("do shadows",       &render_options->do_shadows);
+        ImGui::ColorEdit3("sun color",      &render_options->sun_color.x);
         ImGui::SliderFloat("sun intensity", &render_options->sun_intensity, 0, 500);
 
-        ImGui::SliderFloat("fog color r", &render_options->fog_color.x, 0, 1);
-        ImGui::SliderFloat("fog color g", &render_options->fog_color.y, 0, 1);
-        ImGui::SliderFloat("fog color b", &render_options->fog_color.z, 0, 1);
+        ImGui::Checkbox("do fog",         &render_options->do_fog);
+        ImGui::ColorEdit3("fog color",    &render_options->fog_color.x);
+        ImGui::SliderFloat("fog density", &render_options->fog_density, 0, 0.5);
+        ImGui::Separator();
+
+        ImGui::Text("Bloom");
+        ImGui::Checkbox("do bloom",    &render_options->do_bloom);
+        ImGui::RadioButton("Martijn",  reinterpret_cast<int *>(&render_options->blur_function), (int)BF_MARTIJN); ImGui::SameLine();
+        ImGui::RadioButton("Gaussian", reinterpret_cast<int *>(&render_options->blur_function), (int)BF_GAUSSIAN);
+        ImGui::SliderFloat("bloom radius",    &render_options->bloom_radius, 1, 100);
+        ImGui::SliderInt("bloom iterations",  &render_options->bloom_iterations, 0, 10);
+        ImGui::SliderFloat("bloom threshold", &render_options->bloom_threshold, 0, 50);
+        ImGui::SliderFloat("gaussian_height", &render_options->gaussian_height, 0.001, 1);
+        ImGui::Separator();
+
+        ImGui::Text("Exposure");
+        ImGui::SliderFloat("exposure modifier", &render_options->exposure_modifier, 0, 1);
     }
     ImGui::End();
 }
@@ -283,7 +294,7 @@ void ensure_blurrer_texture_sizes(Blurrer *blurrer, int width, int height) {
     ensure_texture_size(&blurrer->ping_pong_depth_buffer, width, height);
 }
 
-Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_iterations) {
+Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_iterations, Render_Options render_options) {
     // initial copy pass
     {
         // todo(josh): this should just be a copy_texture()
@@ -316,6 +327,8 @@ Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_i
         blur_cbuffer.horizontal = i % 2;
         blur_cbuffer.buffer_dimensions = v2(source_texture.description.width, source_texture.description.height);
         blur_cbuffer.blur_radius = radius;
+        blur_cbuffer.blur_function = render_options.blur_function;
+        blur_cbuffer.gaussian_height = render_options.gaussian_height;
         update_buffer(blurrer->cbuffer_handle, &blur_cbuffer, sizeof(Blur_CBuffer));
         bind_constant_buffers(&blurrer->cbuffer_handle, 1, CBS_BLUR);
 
@@ -361,54 +374,63 @@ void create_renderer3d(Renderer3D *out_renderer, Window *window) {
     out_renderer->default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields), out_renderer->vertex_shader);
 
     // make cube model
-    u32 cube_indices[36] = {
-         0,  2,  1,  0,  3,  2,
-         4,  5,  6,  4,  6,  7,
-         8, 10,  9,  8, 11, 10,
-        12, 13, 14, 12, 14, 15,
-        16, 17, 18, 16, 18, 19,
-        20, 22, 21, 20, 23, 22,
+    // u32 cube_indices[36] = {
+    //      0,  2,  1,  0,  3,  2,
+    //      4,  5,  6,  4,  6,  7,
+    //      8, 10,  9,  8, 11, 10,
+    //     12, 13, 14, 12, 14, 15,
+    //     16, 17, 18, 16, 18, 19,
+    //     20, 22, 21, 20, 23, 22,
+    // };
+
+    Vertex cube_vertices[36] = {
+        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 0
+        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 2
+        {{ (0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 1
+        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 0
+        {{-(0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 3
+        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 2
+
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 4
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 5
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 6
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 4
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 6
+        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 7
+
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 8
+        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 10
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 9
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 8
+        {{-(0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 11
+        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 10
+
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 12
+        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 13
+        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 14
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 12
+        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 14
+        {{ (0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 15
+
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 16
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 17
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 18
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 16
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 18
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 19
+
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 20
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 22
+        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 21
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 20
+        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 23
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 22
     };
 
-    Vertex cube_vertices[24] = {
-        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
-        {{ (0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
-        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
-        {{-(0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
-
-        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
-        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
-        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
-        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
-
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
-        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
-        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
-        {{-(0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
-
-        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
-        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
-        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
-        {{ (0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
-
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}},
-        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
-        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
-        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
-
-        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}},
-        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}},
-        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}},
-        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}},
-    };
-
-    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices[0]) * 24);
-    Buffer cube_index_buffer  = create_buffer(BT_INDEX,  cube_indices,  sizeof(cube_indices[0])  * 36);
+    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices[0]) * ARRAYSIZE(cube_vertices));
     Loaded_Mesh cube_loaded_mesh = {};
     cube_loaded_mesh.vertex_buffer = cube_vertex_buffer;
     cube_loaded_mesh.num_vertices = ARRAYSIZE(cube_vertices);
-    cube_loaded_mesh.index_buffer = cube_index_buffer;
-    cube_loaded_mesh.num_indices = ARRAYSIZE(cube_indices);
     cube_loaded_mesh.has_material = true;
     cube_loaded_mesh.material.cbuffer_handle = create_pbr_material_cbuffer();
     cube_loaded_mesh.material.ambient = 0.5;
@@ -601,23 +623,20 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
     ff_begin(&ff, &ff_vertices);
 
     bind_vertex_format(renderer->default_vertex_format);
-    set_backface_cull(true);
+    set_cull_mode(CM_BACKFACE);
     set_depth_test(true);
     set_primitive_topology(PT_TRIANGLE_LIST);
     set_alpha_blend(true);
 
     Matrix4 sun_transform = {};
 
-    Quaternion sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
-    // Quaternion sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90)) * axis_angle(v3(1, 0, 0), to_radians(90));
-
-    // draw scene to shadow map
-    {
+    Texture shadow_map_buffer = {};
+    if (render_options.do_shadows) {
         Render_Pass_Desc shadow_pass = {};
         shadow_pass.render_target_bindings.color_bindings[0] = {renderer->shadow_map_color_buffer, true, v4(0, 0, 0, 0)};
         shadow_pass.render_target_bindings.depth_binding     = {renderer->shadow_map_depth_buffer, true, 1};
         shadow_pass.camera_position = v3(0, 20, 0);
-        shadow_pass.camera_orientation = sun_orientation;
+        shadow_pass.camera_orientation = render_options.sun_orientation;
         shadow_pass.projection_matrix = construct_orthographic_matrix(-20, 20, -20, 20, -100, 100);
         sun_transform = shadow_pass.projection_matrix * construct_view_matrix(shadow_pass.camera_position, shadow_pass.camera_orientation);
         begin_render_pass(&shadow_pass);
@@ -628,6 +647,11 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
             draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
         }
+
+        shadow_map_buffer = renderer->shadow_map_color_buffer;
+    }
+    else {
+        shadow_map_buffer = renderer->white_texture;
     }
 
     Vector4 skybox_color = v4(10, 10, 10, 1);
@@ -639,19 +663,25 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
     // lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 500;
     // lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
     // lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 500;
-    lighting.sun_direction = quaternion_forward(sun_orientation);
-    lighting.sun_color = render_options.sun_color * render_options.sun_intensity;
+    lighting.sun_direction = quaternion_forward(render_options.sun_orientation);
+    lighting.sun_color     = render_options.sun_color * render_options.sun_intensity;
     lighting.sun_transform = sun_transform;
-    lighting.fog_base_color = render_options.fog_color;
-    lighting.fog_density    = 0.05;
+
+    lighting.do_fog         = render_options.do_fog;
     lighting.fog_y_level    = -1;
+    lighting.fog_color      = render_options.fog_color;
+    lighting.fog_density    = render_options.fog_density;
+
     lighting.has_skybox_map = 1;
     lighting.skybox_color   = skybox_color;
+
     lighting.bloom_threshold = render_options.bloom_threshold;
+
     lighting.ambient_modifier = render_options.ambient_modifier;
-    bind_texture(renderer->skybox_texture, TS_PBR_SKYBOX);
     update_buffer(renderer->lighting_cbuffer_handle, &lighting, sizeof(Lighting_CBuffer));
     bind_constant_buffers(&renderer->lighting_cbuffer_handle, 1, CBS_LIGHTING);
+
+    bind_texture(renderer->skybox_texture, TS_PBR_SKYBOX);
 
     // draw scene
     {
@@ -684,9 +714,9 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             bind_shaders(renderer->skybox_vertex_shader, renderer->skybox_pixel_shader);
             bind_texture(renderer->skybox_texture, TS_PBR_ALBEDO);
 
-            set_backface_cull(false);
+            set_cull_mode(CM_NO_CULL);
             draw_model(renderer->cube_model, camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color, render_options, false);
-            set_backface_cull(true);
+            set_cull_mode(CM_BACKFACE);
 
             // ff_line_circle(&ff, v3(0, 1, 0), 1, v3(0, 1, 0), v4(5, 0, 0, 1));
             // set_primitive_topology(PT_LINE_LIST);
@@ -727,7 +757,14 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
         }
     }
 
-    Texture last_bloom_blur_render_target = do_blur(&renderer->blurrer, renderer->bloom_color_buffer, render_options.bloom_radius, render_options.bloom_iterations);
+    Texture blurred_bloom_buffer = {};
+    if (render_options.do_bloom) {
+        blurred_bloom_buffer = do_blur(&renderer->blurrer, renderer->bloom_color_buffer, render_options.bloom_radius, render_options.bloom_iterations, render_options);
+    }
+    else {
+        blurred_bloom_buffer = renderer->black_texture;
+    }
+
     // Texture last_ssr_blur_render_target = do_blur(&blurrer, ssr_color_buffer, 2, 1);
 
     {
@@ -784,7 +821,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
         begin_render_pass(&screen_pass);
         defer(end_render_pass());
 
-        bind_texture(last_bloom_blur_render_target, TS_FINAL_BLOOM_MAP);
+        bind_texture(blurred_bloom_buffer, TS_FINAL_BLOOM_MAP);
         defer(bind_texture({}, TS_FINAL_BLOOM_MAP));
         bind_texture(renderer->ssr_color_buffer, TS_FINAL_SSR_MAP);
         defer(bind_texture({}, TS_FINAL_SSR_MAP));
@@ -842,7 +879,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
 
         /*
         draw_texture(bloom_color_buffer,                  v3(0, 0, 0),   v3(128, 128, 0));
-        draw_texture(last_bloom_blur_render_target,       v3(128, 0, 0), v3(256, 128, 0));
+        draw_texture(blurred_bloom_buffer,                v3(128, 0, 0), v3(256, 128, 0));
         draw_texture(ssr_color_buffer,                    v3(256, 0, 0), v3(384, 128, 0));
         draw_texture(gbuffer_positions,                   v3(384, 0, 0), v3(512, 128, 0));
         draw_texture(gbuffer_normals,                     v3(512, 0, 0), v3(640, 128, 0));
