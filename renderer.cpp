@@ -228,9 +228,10 @@ void draw_render_options_editor_window(Render_Options *render_options) {
         ImGui::Text("Lighting");
         ImGui::SliderFloat("ambient modifier",   &render_options->ambient_modifier, 0, 1);
 
-        ImGui::Checkbox("do shadows",       &render_options->do_shadows);
-        ImGui::ColorEdit3("sun color",      &render_options->sun_color.x);
-        ImGui::SliderFloat("sun intensity", &render_options->sun_intensity, 0, 500);
+        ImGui::Checkbox("do shadows",         &render_options->do_shadows);
+        ImGui::ColorEdit3("sun color",        &render_options->sun_color.x);
+        ImGui::SliderFloat("sun intensity",   &render_options->sun_intensity, 0, 500);
+        ImGui::Checkbox("visualize cascades", &render_options->visualize_cascades);
 
         ImGui::Checkbox("do fog",         &render_options->do_fog);
         ImGui::ColorEdit3("fog color",    &render_options->fog_color.x);
@@ -241,6 +242,7 @@ void draw_render_options_editor_window(Render_Options *render_options) {
         ImGui::Checkbox("do bloom",    &render_options->do_bloom);
         ImGui::RadioButton("Martijn",  reinterpret_cast<int *>(&render_options->blur_function), (int)BF_MARTIJN); ImGui::SameLine();
         ImGui::RadioButton("Gaussian", reinterpret_cast<int *>(&render_options->blur_function), (int)BF_GAUSSIAN);
+        ImGui::SliderFloat("bloom slope",     &render_options->bloom_slope, 0, 2);
         ImGui::SliderFloat("bloom radius",    &render_options->bloom_radius, 1, 100);
         ImGui::SliderInt("bloom iterations",  &render_options->bloom_iterations, 0, 10);
         ImGui::SliderFloat("bloom threshold", &render_options->bloom_threshold, 0, 50);
@@ -464,14 +466,21 @@ void create_renderer3d(Renderer3D *out_renderer, Window *window) {
         delete_texture_data(skybox_faces[idx]);
     }
 
-    // make shadow map
+    // make shadow maps
     Texture_Description shadow_map_description = {};
-    shadow_map_description.width = 2048;
-    shadow_map_description.height = 2048;
+    shadow_map_description.width = SHADOW_MAP_DIM;
+    shadow_map_description.height = SHADOW_MAP_DIM;
+    shadow_map_description.render_target = true;
     // todo(josh): this should just be one component per pixel
     shadow_map_description.format = TF_R16G16B16A16_FLOAT;
-    shadow_map_description.wrap_mode = TWM_POINT_CLAMP;
-    create_color_and_depth_buffers(shadow_map_description, &out_renderer->shadow_map_color_buffer, &out_renderer->shadow_map_depth_buffer);
+    shadow_map_description.wrap_mode = TWM_LINEAR_CLAMP;
+    out_renderer->shadow_map_color_buffers[0] = create_texture(shadow_map_description);
+    out_renderer->shadow_map_color_buffers[1] = create_texture(shadow_map_description);
+    out_renderer->shadow_map_color_buffers[2] = create_texture(shadow_map_description);
+    out_renderer->shadow_map_color_buffers[3] = create_texture(shadow_map_description);
+    Texture_Description shadow_map_depth_description = shadow_map_description;
+    shadow_map_depth_description.format = TF_DEPTH_STENCIL;
+    out_renderer->shadow_map_depth_buffer = create_texture(shadow_map_depth_description);
 
     // make hdr buffer
     Texture_Description hdr_description = {};
@@ -601,7 +610,21 @@ void destroy_renderer3d(Renderer3D *renderer) {
     // todo(josh): @leak
 }
 
+Vector3 transform_point(Matrix4 matrix, Vector3 pos) {
+    Vector4 pos4 = v4(pos);
+    pos4.w = 1;
+    pos4 = matrix * pos4;
+    if (pos4.w != 0) {
+        pos4 /= pos4.w;
+    }
+    return v3(pos4);
+}
+
 void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector3 camera_position, Quaternion camera_orientation, Render_Options render_options, Window *window, float time_since_startup, float dt) {
+    #define CAMERA_FOV 60
+    #define CAMERA_NEAR_PLANE 0.01
+    #define CAMERA_FAR_PLANE 1000
+
     ensure_swap_chain_size(window->width, window->height);
 
     ensure_texture_size(&renderer->hdr_color_buffer, window->width, window->height);
@@ -628,30 +651,94 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
     set_primitive_topology(PT_TRIANGLE_LIST);
     set_alpha_blend(true);
 
-    Matrix4 sun_transform = {};
-
-    Texture shadow_map_buffer = {};
+    float cascade_distances[5] = {0, 2, 10, 30, 100};
+    Texture shadow_map_buffers[NUM_SHADOW_MAPS] = {};
+    Matrix4 shadow_map_transforms[NUM_SHADOW_MAPS] = {};
     if (render_options.do_shadows) {
-        Render_Pass_Desc shadow_pass = {};
-        shadow_pass.render_target_bindings.color_bindings[0] = {renderer->shadow_map_color_buffer, true, v4(0, 0, 0, 0)};
-        shadow_pass.render_target_bindings.depth_binding     = {renderer->shadow_map_depth_buffer, true, 1};
-        shadow_pass.camera_position = v3(0, 20, 0);
-        shadow_pass.camera_orientation = render_options.sun_orientation;
-        shadow_pass.projection_matrix = construct_orthographic_matrix(-20, 20, -20, 20, -100, 100);
-        sun_transform = shadow_pass.projection_matrix * construct_view_matrix(shadow_pass.camera_position, shadow_pass.camera_orientation);
-        begin_render_pass(&shadow_pass);
-        defer(end_render_pass());
-        bind_shaders(renderer->vertex_shader, renderer->depth_pixel_shader);
+        for (int shadow_map_index = 0; shadow_map_index < NUM_SHADOW_MAPS; shadow_map_index++) {
+            Vector3 frustum_corners[8] = {
+                {-1,  1, -1},
+                { 1,  1, -1},
+                { 1, -1, -1},
+                {-1, -1, -1},
+                {-1,  1,  1},
+                { 1,  1,  1},
+                { 1, -1,  1},
+                {-1, -1,  1},
+            };
 
-        Foreach (command, render_queue) {
-            draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
-            draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
+            // calculate sub-frustum for this cascade
+            Matrix4 cascade_proj = construct_perspective_matrix(to_radians(CAMERA_FOV), (float)window->width / (float)window->height, CAMERA_NEAR_PLANE + cascade_distances[shadow_map_index], min(CAMERA_FAR_PLANE, CAMERA_NEAR_PLANE + cascade_distances[shadow_map_index+1]));
+            Matrix4 cascade_view = construct_view_matrix(camera_position, camera_orientation);
+            Matrix4 cascade_viewport_to_world = inverse(cascade_proj * cascade_view);
+
+            // calculate center point and radius of frustum
+            Vector3 center_point = {};
+            for (int frustum_corner_index = 0; frustum_corner_index < ARRAYSIZE(frustum_corners); frustum_corner_index++) {
+                frustum_corners[frustum_corner_index] = transform_point(cascade_viewport_to_world, frustum_corners[frustum_corner_index]);
+                center_point += frustum_corners[frustum_corner_index];
+            }
+            center_point /= ARRAYSIZE(frustum_corners);
+
+            // todo(josh): take scene geo into account when positioning sun camera
+
+            // todo(josh): this radius changes very slightly as the camera rotates around for some reason. this shouldn't be happening and I believe it's causing the flickering
+            // todo(josh): this radius changes very slightly as the camera rotates around for some reason. this shouldn't be happening and I believe it's causing the flickering
+            // todo(josh): this radius changes very slightly as the camera rotates around for some reason. this shouldn't be happening and I believe it's causing the flickering
+            // note(josh): @ShadowFlickerHack hacked around the problem by clamping the radius to an int. pretty shitty, should investigate a proper solution
+            // note(josh): @ShadowFlickerHack hacked around the problem by clamping the radius to an int. pretty shitty, should investigate a proper solution
+            // note(josh): @ShadowFlickerHack hacked around the problem by clamping the radius to an int. pretty shitty, should investigate a proper solution
+            float radius = (float)(int)(length(frustum_corners[0] - frustum_corners[6]) / 2.0 + 1.0);
+
+            Quaternion shadow_camera_orientation = render_options.sun_orientation;
+            Vector3 shadow_camera_direction = quaternion_forward(shadow_camera_orientation);
+
+            float texels_per_unit = ((float)SHADOW_MAP_DIM) / (radius * 2);
+            Matrix4 scale_matrix = construct_scale_matrix(v3(texels_per_unit, texels_per_unit, texels_per_unit));
+            scale_matrix = scale_matrix * quaternion_to_matrix4(inverse(shadow_camera_orientation));
+
+            // draw_debug_box(center_point, Vector3{1/texels_per_unit, 1/texels_per_unit, 1/texels_per_unit}, COLOR_RED, shadow_camera_orientation);
+            Vector3 center_point_texel_space = transform_point(scale_matrix, center_point);
+            center_point_texel_space.x = round(center_point_texel_space.x);
+            center_point_texel_space.y = round(center_point_texel_space.y);
+            center_point_texel_space.z = round(center_point_texel_space.z);
+            center_point = transform_point(inverse(scale_matrix), center_point_texel_space);
+            if (shadow_map_index == 0) {
+                // wb.im_debug_box(&g_screen_im_render_context, .World, center_point, Vector3{1/texels_per_unit, 1/texels_per_unit, 1/texels_per_unit});
+            }
+
+            // position the shadow camera looking at that point
+            Vector3 shadow_camera_position = center_point - shadow_camera_direction * radius * 10;
+            float shadow_camera_fov = radius;
+            float shadow_camera_far_plane = radius * 2 * 10;
+
+            // draw the scene from the perspective of the light
+            Texture shadow_map_render_target = renderer->shadow_map_color_buffers[shadow_map_index];
+            Texture shadow_map_color_buffer = shadow_map_render_target;
+            Render_Pass_Desc shadow_pass = {};
+            shadow_pass.render_target_bindings.color_bindings[0] = {shadow_map_color_buffer, true, v4(0, 0, 0, 0)};
+            shadow_pass.render_target_bindings.depth_binding     = {renderer->shadow_map_depth_buffer, true, 1};
+            shadow_pass.camera_position = shadow_camera_position;
+            shadow_pass.camera_orientation = shadow_camera_orientation;
+            // todo(josh): use infinite projection?
+            shadow_pass.projection_matrix = construct_orthographic_matrix(-shadow_camera_fov, shadow_camera_fov, -shadow_camera_fov, shadow_camera_fov, -shadow_camera_far_plane, shadow_camera_far_plane);
+            begin_render_pass(&shadow_pass);
+            defer(end_render_pass());
+            bind_shaders(renderer->vertex_shader, renderer->depth_pixel_shader);
+            Foreach (command, render_queue) {
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
+            }
+
+            shadow_map_buffers[shadow_map_index] = shadow_map_render_target;
+            shadow_map_transforms[shadow_map_index] = shadow_pass.projection_matrix * construct_view_matrix(shadow_pass.camera_position, shadow_pass.camera_orientation);
         }
-
-        shadow_map_buffer = renderer->shadow_map_color_buffer;
     }
     else {
-        shadow_map_buffer = renderer->white_texture;
+        for (int i = 0; i < NUM_SHADOW_MAPS; i++) {
+            shadow_map_buffers[i] = renderer->white_texture;
+            shadow_map_transforms[i] = m4_identity();
+        }
     }
 
     Vector4 skybox_color = v4(10, 10, 10, 1);
@@ -663,9 +750,17 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
     // lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 1, 0, 1) * 500;
     // lighting.point_light_positions[lighting.num_point_lights] = v4(sin(time_since_startup * 0.7) * 3, 6, 0, 1);
     // lighting.point_light_colors[lighting.num_point_lights++]  = v4(0, 0, 1, 1) * 500;
-    lighting.sun_direction = quaternion_forward(render_options.sun_orientation);
-    lighting.sun_color     = render_options.sun_color * render_options.sun_intensity;
-    lighting.sun_transform = sun_transform;
+    lighting.sun_direction     = quaternion_forward(render_options.sun_orientation);
+    lighting.sun_color         = render_options.sun_color * render_options.sun_intensity;
+    lighting.sun_transforms[0] = shadow_map_transforms[0];
+    lighting.sun_transforms[1] = shadow_map_transforms[1];
+    lighting.sun_transforms[2] = shadow_map_transforms[2];
+    lighting.sun_transforms[3] = shadow_map_transforms[3];
+    lighting.cascade_distances.x = cascade_distances[1];
+    lighting.cascade_distances.y = cascade_distances[2];
+    lighting.cascade_distances.z = cascade_distances[3];
+    lighting.cascade_distances.w = cascade_distances[4];
+    lighting.visualize_cascades  = render_options.visualize_cascades;
 
     lighting.do_fog         = render_options.do_fog;
     lighting.fog_y_level    = -1;
@@ -675,6 +770,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
     lighting.has_skybox_map = 1;
     lighting.skybox_color   = skybox_color;
 
+    lighting.bloom_slope     = render_options.bloom_slope;
     lighting.bloom_threshold = render_options.bloom_threshold;
 
     lighting.ambient_modifier = render_options.ambient_modifier;
@@ -688,7 +784,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
         Render_Pass_Desc scene_pass_desc = {};
         scene_pass_desc.camera_position = camera_position;
         scene_pass_desc.camera_orientation = camera_orientation;
-        scene_pass_desc.projection_matrix = construct_perspective_matrix(to_radians(60), (float)window->width / (float)window->height, 0.01, 1000);
+        scene_pass_desc.projection_matrix = construct_perspective_matrix(to_radians(CAMERA_FOV), (float)window->width / (float)window->height, CAMERA_NEAR_PLANE, CAMERA_FAR_PLANE);
 
         // draw scene to hdr buffer
         {
@@ -702,8 +798,11 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             scene_pass.render_target_bindings.depth_binding     = {renderer->hdr_depth_buffer,        true, 1};
             begin_render_pass(&scene_pass);
             defer(end_render_pass());
-            bind_texture(renderer->shadow_map_color_buffer, TS_PBR_SHADOW_MAP);
-            defer(bind_texture({}, TS_PBR_SHADOW_MAP));
+            bind_texture(shadow_map_buffers[0], TS_PBR_SHADOW_MAP1); defer(bind_texture({}, TS_PBR_SHADOW_MAP1));
+            bind_texture(shadow_map_buffers[1], TS_PBR_SHADOW_MAP2); defer(bind_texture({}, TS_PBR_SHADOW_MAP2));
+            bind_texture(shadow_map_buffers[2], TS_PBR_SHADOW_MAP3); defer(bind_texture({}, TS_PBR_SHADOW_MAP3));
+            bind_texture(shadow_map_buffers[3], TS_PBR_SHADOW_MAP4); defer(bind_texture({}, TS_PBR_SHADOW_MAP4));
+
             bind_shaders(renderer->vertex_shader, renderer->pixel_shader);
             Foreach (command, render_queue) {
                 draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
@@ -876,6 +975,11 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             case RM_NORMALS:            draw_texture(renderer->gbuffer_normals,              v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
             case RM_METALLIC_ROUGHNESS: draw_texture(renderer->gbuffer_metal_roughness,      v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
         }
+
+        draw_texture(renderer->shadow_map_color_buffers[0], v3(0,   0, 0), v3(128, 128, 0));
+        draw_texture(renderer->shadow_map_color_buffers[1], v3(128, 0, 0), v3(256, 128, 0));
+        draw_texture(renderer->shadow_map_color_buffers[2], v3(256, 0, 0), v3(384, 128, 0));
+        draw_texture(renderer->shadow_map_color_buffers[3], v3(384, 0, 0), v3(512, 128, 0));
 
         /*
         draw_texture(bloom_color_buffer,                  v3(0, 0, 0),   v3(128, 128, 0));

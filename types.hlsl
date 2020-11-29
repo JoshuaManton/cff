@@ -56,18 +56,23 @@ cbuffer CBUFFER_MATERIAL : register(b2) {
     float pad2;
 };
 
+#define NUM_SHADOW_MAPS 4 // :NumShadowMaps
+#define SHADOW_MAP_DIM 2048 // :ShadowMapDim
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
 cbuffer CBUFFER_LIGHTING : register(b3) {
     float4 point_light_positions[MAX_POINT_LIGHTS];
     float4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
     float3 sun_direction;
-    matrix sun_transform;
+    matrix sun_transforms[NUM_SHADOW_MAPS];
+    float4 cascade_distances;
+    int visualize_cascades;
     float3 sun_color;
     int do_fog;
     float3 fog_color;
     float fog_y_level;
     float fog_density;
+    float bloom_slope;
     float bloom_threshold;
     float ambient_modifier;
     int has_skybox_map;

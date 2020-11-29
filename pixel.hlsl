@@ -7,8 +7,11 @@ Texture2D   metallic_map  : register(t2);
 Texture2D   roughness_map : register(t3);
 Texture2D   emission_map  : register(t4);
 Texture2D   ao_map        : register(t5);
-Texture2D   shadow_map    : register(t6);
-TextureCube skybox_map    : register(t7);
+TextureCube skybox_map    : register(t6);
+Texture2D   shadow_map1   : register(t7);
+Texture2D   shadow_map2   : register(t8);
+Texture2D   shadow_map3   : register(t9);
+Texture2D   shadow_map4   : register(t10);
 
 int sun_can_see_point(float3 position, row_major matrix sun_matrix, Texture2D shadow_map_texture) {
     float4 position_sun_space = mul(sun_matrix, float4(position, 1.0));
@@ -38,7 +41,7 @@ float calculate_shadow(Texture2D shadow_map_texture, row_major matrix sun_matrix
     float bias = max(0.01 * (1.0 - dot_to_sun), 0.001);
     // float bias = 0.01;
 
-    float2 texel_size = 1.0 / 2048;
+    float2 texel_size = 1.0 / SHADOW_MAP_DIM;
     float shadow = 0;
 #if 0
     shadow = shadow_map_texture.Sample(main_sampler, proj_coords.xy).r + bias < proj_coords.z ? 1.0 : 0.0;
@@ -102,8 +105,40 @@ PS_OUTPUT main(PS_INPUT input) {
     }
 
     if (length(sun_direction) > 0) {
-        float shadow = calculate_shadow(shadow_map, sun_transform, input.world_position, N);
+        float shadow = 0;
+        int cascade_index = -1;
+
+        #if 1 // note(josh): interpolate between cascades
+             if (distance_to_pixel_position < cascade_distances.x) { float cascade_size = cascade_distances.x;                       float distance_t = (distance_to_pixel_position                      ) / cascade_size; cascade_index = 0; shadow = lerp(calculate_shadow(shadow_map1, sun_transforms[0], input.world_position, N), calculate_shadow(shadow_map2, sun_transforms[1], input.world_position, N), smoothstep(0.75, 1, distance_t)); }
+        else if (distance_to_pixel_position < cascade_distances.y) { float cascade_size = cascade_distances.y - cascade_distances.x; float distance_t = (distance_to_pixel_position - cascade_distances.x) / cascade_size; cascade_index = 1; shadow = lerp(calculate_shadow(shadow_map2, sun_transforms[1], input.world_position, N), calculate_shadow(shadow_map3, sun_transforms[2], input.world_position, N), smoothstep(0.75, 1, distance_t)); }
+        else if (distance_to_pixel_position < cascade_distances.z) { float cascade_size = cascade_distances.z - cascade_distances.y; float distance_t = (distance_to_pixel_position - cascade_distances.y) / cascade_size; cascade_index = 2; shadow = lerp(calculate_shadow(shadow_map3, sun_transforms[2], input.world_position, N), calculate_shadow(shadow_map4, sun_transforms[3], input.world_position, N), smoothstep(0.75, 1, distance_t)); }
+        else if (distance_to_pixel_position < cascade_distances.w) { float cascade_size = cascade_distances.w - cascade_distances.z; float distance_t = (distance_to_pixel_position - cascade_distances.z) / cascade_size; cascade_index = 3; shadow = lerp(calculate_shadow(shadow_map4, sun_transforms[3], input.world_position, N), 0,                                                                         smoothstep(0.75, 1, distance_t)); }
+        #else
+             if (distance_to_pixel_position < cascade_distances.x) { cascade_index = 0; shadow = calculate_shadow(shadow_map1, sun_transforms[0], input.world_position, N); }
+        else if (distance_to_pixel_position < cascade_distances.y) { cascade_index = 1; shadow = calculate_shadow(shadow_map2, sun_transforms[1], input.world_position, N); }
+        else if (distance_to_pixel_position < cascade_distances.z) { cascade_index = 2; shadow = calculate_shadow(shadow_map3, sun_transforms[2], input.world_position, N); }
+        else if (distance_to_pixel_position < cascade_distances.w) { cascade_index = 3; shadow = calculate_shadow(shadow_map4, sun_transforms[3], input.world_position, N); }
+        #endif
+
         output_color.rgb += calculate_light(albedo, metallic, roughness, N, direction_to_camera, -sun_direction, sun_color, 1) * (1.0f - shadow);
+
+        if (visualize_cascades) {
+            if (cascade_index == -1) {
+                output_color.rb += 1; // magenta for no cascade
+            }
+            else if (cascade_index == 0) {
+                output_color.r += 1;
+            }
+            else if (cascade_index == 1) {
+                output_color.g += 1;
+            }
+            else if (cascade_index == 2) {
+                output_color.b += 1;
+            }
+            else if (cascade_index == 3) {
+                output_color.rg += 1;
+            }
+        }
     }
 
     if (has_skybox_map) {
@@ -125,7 +160,8 @@ PS_OUTPUT main(PS_INPUT input) {
         for (int step = 0; step < MAX_STEPS; step++) {
             float3 ray_position = camera_position - direction_to_camera * STEP_SIZE * step;
             float ray_distance = length(camera_position - ray_position);
-            if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transform, shadow_map)) {
+            // todo(josh): use the correct sun cascade here
+            if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transforms[2], shadow_map2)) {
                 float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
                 total_density += fog_amount * STEP_SIZE;
             }
@@ -144,8 +180,7 @@ PS_OUTPUT main(PS_INPUT input) {
     output.material = float4(metallic, roughness, ao, 1.0);
     float color_magnitude = dot(output.color.rgb, float3(0.2, 0.7, 0.1)); // todo(josh): @CorrectBrightness (0.2, 0.7, 0.1) are not exact. martijn: "if you want the exact ones, look at wikipedia at the Y component of the RGB primaries of the sRGB color space"
     if (color_magnitude > bloom_threshold) {
-        const float SLOPE = 0.5;
-        output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * bloom_threshold)) * SLOPE;
+        output.bloom_color.rgb = (output.color.rgb - (normalize(output.color.rgb) * bloom_threshold)) * bloom_slope;
         output.bloom_color.a = output.color.a;
     }
     return output;

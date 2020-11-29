@@ -52,6 +52,7 @@ void main() {
     render_options.do_ao_map         = true;
     render_options.do_bloom          = true;
     render_options.blur_function     = BF_GAUSSIAN;
+    render_options.bloom_slope       = 0.5;
     render_options.bloom_radius      = 10;
     render_options.bloom_iterations  = 2;
     render_options.bloom_threshold   = 10;
@@ -141,7 +142,8 @@ void main() {
         sponza_draw_command.color = v4(1, 1, 1, 1);
         render_queue.append(sponza_draw_command);
 
-        render_options.sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
+        // render_options.sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
+        render_options.sun_orientation = axis_angle(v3(0, 1, 0), to_radians(60)) * axis_angle(v3(1, 0, 0), to_radians(75));
 
         render_scene(&renderer, render_queue, camera_position, camera_orientation, render_options, &main_window, time_since_startup, dt);
         dear_imgui_render(true);

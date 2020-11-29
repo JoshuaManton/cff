@@ -77,21 +77,26 @@ struct PBR_Material_CBuffer {
     float pad2;
 };
 
+#define NUM_SHADOW_MAPS 4 // :NumShadowMaps
 #define MAX_POINT_LIGHTS 16 // :MaxPointLights
 struct Lighting_CBuffer {
     Vector4 point_light_positions[MAX_POINT_LIGHTS];
     Vector4 point_light_colors[MAX_POINT_LIGHTS];
     int num_point_lights;
     Vector3 sun_direction;
-    Matrix4 sun_transform;
+    Matrix4 sun_transforms[NUM_SHADOW_MAPS];
+    Vector4 cascade_distances;
+    int visualize_cascades;
     Vector3 sun_color;
     int do_fog;
     Vector3 fog_color;
     float fog_y_level;
     float fog_density;
+    float bloom_slope;
     float bloom_threshold;
     float ambient_modifier;
     int has_skybox_map;
+    float pad[2];
     Vector4 skybox_color;
 };
 
@@ -134,8 +139,11 @@ struct Final_CBuffer {
 #define TS_PBR_ROUGHNESS        3
 #define TS_PBR_EMISSION         4
 #define TS_PBR_AO               5
-#define TS_PBR_SHADOW_MAP       6
-#define TS_PBR_SKYBOX           7
+#define TS_PBR_SKYBOX           6
+#define TS_PBR_SHADOW_MAP1      7
+#define TS_PBR_SHADOW_MAP2      8
+#define TS_PBR_SHADOW_MAP3      9
+#define TS_PBR_SHADOW_MAP4      10
 
 #define TS_FINAL_MAIN_VIEW    0
 #define TS_FINAL_BLOOM_MAP    1
@@ -192,10 +200,12 @@ struct Render_Options {
     Quaternion sun_orientation;
     Vector3 sun_color;
     float sun_intensity;
+    bool visualize_cascades;
 
     float ambient_modifier;
 
     bool do_bloom;
+    float bloom_slope;
     float bloom_radius;
     int bloom_iterations;
     float bloom_threshold;
@@ -246,6 +256,7 @@ Texture do_blur(Blurrer *blurrer, Texture thing_to_blur, float radius, int num_i
 
 #define NUM_AUTO_EXPOSURE_DOWNSAMPLE_BUFFERS 10
 #define BLOOM_BUFFER_DOWNSCALE 8.0
+#define SHADOW_MAP_DIM 2048 // :ShadowMapDim
 
 struct Renderer3D {
     // todo(josh): we currently @leak everything in here
@@ -269,19 +280,23 @@ struct Renderer3D {
 
     Texture skybox_texture;
 
-    Texture shadow_map_color_buffer;
+    Texture shadow_map_color_buffers[NUM_SHADOW_MAPS];
     Texture shadow_map_depth_buffer;
+
     Texture hdr_color_buffer;
     Texture hdr_depth_buffer;
+
     Texture gbuffer_albedo;
     Texture gbuffer_normals;
     Texture gbuffer_positions;
     Texture gbuffer_metal_roughness;
+
+    Blurrer blurrer;
     Texture bloom_color_buffer;
     Texture ssr_color_buffer;
+
     Texture final_composite_color_buffer;
     Texture final_composite_depth_buffer;
-    Blurrer blurrer;
 
     Texture auto_exposure_downsample_buffers[NUM_AUTO_EXPOSURE_DOWNSAMPLE_BUFFERS];
     Texture auto_exposure_cpu_read_buffer;
