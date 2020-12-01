@@ -35,7 +35,7 @@ float3 ray_march(float3 surface_color, float3 surface_pixel_position, float3 sur
             float3 ray_position_screen_sample = lit_scene_map.Sample(main_sampler, ray_position_uv).rgb;
 
             // attenuate based on how close the sample is to the edge of the screen to avoid hard edges
-            float attentuation_fade_term = 1.0 - (saturate(length(ray_position_position_sample_viewport_space.xy)));
+            float attentuation_fade_term = 1.0 - saturate(length(ray_position_position_sample_viewport_space.xy));
             float3 offset_to_light = ray_position - surface_pixel_position;
             float distance_to_light = length(offset_to_light);
             float attentuation = saturate(1.0 / ((distance_to_light * distance_to_light) + 1));

@@ -129,7 +129,8 @@ void main() {
         Draw_Command helmet_draw_command = {};
         helmet_draw_command.model = helmet_model;
         helmet_draw_command.position = v3(0, 4, 0);
-        helmet_draw_command.orientation = axis_angle(v3(0, 1, 0), time_since_startup * 0.5);
+        helmet_draw_command.orientation = axis_angle(v3(0, 1, 0), to_radians(90));
+        // helmet_draw_command.orientation = quaternion_identity();
         helmet_draw_command.scale = v3(1, 1, 1);
         helmet_draw_command.color = v4(1, 1, 1, 1);
         render_queue.append(helmet_draw_command);

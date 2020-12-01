@@ -976,10 +976,10 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             case RM_METALLIC_ROUGHNESS: draw_texture(renderer->gbuffer_metal_roughness,      v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
         }
 
-        draw_texture(renderer->shadow_map_color_buffers[0], v3(0,   0, 0), v3(128, 128, 0));
-        draw_texture(renderer->shadow_map_color_buffers[1], v3(128, 0, 0), v3(256, 128, 0));
-        draw_texture(renderer->shadow_map_color_buffers[2], v3(256, 0, 0), v3(384, 128, 0));
-        draw_texture(renderer->shadow_map_color_buffers[3], v3(384, 0, 0), v3(512, 128, 0));
+        // draw_texture(renderer->shadow_map_color_buffers[0], v3(0,   0, 0), v3(128, 128, 0));
+        // draw_texture(renderer->shadow_map_color_buffers[1], v3(128, 0, 0), v3(256, 128, 0));
+        // draw_texture(renderer->shadow_map_color_buffers[2], v3(256, 0, 0), v3(384, 128, 0));
+        // draw_texture(renderer->shadow_map_color_buffers[3], v3(384, 0, 0), v3(512, 128, 0));
 
         /*
         draw_texture(bloom_color_buffer,                  v3(0, 0, 0),   v3(128, 128, 0));

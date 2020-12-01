@@ -156,15 +156,15 @@ PS_OUTPUT main(PS_INPUT input) {
     if (do_fog) {
         float total_density = 0;
         const float STEP_SIZE = 0.1;
-        const int MAX_STEPS = 200;
-        for (int step = 0; step < MAX_STEPS; step++) {
-            float3 ray_position = camera_position - direction_to_camera * STEP_SIZE * step;
-            float ray_distance = length(camera_position - ray_position);
+        const int MAX_DISTANCE = 20;
+        float ray_distance = 0;
+        while (ray_distance < MAX_DISTANCE) {
+            float3 ray_position = camera_position - direction_to_camera * ray_distance;
             // todo(josh): use the correct sun cascade here
-            if (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transforms[2], shadow_map2)) {
-                float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
-                total_density += fog_amount * STEP_SIZE;
-            }
+            float fog_amount = 1.0 - exp(-fog_density * (1.0 / (max(1.0, input.world_position.y - fog_y_level))));
+            float factor = (ray_distance < distance_to_pixel_position && sun_can_see_point(ray_position, sun_transforms[3], shadow_map4)) ? 1 : 0;
+            total_density += fog_amount * STEP_SIZE * factor;
+            ray_distance += STEP_SIZE;
         }
         output_color.rgb = lerp(output_color.rgb, fog_color, saturate(total_density));
     }
