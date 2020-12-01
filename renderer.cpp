@@ -32,6 +32,76 @@ void destroy_model(Model model) {
     model.meshes.destroy();
 }
 
+Model create_cube_model(Allocator allocator) {
+
+    // make cube model
+    // u32 cube_indices[36] = {
+    //      0,  2,  1,  0,  3,  2,
+    //      4,  5,  6,  4,  6,  7,
+    //      8, 10,  9,  8, 11, 10,
+    //     12, 13, 14, 12, 14, 15,
+    //     16, 17, 18, 16, 18, 19,
+    //     20, 22, 21, 20, 23, 22,
+    // };
+
+    Vertex cube_vertices[36] = {
+        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 0
+        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 2
+        {{ (0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 1
+        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 0
+        {{-(0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 3
+        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 2
+
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 4
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 5
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 6
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 4
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 6
+        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 7
+
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 8
+        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 10
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 9
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 8
+        {{-(0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 11
+        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 10
+
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 12
+        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 13
+        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 14
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 12
+        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 14
+        {{ (0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 15
+
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 16
+        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 17
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 18
+        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 16
+        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 18
+        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 19
+
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 20
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 22
+        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 21
+        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 20
+        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 23
+        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 22
+    };
+
+    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices[0]) * ARRAYSIZE(cube_vertices));
+    Loaded_Mesh cube_loaded_mesh = {};
+    cube_loaded_mesh.vertex_buffer = cube_vertex_buffer;
+    cube_loaded_mesh.num_vertices = ARRAYSIZE(cube_vertices);
+    cube_loaded_mesh.has_material = true;
+    cube_loaded_mesh.material.cbuffer_handle = create_pbr_material_cbuffer();
+    cube_loaded_mesh.material.ambient = 0.5;
+    cube_loaded_mesh.material.roughness = 0.3;
+    cube_loaded_mesh.material.metallic = 0;
+    Model cube_model = create_model(allocator);
+    cube_model.meshes.append(cube_loaded_mesh);
+    return cube_model;
+}
+
 
 
 void flush_pbr_material(Buffer buffer, PBR_Material material, Render_Options options) {
@@ -375,71 +445,7 @@ void create_renderer3d(Renderer3D *out_renderer, Window *window) {
     };
     out_renderer->default_vertex_format = create_vertex_format(vertex_fields, ARRAYSIZE(vertex_fields), out_renderer->vertex_shader);
 
-    // make cube model
-    // u32 cube_indices[36] = {
-    //      0,  2,  1,  0,  3,  2,
-    //      4,  5,  6,  4,  6,  7,
-    //      8, 10,  9,  8, 11, 10,
-    //     12, 13, 14, 12, 14, 15,
-    //     16, 17, 18, 16, 18, 19,
-    //     20, 22, 21, 20, 23, 22,
-    // };
-
-    Vertex cube_vertices[36] = {
-        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 0
-        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 2
-        {{ (0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 1
-        {{-(0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 0
-        {{-(0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 3
-        {{ (0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0, -1}, { 1,  0,  0}, { 0,  1,  0}}, // 2
-
-        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 4
-        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 5
-        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 6
-        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 4
-        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 6
-        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  0,  1}, {-1,  0,  0}, { 0,  1,  0}}, // 7
-
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 8
-        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 10
-        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 9
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 8
-        {{-(0.5f), -(0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 11
-        {{-(0.5f),  (0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, {-1,  0,  0}, { 0,  0, -1}, { 0,  1,  0}}, // 10
-
-        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 12
-        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 13
-        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 14
-        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 12
-        {{ (0.5f),  (0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 14
-        {{ (0.5f), -(0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 1,  0,  0}, { 0,  0,  1}, { 0,  1,  0}}, // 15
-
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 16
-        {{ (0.5f), -(0.5f), -(0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 17
-        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 18
-        {{-(0.5f), -(0.5f), -(0.5f)}, {0, 0 ,0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 16
-        {{ (0.5f), -(0.5f),  (0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 18
-        {{-(0.5f), -(0.5f),  (0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0, -1,  0}, { 1,  0,  0}, { 0,  0, -1}}, // 19
-
-        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 20
-        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 22
-        {{ (0.5f),  (0.5f), -(0.5f)}, {1, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 21
-        {{-(0.5f),  (0.5f), -(0.5f)}, {0, 1, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 20
-        {{-(0.5f),  (0.5f),  (0.5f)}, {0, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 23
-        {{ (0.5f),  (0.5f),  (0.5f)}, {1, 0, 0}, {1, 1, 1, 1}, { 0,  1,  0}, { 1,  0,  0}, { 0,  0,  1}}, // 22
-    };
-
-    Buffer cube_vertex_buffer = create_buffer(BT_VERTEX, cube_vertices, sizeof(cube_vertices[0]) * ARRAYSIZE(cube_vertices));
-    Loaded_Mesh cube_loaded_mesh = {};
-    cube_loaded_mesh.vertex_buffer = cube_vertex_buffer;
-    cube_loaded_mesh.num_vertices = ARRAYSIZE(cube_vertices);
-    cube_loaded_mesh.has_material = true;
-    cube_loaded_mesh.material.cbuffer_handle = create_pbr_material_cbuffer();
-    cube_loaded_mesh.material.ambient = 0.5;
-    cube_loaded_mesh.material.roughness = 0.3;
-    cube_loaded_mesh.material.metallic = 1;
-    out_renderer->cube_model = create_model(default_allocator());
-    out_renderer->cube_model.meshes.append(cube_loaded_mesh);
+    out_renderer->cube_model = create_cube_model(default_allocator());
 
     // create skybox
     int skybox_width;
@@ -806,7 +812,6 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             bind_shaders(renderer->vertex_shader, renderer->pixel_shader);
             Foreach (command, render_queue) {
                 draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, false);
-                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
             }
 
             // skybox
@@ -817,11 +822,10 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             draw_model(renderer->cube_model, camera_position, v3(1, 1, 1), quaternion_identity(), skybox_color, render_options, false);
             set_cull_mode(CM_BACKFACE);
 
-            // ff_line_circle(&ff, v3(0, 1, 0), 1, v3(0, 1, 0), v4(5, 0, 0, 1));
-            // set_primitive_topology(PT_LINE_LIST);
-            // bind_shaders(vertex_shader, simple_pixel_shader);
-            // ff_end(&ff);
-            // set_primitive_topology(PT_TRIANGLE_LIST);
+            bind_shaders(renderer->vertex_shader, renderer->pixel_shader);
+            Foreach (command, render_queue) {
+                draw_model(command->model, command->position, command->scale, command->orientation, command->color, render_options, true);
+            }
         }
 
         // do screen-space reflections
@@ -968,6 +972,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
 
         bind_shaders(renderer->vertex_shader, renderer->simple_textured_pixel_shader);
 
+        set_alpha_blend(false);
         switch (render_options.debug_render_mode) {
             case RM_DEFAULT:            draw_texture(renderer->final_composite_color_buffer, v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
             case RM_ALBEDO:             draw_texture(renderer->gbuffer_albedo,               v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
@@ -975,6 +980,7 @@ void render_scene(Renderer3D *renderer, Array<Draw_Command> render_queue, Vector
             case RM_NORMALS:            draw_texture(renderer->gbuffer_normals,              v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
             case RM_METALLIC_ROUGHNESS: draw_texture(renderer->gbuffer_metal_roughness,      v3(0, 0, 0),   v3(window->width, window->height, 0)); break;
         }
+        set_alpha_blend(true);
 
         // draw_texture(renderer->shadow_map_color_buffers[0], v3(0,   0, 0), v3(128, 128, 0));
         // draw_texture(renderer->shadow_map_color_buffers[1], v3(128, 0, 0), v3(256, 128, 0));

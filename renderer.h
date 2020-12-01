@@ -46,7 +46,8 @@ struct Model {
 };
 
 Model create_model(Allocator allocator);
-// todo(josh): destroy_model()
+void destroy_model(Model model);
+Model create_cube_model(Allocator allocator);
 
 struct Pass_CBuffer {
     Vector2 screen_dimensions;

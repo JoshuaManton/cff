@@ -17,11 +17,10 @@
 TODO:
 -fully defer lighting calculations
 -bounding boxes/spheres for meshes/models
--cascaded shadow maps
 -particle systems
 -SSAO
--fix alpha blending without ruining bloom
 -transparency sorting to alpha blend properly
+-colored shadows for translucent objects
 -skeletal animation
 -instancing (do we support this already?)
 -assimp model scale
@@ -65,6 +64,9 @@ void main() {
     render_options.do_fog            = true;
     render_options.fog_color         = v3(1, 0.7, 0.3);
     render_options.fog_density       = 0.05;
+
+    Model translucent_cube_model = create_cube_model(default_allocator());
+    translucent_cube_model.meshes[0].material.has_transparency = true;
 
     Model helmet_model = load_model_from_file("sponza/DamagedHelmet.gltf", default_allocator());
     Model sponza_model = load_model_from_file("sponza/sponza.glb", default_allocator());
@@ -142,6 +144,14 @@ void main() {
         sponza_draw_command.scale = v3(1, 1, 1);
         sponza_draw_command.color = v4(1, 1, 1, 1);
         render_queue.append(sponza_draw_command);
+
+        Draw_Command translucent_cube = {};
+        translucent_cube.model = translucent_cube_model;
+        translucent_cube.position = v3(2, 2, 0);
+        translucent_cube.orientation = quaternion_identity();
+        translucent_cube.scale = v3(1, 1, 1);
+        translucent_cube.color = v4(1, 0, 0, 0.5);
+        render_queue.append(translucent_cube);
 
         // render_options.sun_orientation = axis_angle(v3(0, 1, 0), to_radians(90 + sin(time_since_startup * 0.04) * 30)) * axis_angle(v3(1, 0, 0), to_radians(90 + sin(time_since_startup * 0.043) * 30));
         render_options.sun_orientation = axis_angle(v3(0, 1, 0), to_radians(60)) * axis_angle(v3(1, 0, 0), to_radians(75));

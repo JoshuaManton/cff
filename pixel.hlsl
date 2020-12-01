@@ -80,11 +80,10 @@ PS_OUTPUT main(PS_INPUT input) {
     float distance_to_pixel_position = length(camera_position - input.world_position);
     float3 direction_to_camera = (camera_position - input.world_position) / distance_to_pixel_position;
 
-    float4 output_color = float4(1, 1, 1, 1);
+    float4 output_color = model_color * input.color;
     if (has_albedo_map) {
-        output_color = albedo_map.Sample(main_sampler, input.texcoord.xy);
+        output_color *= albedo_map.Sample(main_sampler, input.texcoord.xy);
     }
-    output_color.rgb *= model_color.rgb * input.color.rgb;
 
     float3 albedo = output_color.rgb;
     float ao = 1.0;
